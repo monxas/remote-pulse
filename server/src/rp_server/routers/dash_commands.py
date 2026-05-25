@@ -127,6 +127,8 @@ class CommandSummary(BaseModel):
     rejected_reason: str | None
     approval_requested_at: datetime | None
     approval_responded_at: datetime | None
+    stdout: str | None = None
+    stderr: str | None = None
 
 
 class CommandListResponse(BaseModel):
@@ -212,6 +214,8 @@ def _to_summary(cmd: Command, host: Host) -> CommandSummary:
         rejected_reason=cmd.rejected_reason,
         approval_requested_at=cmd.approval_requested_at,
         approval_responded_at=cmd.approval_responded_at,
+        stdout=cmd.stdout,
+        stderr=cmd.stderr,
     )
 
 
