@@ -17,15 +17,25 @@ class TailscaleAuthKeyCapabilities(BaseModel):
 
 
 class TailscaleAuthKeyResponse(BaseModel):
-    """Response from Tailscale auth key creation."""
+    """Response from Tailscale auth key creation.
+
+    Fields ``revoked`` and ``invalid`` may be absent on newly issued keys
+    (Tailscale API only returns them on subsequent reads). We default them
+    to False so brand-new keys parse cleanly.
+    """
 
     id: str
     key: str
     created: str
     expires: str
-    revoked: bool
     capabilities: TailscaleAuthKeyCapabilities
     description: str | None = None
+    revoked: bool = False
+    invalid: bool = False
+    # Newer API includes expirySeconds in response; tolerate it.
+    expirySeconds: int | None = None
+
+    model_config = {"extra": "ignore"}
 
 
 class TailscaleAPIError(Exception):
