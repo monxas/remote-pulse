@@ -45,7 +45,7 @@ class HeartbeatDaemon:
 
                 # Send to server
                 async with RPClient(self.config) as client:
-                    response = await client.heartbeat(metrics)
+                    await client.heartbeat(metrics)
 
                 logger.info(
                     "heartbeat sent",

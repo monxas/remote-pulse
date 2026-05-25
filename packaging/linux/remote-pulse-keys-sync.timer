@@ -1,0 +1,12 @@
+[Unit]
+Description=Remote-Pulse SSH Keys Sync Timer
+Documentation=https://github.com/monxas/remote-pulse
+Requires=remote-pulse-keys-sync.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

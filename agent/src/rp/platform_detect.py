@@ -92,7 +92,7 @@ def get_host_fingerprint() -> str:
                 ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             for line in result.stdout.splitlines():
                 if "IOPlatformUUID" in line:
@@ -102,9 +102,9 @@ def get_host_fingerprint() -> str:
 
         elif os_type == "windows":
             import winreg
+
             key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\Microsoft\Cryptography"
+                winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography"
             )
             guid, _ = winreg.QueryValueEx(key, "MachineGuid")
             winreg.CloseKey(key)
@@ -128,7 +128,7 @@ def detect_capabilities() -> dict[str, bool]:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
-            timeout=2
+            timeout=2,
         )
         caps["nvidia_gpu"] = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):

@@ -1,0 +1,28 @@
+# Declarative group configuration for Remote-Pulse
+# Sync to DB via `uv run python -m rp_server.admin groups apply`
+# F5 will sync this from PocketID; for now manual edit + apply.
+
+groups:
+  default:
+    description: "Default group for unclassified hosts"
+    access_users:
+      - ramon@monxas.casa
+    auto_distribute_keys: false
+
+  prod:
+    description: "Homelab production hosts (Proxmox, LXCs, VMs)"
+    access_users:
+      - ramon@monxas.casa
+    auto_distribute_keys: true
+
+  family:
+    description: "Family hosts"
+    access_users:
+      - ramon@monxas.casa
+    auto_distribute_keys: true
+
+  iarq:
+    description: "iarquitectos.com client hosts"
+    access_users:
+      - ramon@monxas.casa
+    auto_distribute_keys: true

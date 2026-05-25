@@ -1,7 +1,5 @@
 """Test install command with mock server."""
 
-import json
-
 import httpx
 import pytest
 from click.testing import CliRunner
@@ -26,7 +24,9 @@ def mock_enroll_server(mocker):
 
         def raise_for_status():
             if mock_response.status_code != 200:
-                raise httpx.HTTPStatusError("Error", request=None, response=mock_response)
+                raise httpx.HTTPStatusError(
+                    "Error", request=None, response=mock_response
+                )
 
         mock_response.raise_for_status = raise_for_status
         return mock_response

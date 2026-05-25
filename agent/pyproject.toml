@@ -14,6 +14,9 @@ dependencies = [
     "psutil>=6.0.0",
     "pydantic>=2.8.0",
     "structlog>=24.4.0",
+    "textual>=0.85.0",
+    "textual-plotext>=1.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.scripts]
@@ -31,6 +34,8 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.14.0",
+    "pyinstaller>=6.0.0",
+    "ruff>=0.4.0",
 ]
 
 [tool.pytest.ini_options]

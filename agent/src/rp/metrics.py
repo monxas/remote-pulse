@@ -1,7 +1,6 @@
 """Cross-platform metrics collection using psutil."""
 
 import time
-from typing import Optional
 
 import psutil
 import structlog

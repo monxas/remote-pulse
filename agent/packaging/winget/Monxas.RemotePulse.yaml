@@ -1,0 +1,10 @@
+# Version manifest for Remote-Pulse
+# This file will be submitted to microsoft/winget-pkgs repository
+# Template placeholders to be replaced by release workflow:
+#   {VERSION} - e.g., "0.1.0"
+
+PackageIdentifier: Monxas.RemotePulse
+PackageVersion: {VERSION}
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

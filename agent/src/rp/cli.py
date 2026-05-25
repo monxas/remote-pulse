@@ -10,6 +10,9 @@ from rp.commands.heartbeat import heartbeat
 from rp.commands.status import status
 from rp.commands.version import version
 from rp.commands.uninstall import uninstall
+from rp.commands.dash import dash
+from rp.commands.local import local
+from rp.commands.keys import keys
 
 # Configure structured logging
 structlog.configure(
@@ -42,6 +45,9 @@ main.add_command(heartbeat)
 main.add_command(status)
 main.add_command(version)
 main.add_command(uninstall)
+main.add_command(dash)
+main.add_command(local)
+main.add_command(keys)
 
 
 if __name__ == "__main__":

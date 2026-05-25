@@ -37,7 +37,7 @@ def status(config_path: str):
     click.echo("Remote-Pulse Agent Status")
     click.echo("=" * 50)
     click.echo(f"Agent Version:     {__version__}")
-    click.echo(f"Status:            INSTALLED")
+    click.echo("Status:            INSTALLED")
     click.echo()
     click.echo("Configuration:")
     click.echo(f"  Host ID:         {config.host_id}")

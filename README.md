@@ -4,6 +4,8 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Status](https://img.shields.io/badge/status-pre--alpha-orange.svg)]()
+[![CI](https://github.com/monxas/remote-pulse/workflows/CI/badge.svg)](https://github.com/monxas/remote-pulse/actions/workflows/ci.yml)
+[![Release](https://github.com/monxas/remote-pulse/workflows/release/badge.svg)](https://github.com/monxas/remote-pulse/releases/latest)
 
 **Status:** Pre-alpha / F1 in progress. ADR-0008 [accepted internally](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) (homelab docs).
 
@@ -19,24 +21,83 @@ Remote-Pulse is an agent + server platform that gives you:
 
 This repo contains the **public agent + CLI**. The server lives privately in the homelab; details in ADR-0008.
 
-## Install (preview — once v0.1.0 is released)
+## Install
 
-### Linux / macOS
+### Method 1: One-liner (Linux / macOS)
+
+The quickest way to get started. Installs agent, registers with server, and sets up systemd/launchd service:
 
 ```sh
 curl -fsSL https://rp.monxas.casa/install | sh -s -- --token=<JWT>
 ```
 
-Inspect before running:
+Inspect the script before running (recommended):
 
 ```sh
 curl -fsSL https://rp.monxas.casa/install?show=1
 ```
 
-### Windows
+### Method 2: winget (Windows)
+
+For Windows users, install via winget (once published to microsoft/winget-pkgs):
 
 ```powershell
 winget install Monxas.RemotePulse
+```
+
+Then register the agent:
+
+```powershell
+rp install --token=<JWT>
+```
+
+### Method 3: pipx (Python users)
+
+If you have Python 3.12+ and want auto-updates:
+
+```sh
+pipx install remote-pulse
+rp install --token=<JWT>
+```
+
+Upgrade to latest version:
+
+```sh
+pipx upgrade remote-pulse
+```
+
+### Method 4: Download binary (manual)
+
+Download the latest binary for your platform from [GitHub Releases](https://github.com/monxas/remote-pulse/releases/latest):
+
+- **Linux x64:** `rp-linux-x64`
+- **Linux arm64:** `rp-linux-arm64`
+- **macOS Intel:** `rp-macos-x64`
+- **macOS Apple Silicon:** `rp-macos-arm64`
+- **Windows x64:** `rp-windows-x64.exe`
+
+Verify the download:
+
+```sh
+# Download SHA256SUMS from the release
+curl -fsSL https://github.com/monxas/remote-pulse/releases/latest/download/SHA256SUMS -o SHA256SUMS
+
+# Verify (Linux/macOS)
+sha256sum -c SHA256SUMS --ignore-missing
+
+# Verify (Windows PowerShell)
+Get-FileHash rp-windows-x64.exe -Algorithm SHA256
+```
+
+Then install manually:
+
+```sh
+# Linux/macOS
+chmod +x rp-linux-x64
+./rp-linux-x64 install --token=<JWT>
+
+# Windows
+.\rp-windows-x64.exe install --token=<JWT>
 ```
 
 ## Architecture (one paragraph)
@@ -69,6 +130,48 @@ See [ADR-0008](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/)
 - **F6** — Tailscale SSH + RustDesk Direct IP + Sunshine
 - **F7** — One-liner public + Windows winget + docs site
 - **F8** — Hardening, DR drill, API compat policy, v1.0.0 GA
+
+## Development
+
+### Testing GitHub Actions locally
+
+You can test workflows locally using [act](https://github.com/nektos/act):
+
+```sh
+# Install act (macOS)
+brew install act
+
+# Test CI workflow
+act pull_request
+
+# Test release workflow (requires tag)
+act push --eventpath <(echo '{"ref": "refs/tags/v0.1.0"}')
+
+# List available workflows
+act -l
+```
+
+Note: The release workflow requires large runners for cross-platform builds. Local testing with act may not exactly match GitHub Actions behavior, especially for QEMU-based arm64 builds.
+
+### Building binaries locally
+
+```sh
+cd agent
+
+# Build for your current platform
+make build-binary
+
+# The binary will be in: dist/rp (or dist/rp.exe on Windows)
+
+# Run tests
+make test
+
+# Lint code
+make lint
+
+# Clean artifacts
+make clean
+```
 
 ## Contributing
 

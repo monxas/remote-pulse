@@ -1,0 +1,122 @@
+site_name: Remote-Pulse
+site_description: Fleet monitoring + remote control over Tailscale. One-command onboarding.
+site_url: https://rp.monxas.casa/docs/
+repo_name: monxas/remote-pulse
+repo_url: https://github.com/monxas/remote-pulse
+edit_uri: edit/main/docs/docs/
+copyright: Apache-2.0 — built by <a href="https://github.com/monxas">monxas</a>
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+      fallback_to_build_date: true
+  - mermaid2
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Quickstart:
+      - Install Linux/macOS: quickstart/install-unix.md
+      - Install Windows: quickstart/install-windows.md
+      - First connection: quickstart/first-connection.md
+  - User guide:
+      - rp CLI reference: guide/cli.md
+      - TUI dashboard: guide/tui-dashboard.md
+      - Web dashboard: guide/web-dashboard.md
+      - SSH key lifecycle: guide/ssh-keys.md
+      - Local-approval enforcement: guide/local-approval.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Components: architecture/components.md
+      - Data plane (Tailscale): architecture/tailscale.md
+      - Security model: architecture/security.md
+      - API compatibility: architecture/api-compat.md
+  - Operations:
+      - DR procedure: ops/disaster-recovery.md
+      - Backup strategy: ops/backups.md
+      - Monitoring metrics: ops/metrics.md
+      - Troubleshooting: ops/troubleshooting.md
+  - Troubleshooting:
+      - Windows Defender false positives: troubleshooting/windows-defender.md
+      - Common errors: troubleshooting/common-errors.md
+  - Reference:
+      - REST API: reference/api.md
+      - Configuration: reference/config.md
+      - Glossary: reference/glossary.md
+  - Contributing:
+      - Development setup: contributing/dev-setup.md
+      - Testing: contributing/testing.md
+      - Code style: contributing/code-style.md
+  - Changelog: changelog.md
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/monxas/remote-pulse

@@ -43,7 +43,9 @@ def example_metrics_collection():
     if metrics["load_1m"] is not None:
         print(f"Load Average (1m): {metrics['load_1m']:.2f}")
 
-    print(f"Uptime: {metrics['uptime_s'] // 3600}h {(metrics['uptime_s'] % 3600) // 60}m")
+    print(
+        f"Uptime: {metrics['uptime_s'] // 3600}h {(metrics['uptime_s'] % 3600) // 60}m"
+    )
     print()
 
 
@@ -56,16 +58,18 @@ async def example_heartbeat_simulation():
     metrics = collector.collect_heartbeat_metrics()
 
     print("\nPayload that would be sent to server:")
-    print({
-        "host_id": "example-host-123",
-        "metrics": {
-            "cpu_pct": metrics["cpu_pct"],
-            "mem_pct": metrics["mem_pct"],
-            "load_1m": metrics["load_1m"],
-            "uptime_s": metrics["uptime_s"],
-            "agent_version": metrics["agent_version"],
-        },
-    })
+    print(
+        {
+            "host_id": "example-host-123",
+            "metrics": {
+                "cpu_pct": metrics["cpu_pct"],
+                "mem_pct": metrics["mem_pct"],
+                "load_1m": metrics["load_1m"],
+                "uptime_s": metrics["uptime_s"],
+                "agent_version": metrics["agent_version"],
+            },
+        }
+    )
     print()
 
 

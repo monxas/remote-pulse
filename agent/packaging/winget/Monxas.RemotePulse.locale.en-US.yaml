@@ -1,0 +1,36 @@
+# Locale manifest for Remote-Pulse (en-US)
+# Template placeholders to be replaced by release workflow:
+#   {VERSION} - e.g., "0.1.0"
+
+PackageIdentifier: Monxas.RemotePulse
+PackageVersion: {VERSION}
+PackageLocale: en-US
+Publisher: Monxas
+PublisherUrl: https://github.com/monxas
+PublisherSupportUrl: https://github.com/monxas/remote-pulse/issues
+Author: Ramón Kamibayashi
+PackageName: Remote-Pulse
+PackageUrl: https://github.com/monxas/remote-pulse
+License: Apache-2.0
+LicenseUrl: https://github.com/monxas/remote-pulse/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Ramón Kamibayashi
+ShortDescription: Fleet monitoring and remote control agent over Tailscale
+Description: |-
+  Remote-Pulse is an agent + server platform for single-pane-of-glass fleet
+  monitoring across Linux, macOS, and Windows hosts. Features include:
+  - Live sparklines for CPU, memory, disk, and network metrics
+  - One-command installation with Tailscale onboarding
+  - Centralized SSH key lifecycle management
+  - Remote shell and screen access over WireGuard P2P
+  - Defense-in-depth security with local-approval gates
+Moniker: rp
+Tags:
+- monitoring
+- fleet-management
+- remote-access
+- tailscale
+- ssh-keys
+- observability
+- devops
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from rp_server import __version__
 from rp_server.config import settings
 from rp_server.database import engine
-from rp_server.routers import enroll, heartbeat, hosts
+from rp_server.routers import admin, enroll, heartbeat, hosts, keys, metrics
 
 # Configure structured logging
 structlog.configure(
@@ -59,6 +59,9 @@ app = FastAPI(
 app.include_router(enroll.router)
 app.include_router(heartbeat.router)
 app.include_router(hosts.router)
+app.include_router(metrics.router)
+app.include_router(keys.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
@@ -84,6 +87,7 @@ async def root() -> JSONResponse:
                 "enroll": "/v1/enroll",
                 "heartbeat": "/v1/heartbeat",
                 "hosts": "/v1/hosts",
+                "metrics": "/v1/metrics/{host_id}/sparkline",
             },
         }
     )

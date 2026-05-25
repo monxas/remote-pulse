@@ -1,51 +1,279 @@
-name: Release
+name: release
 
 on:
   push:
     tags:
       - "v*"
 
-# F7 fully populates this; F1 stub only.
 jobs:
-  build:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: linux-x64
-            os: ubuntu-latest
-          - target: linux-arm64
-            os: ubuntu-latest
-          - target: macos-x64
-            os: macos-13
-          - target: macos-arm64
-            os: macos-latest
-          - target: windows-x64
-            os: windows-latest
+  build-linux-x64:
+    name: Build Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Build agent binary (PyInstaller)
+      - name: Build binary
         working-directory: agent
         run: |
-          uv sync --dev
-          uv run pyinstaller --onefile --name rp src/rp/__main__.py
-          ls -la dist/
-
-      # SHA256SUMS + cosign signing happen in F8
+          uv sync --all-extras --dev
+          uv run pyinstaller rp.spec --clean --noconfirm
+          chmod +x dist/rp
+          ./dist/rp version
+          ls -lh dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rp-${{ matrix.target }}
-          path: agent/dist/rp*
+          name: rp-linux-x64
+          path: agent/dist/rp
 
-  # release publishing step deferred to F7-F8
+  build-linux-arm64:
+    name: Build Linux arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build binary (emulated)
+        working-directory: agent
+        run: |
+          # Build using QEMU emulation
+          docker run --rm --platform linux/arm64 \
+            -v $(pwd):/work -w /work \
+            python:3.12-slim \
+            bash -c "apt-get update -qq && apt-get install -y -qq binutils && \
+                     pip install -q uv && \
+                     uv sync --all-extras --dev && \
+                     uv run pyinstaller rp.spec --clean --noconfirm && \
+                     chmod +x dist/rp && \
+                     ls -lh dist/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp-linux-arm64
+          path: agent/dist/rp
+
+  build-macos-x64:
+    name: Build macOS x64
+    runs-on: macos-13
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build binary
+        working-directory: agent
+        run: |
+          uv sync --all-extras --dev
+          uv run pyinstaller rp.spec --clean --noconfirm
+          chmod +x dist/rp
+          ./dist/rp version
+          ls -lh dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp-macos-x64
+          path: agent/dist/rp
+
+  build-macos-arm64:
+    name: Build macOS arm64
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build binary
+        working-directory: agent
+        run: |
+          uv sync --all-extras --dev
+          uv run pyinstaller rp.spec --clean --noconfirm
+          chmod +x dist/rp
+          ./dist/rp version
+          ls -lh dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp-macos-arm64
+          path: agent/dist/rp
+
+  build-windows-x64:
+    name: Build Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build binary
+        working-directory: agent
+        run: |
+          uv sync --all-extras --dev
+          uv run pyinstaller rp.spec --clean --noconfirm
+          dir dist\
+          dist\rp.exe version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp-windows-x64.exe
+          path: agent/dist/rp.exe
+
+  sha256sums:
+    name: Generate SHA256SUMS
+    runs-on: ubuntu-latest
+    needs:
+      - build-linux-x64
+      - build-linux-arm64
+      - build-macos-x64
+      - build-macos-arm64
+      - build-windows-x64
+    timeout-minutes: 5
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd artifacts
+          # Rename artifacts to include target suffix
+          mv rp-linux-x64/rp rp-linux-x64
+          mv rp-linux-arm64/rp rp-linux-arm64
+          mv rp-macos-x64/rp rp-macos-x64
+          mv rp-macos-arm64/rp rp-macos-arm64
+          mv rp-windows-x64.exe/rp.exe rp-windows-x64.exe
+
+          # Generate checksums
+          sha256sum rp-* > SHA256SUMS
+          cat SHA256SUMS
+
+          # Move files back for release
+          mkdir -p ../release
+          mv rp-* ../release/
+          mv SHA256SUMS ../release/
+
+      - name: Upload SHA256SUMS
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: release/SHA256SUMS
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - sha256sums
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp artifacts/rp-linux-x64/rp release/rp-linux-x64
+          cp artifacts/rp-linux-arm64/rp release/rp-linux-arm64
+          cp artifacts/rp-macos-x64/rp release/rp-macos-x64
+          cp artifacts/rp-macos-arm64/rp release/rp-macos-arm64
+          cp artifacts/rp-windows-x64.exe/rp.exe release/rp-windows-x64.exe
+          cp artifacts/SHA256SUMS/SHA256SUMS release/SHA256SUMS
+          ls -lh release/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> CHANGELOG.md
+          else
+            echo "## Initial Release" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "First public release of Remote-Pulse agent." >> CHANGELOG.md
+          fi
+
+          cat CHANGELOG.md
+
+      - name: Determine prerelease flag
+        id: prerelease
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if echo "$TAG" | grep -qE '(alpha|beta|rc)'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          files: |
+            release/rp-linux-x64
+            release/rp-linux-arm64
+            release/rp-macos-x64
+            release/rp-macos-arm64
+            release/rp-windows-x64.exe
+            release/SHA256SUMS
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          draft: false

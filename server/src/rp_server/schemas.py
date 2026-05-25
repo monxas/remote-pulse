@@ -1,9 +1,11 @@
 """Pydantic request/response schemas."""
 
+import re
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EnrollRequest(BaseModel):
@@ -116,3 +118,173 @@ class ErrorResponse(BaseModel):
     """Standard error response."""
 
     detail: str
+
+
+class SparklineSeries(BaseModel):
+    """Time series data for a single metric."""
+
+    metric: str = Field(description="Metric name (e.g. 'cpu_pct', 'mem_pct')")
+    points: list[tuple[datetime, float]] = Field(
+        description="List of (timestamp, value) tuples sorted ascending by timestamp"
+    )
+
+
+class SparklineResponse(BaseModel):
+    """Sparkline data response for multiple metrics over a time window."""
+
+    host_id: uuid.UUID
+    window: str = Field(description="Time window requested (e.g. '5m', '1h', '24h')")
+    series: list[SparklineSeries]
+    bucket_seconds: int = Field(description="Actual bucket resolution used in seconds")
+
+
+# F4 schemas - Groups
+
+
+class GroupBase(BaseModel):
+    """Base group fields."""
+
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = None
+    access_users: list[str] = Field(default_factory=list)
+    auto_distribute_keys: bool = True
+
+
+class GroupCreate(GroupBase):
+    """Group creation request."""
+
+    pass
+
+
+class GroupResponse(GroupBase):
+    """Group response with timestamps."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    created_at: datetime
+
+
+# F4 schemas - SSH Keys
+
+
+class SSHKeyBase(BaseModel):
+    """Base SSH key fields."""
+
+    user_name: str = Field(default="root", min_length=1, max_length=32)
+    pubkey: str = Field(min_length=1)
+    fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
+    algorithm: str = Field(default="ed25519", pattern=r"^(ed25519|rsa|ecdsa)$")
+
+    @field_validator("pubkey")
+    @classmethod
+    def validate_pubkey_format(cls, v: str) -> str:
+        """Validate pubkey starts with correct algorithm prefix."""
+        if not v.startswith(("ssh-ed25519 ", "ssh-rsa ", "ecdsa-sha2-")):
+            raise ValueError("pubkey must start with ssh-ed25519, ssh-rsa, or ecdsa-sha2-*")
+        return v
+
+
+class SSHKeyRegister(SSHKeyBase):
+    """SSH key registration request from agent."""
+
+    host_id: uuid.UUID
+
+
+class SSHKeyResponse(SSHKeyBase):
+    """SSH key response with full details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    host_id: uuid.UUID
+    created_at: datetime
+    revoked_at: datetime | None = None
+    revoked_reason: str | None = None
+
+
+# F4 schemas - Commands
+
+
+class CommandBase(BaseModel):
+    """Base command fields."""
+
+    host_id: uuid.UUID
+    issued_by: str = Field(min_length=1)
+    command_type: str = Field(min_length=1, max_length=50)
+    command_payload: dict[str, Any]
+    server_signature: str = Field(min_length=1)
+    agent_node_id: str | None = None
+
+
+class CommandCreate(CommandBase):
+    """Command creation request (server internal)."""
+
+    human_approved: bool = False
+    approved_by: str | None = None
+
+
+class CommandAck(BaseModel):
+    """Command acknowledgment from agent after execution."""
+
+    command_id: uuid.UUID
+    completed_at: datetime
+    exit_code: int | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    rejected_reason: str | None = None
+
+
+class CommandResponse(CommandBase):
+    """Command response with full execution details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    issued_at: datetime
+    completed_at: datetime | None = None
+    exit_code: int | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    duration_ms: int | None = None
+    human_approved: bool
+    approved_by: str | None = None
+    rejected_reason: str | None = None
+
+
+# F4 schemas - Agent Version
+
+
+class AgentVersionInfo(BaseModel):
+    """Agent version and API compatibility info.
+
+    Used for parsing Sec-RP-Agent-Version header and version negotiation.
+    """
+
+    agent_version: str = Field(pattern=r"^\d+\.\d+\.\d+")
+    api_compat_min: str = Field(pattern=r"^\d+\.\d+\.\d+")
+    api_compat_max: str = Field(pattern=r"^\d+\.\d+\.\d+")
+
+    @classmethod
+    def from_header(cls, header: str) -> "AgentVersionInfo":
+        """Parse from Sec-RP-Agent-Version header format.
+
+        Format: "agent_version;min=X.Y.Z;max=X.Y.Z"
+        Example: "0.5.2;min=0.5.0;max=0.6.0"
+        """
+        parts = header.split(";")
+        if len(parts) != 3:
+            raise ValueError("Invalid agent version header format")
+
+        agent_version = parts[0].strip()
+        min_match = re.match(r"min=(\d+\.\d+\.\d+)", parts[1].strip())
+        max_match = re.match(r"max=(\d+\.\d+\.\d+)", parts[2].strip())
+
+        if not min_match or not max_match:
+            raise ValueError("Invalid API compatibility range format")
+
+        return cls(
+            agent_version=agent_version,
+            api_compat_min=min_match.group(1),
+            api_compat_max=max_match.group(1),
+        )

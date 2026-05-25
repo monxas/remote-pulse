@@ -15,6 +15,8 @@ def version():
     click.echo(f"remote-pulse agent version {__version__}")
     click.echo()
     click.echo("Runtime:")
-    click.echo(f"  Python:       {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    click.echo(
+        f"  Python:       {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
     click.echo(f"  Platform:     {get_os()} ({get_arch()})")
     click.echo(f"  Node:         {platform.node()}")

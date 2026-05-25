@@ -9,7 +9,6 @@ from rp_server.integrations.tailscale_api import (
     TailscaleAPIClient,
     TailscaleAPIError,
     TailscaleAuthenticationError,
-    TailscaleAuthKeyResponse,
     TailscalePermissionError,
     TailscaleValidationError,
 )
