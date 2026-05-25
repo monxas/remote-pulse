@@ -17,6 +17,7 @@ from sqlalchemy import select, and_, update
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin, require_operator_or_admin
+from rp_server.events import fire_and_forget
 from rp_server.models import Command, Host, User
 
 logger = structlog.get_logger()
@@ -167,6 +168,16 @@ async def request_approval(
         approval_token=str(approval_token),
     )
 
+    # ADR-0009 Phase 1: notify dashboards listening on /v1/dash/stream.
+    fire_and_forget(
+        "approval.created",
+        {
+            "approval_id": str(approval_token),
+            "command_id": str(command_id),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
     # TODO F4-6: Fire webhook to n8n (deferred to integration)
     # webhook = TelegramApprovalWebhook(...)
     # await webhook.fire_approval_request(command, host, approval_token)
@@ -250,6 +261,17 @@ async def approve_command(
         host=host.hostname,
     )
 
+    # ADR-0009 Phase 1: SSE notification
+    fire_and_forget(
+        "command.status_change",
+        {
+            "command_id": str(command.id),
+            "host_id": str(host_id),
+            "status": "approved",
+            "ts": now.isoformat(),
+        },
+    )
+
     # TODO F4-6: Forward signed command to agent for execution
     # (currently agent polls for pending commands; webhook push TBD F5)
 
@@ -327,6 +349,17 @@ async def reject_command(
         approver=payload.approver_id,
         reason=reason,
         host=host.hostname,
+    )
+
+    # ADR-0009 Phase 1: SSE notification
+    fire_and_forget(
+        "command.status_change",
+        {
+            "command_id": str(command.id),
+            "host_id": str(command.host_id),
+            "status": "rejected",
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
     )
 
     return ApprovalResult(

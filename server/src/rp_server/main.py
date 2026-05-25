@@ -22,6 +22,7 @@ from rp_server.routers import (
     auth_oidc,
     commands,
     compat,
+    dash_api,
     enroll,
     enrollment_links,
     heartbeat,
@@ -110,12 +111,16 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # CSP: allow self + the specific CDNs the dashboard pulls (HTMX, uPlot, Pico).
+    # CSP: legacy /dash/ Jinja UI still pulls HTMX/uPlot/Pico from CDNs — kept
+    # for backwards compat until that page is retired. The new /dash-next/ SPA
+    # is 'self' only and uses self-hosted fonts (font-src 'self' data:).
+    # connect-src 'self' covers fetch() + EventSource (SSE) to /v1/dash/stream.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
         "img-src 'self' data:; "
+        "font-src 'self' data:; "
         "connect-src 'self'; "
         "frame-ancestors 'none'"
     )
@@ -162,7 +167,10 @@ app.include_router(admin.router)
 app.include_router(commands.router)
 app.include_router(approvals.router)
 app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
-app.include_router(web.router)  # F5: Web dashboard
+# ADR-0009 Phase 1: JSON API for the SvelteKit SPA. Mounted BEFORE the SPA
+# static-files mount so /v1/dash/* is dispatched here, not by the catch-all.
+app.include_router(dash_api.router)
+app.include_router(web.router)  # F5: Web dashboard (legacy Jinja UI)
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
 
