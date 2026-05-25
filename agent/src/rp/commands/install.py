@@ -58,16 +58,21 @@ def install(
             headers={"User-Agent": "remote-pulse-agent/0.1.0"},
         )
 
-        response = client.post(
-            "/v1/enroll",
-            json={
-                "token": token,
-                "hostname": hostname,
-                "host_fingerprint": host_fingerprint,
-                "group": group,
-                "platform": platform_info,
-            },
-        )
+        # Match the EnrollRequest schema in server/.../schemas.py:
+        # flat fields, not a nested `platform` object.
+        from rp import __version__ as agent_version
+
+        enroll_payload = {
+            "token": token,
+            "hostname": hostname,
+            "host_fingerprint": host_fingerprint,
+            "group": group or "default",
+            "os": platform_info["os"],
+            "arch": platform_info["arch"],
+            "distro": platform_info.get("distro"),
+            "agent_version": agent_version,
+        }
+        response = client.post("/v1/enroll", json=enroll_payload)
 
         response.raise_for_status()
         data = response.json()
