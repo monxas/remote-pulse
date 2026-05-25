@@ -10,12 +10,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, text
 
 from rp_server.database import DbSession
-from rp_server.deps import current_user
+from rp_server.deps import current_user, current_user_optional
 from rp_server.middleware.group_filter import filter_hosts_by_user_groups
 from rp_server.models import Host, User
 
@@ -33,13 +33,25 @@ templates.env.globals["now"] = datetime.now
 async def dashboard(
     request: Request,
     db: DbSession,
-    user: Annotated[User, Depends(current_user)],
+    user: Annotated[User | None, Depends(current_user_optional)] = None,
     group_filter: str = Query(default="all", description="Filter by group name"),
 ):
     """Main dashboard page with host list and sparklines.
 
     HTMX-driven with auto-refresh every 5s on host rows.
+
+    If the caller has no resolved identity (no session, no Tailscale-identity
+    fallback), redirect to the OIDC login endpoint instead of returning 401 —
+    browsers can follow it, curl users will see the 302.
     """
+    if user is None:
+        target = request.url.path
+        if request.url.query:
+            target += "?" + request.url.query
+        return RedirectResponse(
+            url=f"/auth/login?next={target}",
+            status_code=302,
+        )
     # Build query with user group filtering
     stmt = select(Host).order_by(Host.hostname)
     stmt = filter_hosts_by_user_groups(stmt, user)

@@ -166,6 +166,22 @@ async def current_user(
             )
             return user
 
+    # --- OIDC session cookie path (PocketID login flow set request.session) ---
+    sess_user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    if sess_user_id:
+        import uuid as _uuid
+
+        try:
+            uid = _uuid.UUID(sess_user_id)
+        except ValueError:
+            uid = None
+        if uid:
+            stmt = select(User).where(User.id == uid)
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user and user.is_active:
+                return user
+
     # --- Tailscale identity → admin fallback (quick path until PocketID is set up) ---
     # When the request crossed `tailscale serve` we get authenticated Tailscale
     # identity headers. If the caller's email matches the configured emergency

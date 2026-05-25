@@ -17,6 +17,7 @@ from rp_server.middleware.compat import APICompatMiddleware
 from rp_server.routers import (
     admin,
     approvals,
+    auth_oidc,
     commands,
     compat,
     enroll,
@@ -27,6 +28,7 @@ from rp_server.routers import (
     metrics,
     web,
 )
+from starlette.middleware.sessions import SessionMiddleware
 
 # Configure structured logging
 structlog.configure(
@@ -84,6 +86,17 @@ app.add_middleware(
 
 # API Compatibility middleware
 app.add_middleware(APICompatMiddleware)
+
+# Session middleware — signs cookies for the OIDC login flow (auth_oidc.py).
+# Cookies are HttpOnly + SameSite=Lax + Secure (when running behind HTTPS).
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    session_cookie="rp_session",
+    same_site="lax",
+    https_only=True,
+    max_age=60 * 60 * 12,  # 12h
+)
 
 
 # Security headers middleware
@@ -146,6 +159,7 @@ app.include_router(keys.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
 app.include_router(approvals.router)
+app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
 app.include_router(web.router)  # F5: Web dashboard
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 

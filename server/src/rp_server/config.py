@@ -86,6 +86,42 @@ class Settings(BaseSettings):
         ),
     ]
 
+    pocketid_base_url: Annotated[
+        str,
+        Field(
+            default="https://pocketid.monxas.casa",
+            description="PocketID OIDC issuer base URL.",
+        ),
+    ]
+    pocketid_client_id: Annotated[
+        str | None,
+        Field(default=None, description="OIDC client id for the web dashboard."),
+    ]
+    pocketid_client_secret: Annotated[
+        str | None,
+        Field(default=None, description="OIDC client secret for the web dashboard."),
+    ]
+
+    public_dashboard_url: Annotated[
+        str,
+        Field(
+            default="https://rp.monxas.casa",
+            description=(
+                "Public origin for the dashboard. Used to build the OIDC callback "
+                "URL when behind a reverse proxy whose Host header does not match."
+            ),
+        ),
+    ]
+
+    session_secret: Annotated[
+        str,
+        Field(
+            default="change-me-in-prod-this-is-only-for-dev-and-testing-32+",
+            min_length=32,
+            description="Secret for SessionMiddleware-signed cookies.",
+        ),
+    ]
+
     heartbeat_interval_s: Annotated[
         int,
         Field(
