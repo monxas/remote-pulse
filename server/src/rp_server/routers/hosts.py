@@ -1,11 +1,13 @@
 """Host inventory endpoints."""
+
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy import select
 
 from rp_server.database import DbSession
+from rp_server.deps import TailscaleIdentity, tailscale_identity
 from rp_server.models import Heartbeat, Host
 from rp_server.schemas import HeartbeatData, HostDetail, HostListItem
 
@@ -14,7 +16,10 @@ router = APIRouter(prefix="/v1", tags=["hosts"])
 
 
 @router.get("/hosts", response_model=list[HostListItem])
-async def list_hosts(db: DbSession) -> list[HostListItem]:
+async def list_hosts(
+    db: DbSession,
+    ts_identity: TailscaleIdentity = Depends(tailscale_identity),
+) -> list[HostListItem]:
     """
     List all registered hosts with summary information.
 
@@ -29,7 +34,11 @@ async def list_hosts(db: DbSession) -> list[HostListItem]:
 
 
 @router.get("/hosts/{host_id}", response_model=HostDetail)
-async def get_host_detail(host_id: uuid.UUID, db: DbSession) -> HostDetail:
+async def get_host_detail(
+    host_id: uuid.UUID,
+    db: DbSession,
+    ts_identity: TailscaleIdentity = Depends(tailscale_identity),
+) -> HostDetail:
     """
     Get detailed host information including recent heartbeats.
 
@@ -74,6 +83,6 @@ async def get_host_detail(host_id: uuid.UUID, db: DbSession) -> HostDetail:
         last_seen_at=host.last_seen_at,
         group_name=host.group_name,
         capabilities=host.capabilities,
-        metadata=host.metadata,
+        metadata=host.extra,
         recent_heartbeats=recent_heartbeats,
     )

@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models for Remote-Pulse server."""
+
 import uuid
 from datetime import datetime
 from typing import Any
@@ -49,7 +50,8 @@ class Host(Base):
         nullable=False,
         server_default=text("'{}'::jsonb"),
     )
-    metadata: Mapped[dict[str, Any]] = mapped_column(
+    extra: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb"),
