@@ -69,12 +69,15 @@ async def generate_enrollment_link(
     jti = str(uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(hours=request_data.ttl_hours)
 
+    # NOTE: claim names must match the validator in routers/enroll.py:
+    # it expects `group_name` (not `group`) and `issued_by`.
     payload = {
         "jti": jti,
         "iss": "remote-pulse-server",
         "iat": datetime.now(timezone.utc),
         "exp": expires_at,
-        "group": request_data.group,
+        "group_name": request_data.group,
+        "issued_by": user.email,
         "hostname": request_data.hostname,
         "max_uses": request_data.max_uses,
     }
