@@ -124,7 +124,8 @@ async def get_sparkline_data(
         result = await db.execute(
             query,
             {
-                "bucket_interval": f"{bucket_seconds} seconds",
+                # asyncpg INTERVAL codec expects datetime.timedelta, not str
+                "bucket_interval": timedelta(seconds=bucket_seconds),
                 "host_id": host_id,
                 "start_time": start_time,
                 "end_time": now,

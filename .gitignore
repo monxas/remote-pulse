@@ -63,7 +63,9 @@ secrets/
 *.pem
 
 # Build artifacts
+# PyInstaller temp specs (NOT rp.spec which is source-tracked)
 *.spec
+!agent/rp.spec
 *.exe
 *.app
 *.msi

@@ -1,0 +1,71 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Remote-Pulse PyInstaller spec file
+# Generates standalone binary for Linux/macOS/Windows
+
+a = Analysis(
+    ['src/rp/__main__.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'rp.commands.install',
+        'rp.commands.heartbeat',
+        'rp.commands.status',
+        'rp.commands.local',
+        'rp.commands.dash',
+        'rp.commands.register',
+        'rp.commands.version',
+        'rp.commands.keys',
+        'rp.commands.uninstall',
+        'rp.dash.app',
+        'rp.dash.widgets.host_list',
+        'rp.dash.widgets.host_detail',
+        'rp.dash.widgets.sparkline',
+        'rp.dash.widgets.footer_status',
+        'textual',
+        'textual.app',
+        'textual.widgets',
+        'textual_plotext',
+        'plotext',
+        'rich',
+        'psutil',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'tkinter',
+        'matplotlib',
+        'pytest',
+        'IPython',
+        'jupyter',
+        'notebook',
+        'pandas',
+        'numpy',
+        'scipy',
+    ],
+    noarchive=False,
+    optimize=1,  # Strip docstrings, keep asserts
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='rp',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)

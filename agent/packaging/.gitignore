@@ -1,0 +1,9 @@
+# Ignore generated winget manifests (with placeholders substituted)
+winget/*.generated.yaml
+
+# Ignore test builds
+*.exe
+*.deb
+*.rpm
+*.pkg
+*.dmg
