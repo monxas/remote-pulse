@@ -1,0 +1,31 @@
+[Unit]
+Description=Remote-Pulse Agent
+Documentation=https://github.com/monxas/remote-pulse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+# F1: corre como root para acceder /etc/rp/. F8 hardening considerará user dedicado `rp`.
+ExecStart=/root/.local/bin/rp heartbeat --daemon
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60s
+StartLimitBurst=10
+
+# Hardening básico F1 (más restrictivo en F8)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/etc/rp /var/lib/rp /var/log/rp
+PrivateTmp=yes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=remote-pulse
+
+[Install]
+WantedBy=multi-user.target

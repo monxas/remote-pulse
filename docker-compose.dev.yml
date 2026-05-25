@@ -1,0 +1,41 @@
+# Local dev environment for Remote-Pulse server
+# Run: docker compose -f docker-compose.dev.yml up -d
+# Postgres exposed on localhost:5432 with TimescaleDB pre-installed for F3 work.
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rp-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: remote_pulse
+      POSTGRES_USER: rp_app
+      POSTGRES_PASSWORD: devpass_only_for_local
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - rp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rp_app -d remote_pulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # F3+: pgadmin opcional para debug schema
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rp-pgadmin-dev
+    restart: unless-stopped
+    profiles: ["debug"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dev@local
+      PGADMIN_DEFAULT_PASSWORD: devpass
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "127.0.0.1:5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  rp_postgres_data:
