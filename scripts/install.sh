@@ -238,8 +238,8 @@ if [ -z "$HOST_FINGERPRINT" ]; then
     HOST_FINGERPRINT="unknown-$(date +%s)"
 fi
 
-ENROLL_PAYLOAD="$(printf '{"token":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s"}' \
-    "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH")"
+ENROLL_PAYLOAD="$(printf '{"token":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s","agent_version":"%s"}' \
+    "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "${RP_VERSION:-main}")"
 
 ENROLL_RESP="$(curl -fsSL -X POST "$RP_SERVER/v1/enroll" \
     -H "Content-Type: application/json" \
