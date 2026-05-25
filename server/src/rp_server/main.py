@@ -189,12 +189,25 @@ app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 # from an installed wheel.
 _DASH_NEXT_DIR = Path(__file__).parent / "static" / "dash-next"
 if _DASH_NEXT_DIR.is_dir():
-    # `html=True` makes StaticFiles serve `index.html` for any path that
-    # doesn't match a file — exactly what the SPA's client-side router
-    # needs for deep links like /dash-next/hosts/<id>.
+    # Starlette's StaticFiles(html=True) only serves index.html at the mount
+    # root, not for nested paths. The SvelteKit client-side router needs
+    # /dash-next/hosts/<id> (and any other deep link) to return the SPA
+    # shell so it can boot and route. Subclass to fall back to index.html
+    # on any 404 — this is the standard SPA-fallback pattern.
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    class SPAStaticFiles(StaticFiles):
+        async def get_response(self, path: str, scope):
+            try:
+                return await super().get_response(path, scope)
+            except StarletteHTTPException as exc:
+                if exc.status_code == 404:
+                    return await super().get_response("index.html", scope)
+                raise
+
     app.mount(
         "/dash-next",
-        StaticFiles(directory=str(_DASH_NEXT_DIR), html=True),
+        SPAStaticFiles(directory=str(_DASH_NEXT_DIR), html=True),
         name="dash-next",
     )
 else:
