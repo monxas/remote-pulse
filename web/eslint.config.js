@@ -42,6 +42,26 @@ export default [
     },
   },
   {
+    // Generic Button primitive accepts any URL string (callers resolve
+    // route IDs themselves, or pass full external URLs like /auth/login).
+    // The rule can't see through the prop, so we silence it on the
+    // component definition only.
+    files: ['src/lib/components/ui/button/button.svelte'],
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off',
+    },
+  },
+  {
+    // NavBar stores pre-resolved ResolvedPathname strings in a const array
+    // (so we only call `resolve()` once at module init). The rule wants a
+    // direct `resolve()` call at the JSX site, which we cannot do without
+    // duplicating the resolve table.
+    files: ['src/lib/components/app/NavBar.svelte'],
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off',
+    },
+  },
+  {
     ignores: [
       'build/',
       '.svelte-kit/',
