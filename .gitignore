@@ -103,3 +103,4 @@ web/test-results/
 web/.vitest-cache/
 server/src/rp_server/static/dash-next/*
 !server/src/rp_server/static/dash-next/.gitkeep
+.claude/
