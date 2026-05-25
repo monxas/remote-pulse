@@ -3,11 +3,12 @@
 > Single-pane-of-glass fleet monitoring and remote control over Tailscale. One-command onboarding for any Linux/macOS/Windows host.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Status](https://img.shields.io/badge/status-pre--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/status-v1.0.0-brightgreen.svg)]()
+[![Release](https://img.shields.io/github/v/release/monxas/remote-pulse?label=release)](https://github.com/monxas/remote-pulse/releases/latest)
 [![CI](https://github.com/monxas/remote-pulse/workflows/CI/badge.svg)](https://github.com/monxas/remote-pulse/actions/workflows/ci.yml)
-[![Release](https://github.com/monxas/remote-pulse/workflows/release/badge.svg)](https://github.com/monxas/remote-pulse/releases/latest)
 
-**Status:** Pre-alpha / F1 in progress. ADR-0008 [accepted internally](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) (homelab docs).
+**Status:** General Availability v1.0.0. ADR-0008 [accepted](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) (homelab docs).
+**Public docs:** [rp.monxas.casa/docs](https://rp.monxas.casa/docs)
 
 ## What is this
 
@@ -120,16 +121,16 @@ monxas-remote-pulse/
 
 ## Status / roadmap
 
-See [ADR-0008](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) for the full 8-phase plan. Short version:
+**v1.0.0 shipped 2026-05-25.** All 8 phases (F1-F8) completed. See [ADR-0008](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) for full design and [CHANGELOG](docs/docs/changelog.md) for detailed feature list.
 
-- **F1** (in progress) — Agent MVP + server stub over LAN HTTP
-- **F2** — Tailscale daemon + `tailscale serve` + JWT enrollment
-- **F3** — TUI dashboard with sparklines (`textual-plotext`)
-- **F4** — SSH key lifecycle + remote exec + local-approval enforcement
-- **F5** — Web dashboard + Grafana panels + multi-user (PocketID OIDC)
-- **F6** — Tailscale SSH + RustDesk Direct IP + Sunshine
-- **F7** — One-liner public + Windows winget + docs site
-- **F8** — Hardening, DR drill, API compat policy, v1.0.0 GA
+### Roadmap v1.x+
+
+- **v1.1** — GUI installer (Tauri) for family Windows users
+- **v1.2** — WebSocket multi-channel (currently REST polling)
+- **v1.3** — NetBird control-plane optional (Tailscale vendor escape)
+- **v2.0** — EV code signing, MSI installer, code-reviewed pentest
+
+See [GitHub Issues](https://github.com/monxas/remote-pulse/issues) for feature requests and bugs.
 
 ## Development
 

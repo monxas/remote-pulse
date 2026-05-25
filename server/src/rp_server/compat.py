@@ -9,10 +9,10 @@ from typing import Literal
 SERVER_API_VERSION = "1.0.0"
 
 # Oldest agent version we still support (N-2 policy)
-SERVER_MIN_AGENT_VERSION = "0.1.0"
+SERVER_MIN_AGENT_VERSION = "1.0.0"
 
 # Agent versions that still work but trigger deprecation warnings
-SERVER_DEPRECATED_AGENT_VERSIONS = ["0.0.x"]
+SERVER_DEPRECATED_AGENT_VERSIONS = []
 
 # Feature flags announced to agents via /v1/server/info
 API_FEATURES = [

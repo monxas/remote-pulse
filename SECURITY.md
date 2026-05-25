@@ -4,9 +4,26 @@
 
 Found a vulnerability in Remote-Pulse? **Please do not open a public GitHub issue.**
 
-Email: **security@monxas.casa** (forwards to the maintainer).
+**Contact:** security@monxas.casa (forwards to the maintainer)
 
-Expected response time: 72 hours acknowledgement, 30 days fix or mitigation plan.
+**PGP key:** TBD (targeting v0.2.0 — for now, email is unencrypted but monitored)
+
+### Disclosure timeline
+
+We follow coordinated vulnerability disclosure (CVD):
+
+1. **Acknowledgement:** Within 72 hours of report
+2. **Initial assessment:** Within 7 days (severity classification, impact analysis)
+3. **Fix or mitigation plan:** Within 30 days
+4. **Public disclosure:** 90 days after fix deployed (or sooner if mutually agreed)
+
+### Bug bounty
+
+No formal bug bounty program (homelab scope, non-commercial). However:
+- Responsible disclosures acknowledged in `SECURITY.md` acknowledgements section
+- Critical findings may receive recognition in release notes
+
+We appreciate security research conducted ethically and responsibly.
 
 ## Scope
 
@@ -46,4 +63,17 @@ Pre-alpha. Once v1.0.0 ships, N-2 deprecation policy applies (see ADR-0008 Appen
 
 ## Acknowledgements
 
-Will list responsible disclosers here once we get any.
+Responsible disclosers recognized here:
+
+- *No public vulnerabilities reported yet (v0.1.0 pre-release)*
+
+Thank you to all security researchers who help keep Remote-Pulse secure.
+
+---
+
+## Additional resources
+
+- **Security audit report:** [docs/security/audit-2026-05-25.md](docs/security/audit-2026-05-25.md)
+- **Security checklist:** [docs/security/checklist.md](docs/security/checklist.md)
+- **Architecture security model:** [ADR-0008 §5](https://docs.monxas.casa/architecture/adr/ADR-0008-remote-pulse/) (defense-in-depth layers)
+- **DR procedure:** ADR-0008 Appendix F (disaster recovery, key rotation)

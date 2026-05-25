@@ -206,11 +206,58 @@ jobs:
           name: SHA256SUMS
           path: release/SHA256SUMS
 
+  cosign-sign:
+    name: Cosign sign artifacts
+    needs: sha256sums
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare binaries
+        run: |
+          mkdir -p release
+          cp artifacts/rp-linux-x64/rp release/rp-linux-x64
+          cp artifacts/rp-linux-arm64/rp release/rp-linux-arm64
+          cp artifacts/rp-macos-x64/rp release/rp-macos-x64
+          cp artifacts/rp-macos-arm64/rp release/rp-macos-arm64
+          cp artifacts/rp-windows-x64.exe/rp.exe release/rp-windows-x64.exe
+
+      - name: Sign all binaries
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        working-directory: release
+        run: |
+          for binary in rp-*; do
+            echo "Signing $binary..."
+            cosign sign-blob --yes \
+              --bundle "${binary}.sig" \
+              "$binary"
+          done
+
+      - name: Upload signatures
+        uses: actions/upload-artifact@v4
+        with:
+          name: signatures
+          path: release/*.sig
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
       - sha256sums
+      - cosign-sign
     timeout-minutes: 5
     permissions:
       contents: write
@@ -233,6 +280,7 @@ jobs:
           cp artifacts/rp-macos-arm64/rp release/rp-macos-arm64
           cp artifacts/rp-windows-x64.exe/rp.exe release/rp-windows-x64.exe
           cp artifacts/SHA256SUMS/SHA256SUMS release/SHA256SUMS
+          cp artifacts/signatures/*.sig release/ || true
           ls -lh release/
 
       - name: Generate changelog
@@ -275,6 +323,7 @@ jobs:
             release/rp-macos-arm64
             release/rp-windows-x64.exe
             release/SHA256SUMS
+            release/*.sig
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           draft: false
 
