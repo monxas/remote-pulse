@@ -42,6 +42,23 @@ the same six series as the TUI, plus the audit-log tail.
     [`server/src/rp_server/web/`](https://github.com/monxas/remote-pulse/tree/main/server/src/rp_server)
     once that phase starts.
 
+## Set up screen sharing
+
+The web dashboard's "Open screen" action launches `rp screen <host>` via the
+CLI. For that to work, the **host** must first have a screen-sharing tool
+installed and configured. Run on the target host:
+
+```bash
+sudo rp install-screen rustdesk   # Linux / macOS / Windows
+rp install-screen sunshine         # Windows GPU hosts
+sudo rp install-screen vnc         # Linux GUI fallback
+```
+
+The agent generates the secret, binds to the Tailscale interface, and
+reports the resulting capabilities back to the server so they appear in this
+dashboard. See [`rp install-screen` in the CLI reference](cli.md) for the
+full flag set.
+
 ## See also
 
 - [Security model](../architecture/security.md)

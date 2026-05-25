@@ -296,3 +296,99 @@ class AgentVersion(Base):
         nullable=False,
         server_default=text("now()"),
     )
+
+
+class User(Base):
+    """User accounts for web dashboard access via PocketID OIDC.
+
+    F5 schema. Users are synced from PocketID IdP and have role-based access
+    with group filtering for multi-tenant fleet visibility.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    pocketid_sub: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    role: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'viewer'"),
+    )
+    accessible_groups: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default=text("ARRAY[]::TEXT[]"),
+    )
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+
+
+class CanaryDeploy(Base):
+    """Canary deployment tracking for agent upgrades.
+
+    F8 schema. Tracks canary deploy state machine:
+    pending → observing → propagating → complete | failed_rollback
+    """
+
+    __tablename__ = "canary_deploys"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    group_name: Mapped[str] = mapped_column(Text, nullable=False)
+    target_version: Mapped[str] = mapped_column(Text, nullable=False)
+    canary_host_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hosts.id"),
+        nullable=False,
+    )
+    state: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'pending'"),
+    )
+    initiated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    )
+    observation_minutes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("10"),
+    )
+    canary_health_check_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    propagation_started_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    failed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    initiated_by: Mapped[str] = mapped_column(Text, nullable=False)

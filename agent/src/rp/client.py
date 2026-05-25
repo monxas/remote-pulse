@@ -6,6 +6,7 @@ from typing import Any, Optional
 import httpx
 import structlog
 
+from rp.compat import APICompatHandler
 from rp.config import AgentConfig
 
 logger = structlog.get_logger()
@@ -25,13 +26,18 @@ class RPClient:
         self.config = config
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
+        self._compat_handler = APICompatHandler(config.server_url)
 
     async def __aenter__(self):
         """Async context manager entry."""
+        # Prepare default headers with version info
+        default_headers = {"User-Agent": "remote-pulse-agent/0.1.0"}
+        default_headers = self._compat_handler.add_version_headers(default_headers)
+
         self._client = httpx.AsyncClient(
             base_url=self.config.server_url,
             timeout=self.timeout,
-            headers={"User-Agent": "remote-pulse-agent/0.1.0"},
+            headers=default_headers,
         )
         return self
 
@@ -79,6 +85,9 @@ class RPClient:
 
                 response = await self._client.request(method, path, json=json)
                 response.raise_for_status()
+
+                # Handle compatibility response headers
+                self._compat_handler.handle_compat_response(response)
 
                 return response.json()
 
@@ -154,6 +163,37 @@ class RPClient:
         logger.debug("sending heartbeat", host_id=self.config.host_id)
         return await self._request("POST", "/v1/heartbeat", json=payload)
 
+    async def update_capabilities(self, capabilities: dict[str, Any]) -> dict[str, Any]:
+        """
+        Report updated host capabilities to the server.
+
+        POSTs to ``/v1/hosts/{host_id}/capabilities`` so the dashboard and
+        ``rp screen`` resolver pick up the new state immediately (without
+        waiting for the next heartbeat).
+
+        Returns:
+            Server response payload (best-effort; warns if endpoint missing).
+        """
+        path = f"/v1/hosts/{self.config.host_id}/capabilities"
+        payload = {
+            "host_id": self.config.host_id,
+            "capabilities": capabilities,
+        }
+        logger.info(
+            "updating_capabilities",
+            host_id=self.config.host_id,
+            keys=sorted(capabilities.keys()),
+        )
+        try:
+            return await self._request("POST", path, json=payload, retry_count=2)
+        except httpx.HTTPError as e:
+            logger.warning("update_capabilities_failed", error=str(e), path=path)
+            return {
+                "status": "warning",
+                "message": "Capabilities endpoint not available; "
+                "will resync on next heartbeat.",
+            }
+
     async def deregister(self) -> dict[str, Any]:
         """
         Deregister host from server.
@@ -173,6 +213,83 @@ class RPClient:
             # F1: Server endpoint may not exist yet, fail gracefully
             logger.warning("deregister failed (endpoint may not exist)", error=str(e))
             return {"status": "warning", "message": "Server endpoint not available"}
+
+    async def version_handshake(
+        self,
+        agent_version: str,
+        api_compat_min: str,
+        api_compat_max: str,
+    ) -> dict[str, Any]:
+        """
+        Send version handshake to server after upgrade.
+
+        Args:
+            agent_version: New agent version
+            api_compat_min: Minimum compatible API version
+            api_compat_max: Maximum compatible API version
+
+        Returns:
+            Server response
+        """
+        payload = {
+            "host_id": self.config.host_id,
+            "agent_version": agent_version,
+            "api_compat_min": api_compat_min,
+            "api_compat_max": api_compat_max,
+        }
+
+        logger.info(
+            "sending version handshake",
+            host_id=self.config.host_id,
+            agent_version=agent_version,
+        )
+        return await self._request("POST", "/v1/agent/version-handshake", json=payload)
+
+    async def report_rollback(
+        self,
+        from_version: str,
+        to_version: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        """
+        Report rollback to server.
+
+        Args:
+            from_version: Version rolled back from
+            to_version: Version rolled back to
+            reason: Rollback reason
+
+        Returns:
+            Server response
+        """
+        payload = {
+            "host_id": self.config.host_id,
+            "from_version": from_version,
+            "to_version": to_version,
+            "reason": reason,
+        }
+
+        logger.info(
+            "reporting rollback",
+            host_id=self.config.host_id,
+            from_version=from_version,
+            to_version=to_version,
+            reason=reason,
+        )
+        return await self._request("POST", "/v1/agent/rollback", json=payload)
+
+    async def send_heartbeat(self) -> dict[str, Any]:
+        """
+        Send minimal heartbeat for self-check.
+
+        Returns:
+            Server response
+        """
+        return await self._request(
+            "POST",
+            "/v1/heartbeat",
+            json={"host_id": self.config.host_id},
+        )
 
     async def get(self, path: str, **kwargs) -> httpx.Response:
         """

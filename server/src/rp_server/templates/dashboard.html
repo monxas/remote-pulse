@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Fleet Dashboard - Remote-Pulse{% endblock %}
+
+{% block content %}
+<h1>Fleet Dashboard</h1>
+
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label for="group-filter">Group:</label>
+                <select id="group-filter" name="group" onchange="window.location.href='/dash?group_filter=' + this.value">
+                    <option value="all" {% if selected_group == 'all' %}selected{% endif %}>All</option>
+                    {% for group in available_groups %}
+                    <option value="{{ group }}" {% if selected_group == group %}selected{% endif %}>{{ group }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <span style="color: #95a5a6;">Last updated: <span id="last-update">{{ now().strftime('%H:%M:%S') }}</span></span>
+            </div>
+        </div>
+    </header>
+
+    <table role="grid">
+        <thead>
+            <tr>
+                <th>Host</th>
+                <th>Group</th>
+                <th>Status</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Load 1m</th>
+                <th>Last Seen</th>
+            </tr>
+        </thead>
+        <tbody 
+            hx-get="/dash/hosts/refresh?group_filter={{ selected_group }}"
+            hx-trigger="every 5s"
+            hx-swap="innerHTML">
+            {% for host in hosts %}
+            {% include 'partials/host_row.html' %}
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Update last-update timestamp every second
+    setInterval(() => {
+        const now = new Date();
+        document.getElementById('last-update').textContent = 
+            now.toLocaleTimeString('en-GB', { hour12: false });
+    }, 1000);
+</script>
+{% endblock %}

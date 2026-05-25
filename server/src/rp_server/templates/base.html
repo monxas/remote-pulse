@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Remote-Pulse Dashboard{% endblock %}</title>
+    
+    <!-- Pico.css minimal CSS framework -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    
+    <!-- HTMX 2.0 -->
+    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+    
+    <!-- uPlot.js for sparklines -->
+    <link rel="stylesheet" href="https://unpkg.com/uplot@1.6/dist/uPlot.min.css">
+    <script src="https://unpkg.com/uplot@1.6/dist/uPlot.iife.min.js"></script>
+    
+    <style>
+        .sparkline { width: 120px; height: 40px; display: inline-block; }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+        .status-up { background-color: #2ecc71; }
+        .status-down { background-color: #e74c3c; }
+        .status-stale { background-color: #f39c12; }
+        nav { margin-bottom: 2rem; }
+        .user-info { float: right; }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><strong>Remote-Pulse</strong></li>
+        </ul>
+        <ul>
+            <li><a href="/dash">Dashboard</a></li>
+            <li><a href="/dash/enroll-link">Enroll</a></li>
+            <li class="user-info">
+                {{ user.name or user.email }}
+                <span style="color: #95a5a6;">({{ user.role }})</span>
+                | <a href="/logout">Logout</a>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer style="margin-top: 3rem; text-align: center; color: #95a5a6;">
+        <small>Remote-Pulse v0.5 | Powered by PocketID OIDC</small>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

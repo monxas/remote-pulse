@@ -12,15 +12,19 @@ from fastapi.responses import JSONResponse, Response
 from rp_server import __version__
 from rp_server.config import settings
 from rp_server.database import DbSession, engine
+from rp_server.middleware.compat import APICompatMiddleware
 from rp_server.routers import (
     admin,
     approvals,
     commands,
+    compat,
     enroll,
+    enrollment_links,
     heartbeat,
     hosts,
     keys,
     metrics,
+    web,
 )
 
 # Configure structured logging
@@ -66,6 +70,10 @@ app = FastAPI(
 )
 
 
+# API Compatibility middleware (before custom middleware)
+app.add_middleware(APICompatMiddleware)
+
+
 # Prometheus metrics middleware
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
@@ -86,6 +94,7 @@ async def metrics_middleware(request: Request, call_next):
 
 
 # Include routers
+app.include_router(compat.router)  # Public info endpoint first
 app.include_router(enroll.router)
 app.include_router(heartbeat.router)
 app.include_router(hosts.router)
@@ -94,6 +103,8 @@ app.include_router(keys.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
 app.include_router(approvals.router)
+app.include_router(web.router)  # F5: Web dashboard
+app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
 
 @app.get("/health")

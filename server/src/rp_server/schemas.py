@@ -296,3 +296,201 @@ class AgentVersionInfo(BaseModel):
             api_compat_min=min_match.group(1),
             api_compat_max=max_match.group(1),
         )
+
+
+# F5 schemas - Users
+
+
+class UserBase(BaseModel):
+    """Base user fields."""
+
+    email: str = Field(min_length=1, max_length=255)
+    name: str | None = None
+    role: str = Field(default="viewer", pattern=r"^(admin|operator|viewer)$")
+    accessible_groups: list[str] = Field(default_factory=list)
+    avatar_url: str | None = None
+
+
+class UserCreate(UserBase):
+    """User creation request (internal)."""
+
+    pocketid_sub: str = Field(min_length=1)
+
+
+class UserUpdate(BaseModel):
+    """User update request (partial)."""
+
+    name: str | None = None
+    role: str | None = Field(default=None, pattern=r"^(admin|operator|viewer)$")
+    accessible_groups: list[str] | None = None
+    avatar_url: str | None = None
+    is_active: bool | None = None
+
+
+class UserResponse(UserBase):
+    """User response with full details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    pocketid_sub: str
+    created_at: datetime
+    last_login_at: datetime | None = None
+    is_active: bool
+
+
+class MeResponse(BaseModel):
+    """Current user info response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    name: str | None
+    role: str
+    accessible_groups: list[str]
+    avatar_url: str | None = None
+
+
+# F7-6 schemas - Enrollment Links
+
+
+class EnrollLinkRequest(BaseModel):
+    """Magic-link enrollment request."""
+
+    group: str = Field(default="default", max_length=100)
+    hostname: str | None = Field(default=None, max_length=255)
+    ttl_hours: int = Field(default=24, ge=1, le=168)  # max 7 days
+    max_uses: int = Field(default=1, ge=1, le=100)
+
+
+class EnrollLinkResponse(BaseModel):
+    """Magic-link enrollment response."""
+
+    token: str
+    expires_at: datetime
+    magic_url_unix: str
+    magic_url_windows: str
+    qr_code_svg: str
+
+
+# F8-3 schemas - API Compatibility
+
+
+class ServerInfoResponse(BaseModel):
+    """Server info response for agent compatibility checks.
+
+    Public endpoint (no auth) - agents call before connecting.
+    See ADR-0008 Appendix G for version negotiation policy.
+    """
+
+    server_version: str = Field(description="Server API version (semver)")
+    api_version: str = Field(default="v1", description="API prefix version")
+    min_agent_version: str = Field(description="Minimum supported agent version")
+    deprecated_agent_versions: list[str] = Field(
+        description="Agent versions that trigger deprecation warnings"
+    )
+    features: list[str] = Field(
+        description="List of supported feature flags (e.g. 'heartbeat', 'signed_commands')"
+    )
+    tailscale_ssh_supported: bool = Field(default=True)
+    rustdesk_direct_ip_supported: bool = Field(default=True)
+    sunshine_supported: bool = Field(default=True)
+    max_metrics_window: str = Field(
+        default="1y", description="Maximum time window for metrics queries"
+    )
+    metrics_retention_policy: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "heartbeat_raw": "90d",
+            "metrics_downsampled_5m": "1y",
+            "metrics_downsampled_1h": "5y",
+        }
+    )
+
+
+class CompatMatrixEntry(BaseModel):
+    """Agent version distribution entry."""
+
+    agent_version: str
+    host_count: int
+    deprecated: bool
+    compatible: bool
+
+
+class CompatMatrixResponse(BaseModel):
+    """Compatibility matrix showing agent version distribution across fleet."""
+
+    server_version: str
+    min_agent_version: str
+    entries: list[CompatMatrixEntry]
+    total_hosts: int
+
+
+# F8 schemas - Canary deploy
+
+
+class CanaryUpgradeRequest(BaseModel):
+    """Request to initiate canary upgrade."""
+
+    group: str = Field(description="Target group for upgrade")
+    target_version: str = Field(pattern=r"^\d+\.\d+\.\d+", description="Target agent version")
+    canary_host_id: uuid.UUID | None = Field(
+        default=None,
+        description="Specific host ID for canary (if None, selects lowest-criticality)",
+    )
+    observation_minutes: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Observation period after canary upgrade",
+    )
+
+
+class CanaryUpgradeResponse(BaseModel):
+    """Response from canary upgrade initiation."""
+
+    canary_id: uuid.UUID
+    target_version: str
+    canary_host_id: uuid.UUID
+    canary_hostname: str
+    group_name: str
+    observation_minutes: int
+    eta_minutes: int
+    state: str
+
+
+class CanaryStatus(BaseModel):
+    """Status of a canary deploy."""
+
+    id: uuid.UUID
+    group_name: str
+    target_version: str
+    canary_host_id: uuid.UUID
+    canary_hostname: str
+    state: str  # pending, observing, propagating, complete, failed_rollback
+    initiated_at: datetime
+    observation_minutes: int
+    canary_health_check_at: datetime | None
+    propagation_started_at: datetime | None
+    completed_at: datetime | None
+    failed_reason: str | None
+    initiated_by: str
+    hosts_remaining: int
+    hosts_upgraded: int
+
+
+class SelfCheckRequest(BaseModel):
+    """Self-check report from agent post-upgrade."""
+
+    host_id: uuid.UUID
+    agent_version: str
+    upgrade_id: uuid.UUID | None = None
+    status: str  # ok, failed
+    errors: list[str] = Field(default_factory=list)
+
+
+class SelfCheckResponse(BaseModel):
+    """Response to self-check report."""
+
+    acknowledged: bool
+    canary_state_updated: bool = False

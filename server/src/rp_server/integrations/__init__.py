@@ -1,1 +1,1 @@
-"""Integrations with external services."""
+"""External integrations for Remote-Pulse server."""

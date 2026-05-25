@@ -111,6 +111,36 @@ If the workstation is not on the tailnet, `rp dash` falls back to the public
 HTTPS endpoint and uses OIDC (PocketID) login. The dashboard scopes hosts
 by the user's `accessible_groups`.
 
+## Set up screen sharing
+
+Each host in the TUI shows screen-sharing capabilities (RustDesk / Sunshine /
+TigerVNC) when they have been provisioned on that host. To enable them, run
+the matching `rp install-screen` command **on the host you want to control**:
+
+```bash
+# Linux / macOS / Windows — generic, P2P over Direct IP
+sudo rp install-screen rustdesk
+
+# Windows GPU hosts — low-latency Moonlight streaming
+rp install-screen sunshine
+
+# Linux GUI hosts without GPU — TigerVNC fallback
+sudo rp install-screen vnc
+
+# Check what is currently installed
+rp install-screen status
+```
+
+The agent generates the secret, binds to the Tailscale interface, and POSTs
+the resulting capabilities to the server. After that, from your workstation:
+
+```bash
+rp screen <host>
+```
+
+picks the best protocol automatically (RustDesk > Sunshine > VNC). See the
+[CLI reference](cli.md) for the full flag list.
+
 ## See also
 
 - [Web dashboard](web-dashboard.md) — same data, browser-based.

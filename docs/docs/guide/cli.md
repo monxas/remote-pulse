@@ -203,6 +203,52 @@ Open RustDesk (Direct IP) or Sunshine against the target.
 
 Run a shell command remotely with audit logging.
 
+## Screen-sharing setup <span class="rp-badge planned">F6</span>
+
+`rp install-screen` is the **host-side** companion to `rp screen`. It
+installs and configures the screen-sharing server on the current machine
+(RustDesk Direct IP, Sunshine GameStream, or TigerVNC), writes secrets to
+`/etc/rp/` (or `C:\ProgramData\rp` on Windows), and POSTs the resulting
+capabilities to the server.
+
+### `rp install-screen rustdesk`
+
+Install the RustDesk client + configure Direct IP mode (no rendezvous
+server, P2P over Tailscale). Cross-OS (apt/dnf/AUR on Linux, Homebrew on
+macOS, winget on Windows).
+
+| Flag | Description |
+|------|-------------|
+| `--force` | Reinstall even if already present. |
+| `--password <str>` | Custom password (default: 32-char random). |
+| `--tailscale-ip <ip>` | Bind to a specific Tailscale IPv4. |
+| `--skip-server-report` | Don't POST capabilities back to the server. |
+
+### `rp install-screen sunshine`
+
+Install Sunshine (Windows GPU hosts only). Downloads
+`sunshine-windows-installer.exe` from the LizardByte release, verifies
+SHA256, runs the NSIS silent install, opens firewall ports 47984/47989/47990
+and enables the auto-start service. **Pairing is one-time manual** — the
+PIN must be entered via the Sunshine web admin at
+`https://<tailscale-ip>:47990`.
+
+| Flag | Description |
+|------|-------------|
+| `--force` | Reinstall + override GPU detection. |
+| `--tailscale-ip <ip>` | Bind admin UI to specific Tailscale IPv4. |
+| `--skip-server-report` | Don't POST capabilities back to the server. |
+
+### `rp install-screen vnc`
+
+Install TigerVNC (Linux GUI fallback when no GPU). Requires an X11 server
+on the host.
+
+### `rp install-screen status`
+
+Print a table of which screen-sharing tools are installed locally and at
+what version.
+
 ## Admin <span class="rp-badge planned">F5+</span>
 
 The `rp admin` namespace is reserved for server-side operations (enrollment,

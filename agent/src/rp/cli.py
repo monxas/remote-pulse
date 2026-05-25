@@ -4,6 +4,7 @@ import click
 import structlog
 
 from rp import __version__
+from rp.commands.compat import compat_cmd
 from rp.commands.install import install
 from rp.commands.register import register
 from rp.commands.heartbeat import heartbeat
@@ -16,6 +17,8 @@ from rp.commands.keys import keys
 from rp.commands.ssh import ssh
 from rp.commands.screen import screen
 from rp.commands.exec import exec_
+from rp.commands.upgrade import upgrade
+from rp.commands.install_screen import install_screen
 
 # Configure structured logging
 structlog.configure(
@@ -54,6 +57,9 @@ main.add_command(keys)
 main.add_command(ssh)
 main.add_command(screen)
 main.add_command(exec_)
+main.add_command(upgrade)
+main.add_command(install_screen)
+main.add_command(compat_cmd)
 
 
 if __name__ == "__main__":

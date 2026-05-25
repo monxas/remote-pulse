@@ -209,6 +209,23 @@ rp screen pmx-51 --no-wait
 - **Local machine**: Must have corresponding client (RustDesk/Moonlight/VNC viewer)
 
 **Installation:**
+
+Use the agent helper (recommended — also configures Direct IP + reports
+capabilities to the server):
+
+```bash
+# Linux (Debian/Ubuntu/Fedora/Arch) - run as root
+sudo rp install-screen rustdesk
+
+# macOS (requires Homebrew)
+rp install-screen rustdesk
+
+# Windows (requires winget)
+rp install-screen rustdesk
+```
+
+Or install manually:
+
 ```bash
 # macOS
 brew install --cask rustdesk
@@ -219,6 +236,52 @@ sudo apt install rustdesk
 # Windows
 winget install RustDesk.RustDesk
 ```
+
+## Screen sharing setup
+
+`rp install-screen` is the companion command to `rp screen <host>`. It
+installs the **host-side** screen-sharing tool (RustDesk Direct IP,
+Sunshine, or TigerVNC), generates secrets, binds to the Tailscale interface,
+and POSTs the resulting capabilities to the server so the dashboard picks
+them up without waiting for the next heartbeat.
+
+```bash
+# Linux/macOS/Windows: install RustDesk + configure Direct IP
+sudo rp install-screen rustdesk
+# + rustdesk 1.2.3 installed via dpkg
+#   Direct IP configured, password saved to /etc/rp/rustdesk.toml
+#   bind=0.0.0.0  id_server=direct
+#   Reported capabilities to server.
+
+# Windows GPU hosts: install Sunshine
+rp install-screen sunshine
+# + sunshine 0.21.0 installed via msi-silent
+#   Admin URL: https://100.64.0.115:47990
+#   Username: rp-admin
+#   Credentials saved to C:\ProgramData\rp\sunshine.toml
+#   One-time pairing required: open the admin URL in a browser to pair
+#   Moonlight client.
+
+# Linux GUI fallback (no GPU): install TigerVNC
+sudo rp install-screen vnc
+
+# Inspect local install state
+rp install-screen status
+#   Tool       Installed    Version
+#   ------------------------------------
+#   RustDesk   ✓ yes        1.2.3
+#   Sunshine   ✗ no         —
+#   TigerVNC   ✗ no         —
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--force` | Reinstall even if present (and override GPU check for Sunshine). |
+| `--password` | Custom RustDesk password (default: 32-char random). |
+| `--tailscale-ip` | Bind to a specific Tailscale IPv4 instead of `0.0.0.0`. |
+| `--skip-server-report` | Don't POST capabilities to the server. |
 
 ### Remote Exec: `rp exec <host|@group> -- <cmd>`
 
