@@ -15,6 +15,7 @@ from sqlalchemy import select, func
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin, require_operator_or_admin
+from rp_server.events import fire_and_forget
 from rp_server.models import CanaryDeploy, Command, Host, User
 from rp_server.schemas import (
     CanaryStatus,
@@ -138,6 +139,19 @@ async def create_command(
         command_type=request.command_type,
         expires_at=expires_at.isoformat(),
         human_approved=request.human_approved,
+    )
+
+    # ADR-0009 Phase 2: notify dashboards listening on /v1/dash/stream.
+    fire_and_forget(
+        "command.issued",
+        {
+            "command_id": str(command_id),
+            "host_id": str(request.host_id),
+            "group_name": host.group_name,
+            "command_type": request.command_type,
+            "issued_by": issued_by,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        },
     )
 
     # Convert to response schema
