@@ -76,7 +76,7 @@ async def receive_heartbeat(
             "host_id": str(request.host_id),
             "hostname": host.hostname,
             "cpu_pct": request.cpu_pct,
-            "tailscale_login": ts_identity.login,
+            "tailscale_login": ts_identity.login if ts_identity else None,
         },
     )
 
