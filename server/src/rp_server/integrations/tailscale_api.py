@@ -53,7 +53,19 @@ class TailscaleValidationError(TailscaleAPIError):
 
 
 class TailscaleAPIClient:
-    """Async wrapper for Tailscale API operations."""
+    """Async wrapper for Tailscale API operations.
+
+    Supports two credential formats:
+
+    - **OAuth client secret** (``tskey-client-...``): the modern format.
+      We exchange it for a short-lived Bearer access token via
+      ``POST /api/v2/oauth/token`` (client_credentials grant), cache it
+      until ~30s before expiry, and use it as ``Authorization: Bearer``.
+    - **Personal access token / API key** (``tskey-api-...``): legacy,
+      used directly as Bearer.
+
+    Detection is by prefix on ``api_key``.
+    """
 
     def __init__(
         self,
@@ -66,7 +78,9 @@ class TailscaleAPIClient:
         Initialize Tailscale API client.
 
         Args:
-            api_key: Tailscale API key (tskey-api-xxxx)
+            api_key: Either OAuth client secret (``tskey-client-...``) or PAT
+                (``tskey-api-...``). The client transparently handles the
+                OAuth exchange if needed.
             tailnet: Tailnet identifier ("-" = default tailnet of API key owner)
             timeout: Request timeout in seconds
             max_retries: Number of retry attempts for transient errors
@@ -76,6 +90,54 @@ class TailscaleAPIClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.base_url = "https://api.tailscale.com/api/v2"
+        # Cached Bearer token from OAuth exchange (None for PAT)
+        self._cached_bearer: str | None = None
+        self._cached_bearer_expires_at: float = 0.0
+
+    def _is_oauth_client_secret(self) -> bool:
+        return self.api_key.startswith("tskey-client-")
+
+    async def _get_bearer(self) -> str:
+        """Return a valid Bearer token, refreshing via OAuth exchange if needed."""
+        import time
+
+        if not self._is_oauth_client_secret():
+            # PAT: usable directly as Bearer.
+            return self.api_key
+
+        # OAuth client secret: exchange for short-lived access token.
+        now = time.time()
+        if self._cached_bearer and self._cached_bearer_expires_at - 30 > now:
+            return self._cached_bearer
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # client_id is embedded in the secret prefix ("tskey-client-<ID>-...")
+            # but Tailscale accepts the full secret as both client_id and
+            # client_secret for legacy reasons. Submit both explicitly.
+            client_id = self.api_key.split("-")[2] if self.api_key.count("-") >= 3 else ""
+            resp = await client.post(
+                f"{self.base_url}/oauth/token",
+                data={
+                    "client_id": client_id,
+                    "client_secret": self.api_key,
+                    "grant_type": "client_credentials",
+                },
+            )
+            if resp.status_code != 200:
+                raise TailscaleAuthenticationError(
+                    f"OAuth token exchange failed ({resp.status_code}): {resp.text}"
+                )
+            data = resp.json()
+            self._cached_bearer = data["access_token"]
+            self._cached_bearer_expires_at = now + float(data.get("expires_in", 3600))
+            logger.info(
+                "Tailscale OAuth token refreshed",
+                extra={
+                    "expires_in": data.get("expires_in"),
+                    "scope": data.get("scope"),
+                },
+            )
+            return self._cached_bearer
 
     async def create_authkey(
         self,
@@ -126,16 +188,14 @@ class TailscaleAPIClient:
         if description:
             payload["description"] = description
 
+        bearer = await self._get_bearer()
         for attempt in range(self.max_retries):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(
                         url,
                         json=payload,
-                        auth=(
-                            self.api_key,
-                            "",
-                        ),  # HTTP Basic auth (username=api_key, password=empty)
+                        headers={"Authorization": f"Bearer {bearer}"},
                     )
 
                     # Handle error responses

@@ -16,7 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from rp_server.config import settings
 from rp_server.main import app
-from rp_server.models import Base, User
+from rp_server.models import User
 
 
 @pytest.fixture(autouse=True)
