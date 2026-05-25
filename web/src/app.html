@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Remote-Pulse fleet dashboard" />
+    <title>Remote-Pulse</title>
+    <!--
+      Pre-paint theme bootstrap. Runs before any CSS variable is read so the
+      initial paint already matches the persisted / preferred theme — no
+      flash-of-unstyled-content when switching between dark and light.
+
+      We set both `data-theme="..."` (queryable by app code) and a
+      `light-theme`/`dark-theme` class (matched by Radix Colors' ramp CSS).
+      Storage key matches ThemeToggle.svelte. ADR-0009 §3 / §6.1.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('rp-theme');
+          var resolved;
+          if (stored === 'light' || stored === 'dark') {
+            resolved = stored;
+          } else {
+            // 'system' or unset: defer to the OS preference. Dark is the
+            // default per ADR-0009 §2 driver #1.
+            resolved = window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+          }
+          var html = document.documentElement;
+          html.dataset.theme = resolved;
+          html.classList.remove('light-theme', 'dark-theme');
+          html.classList.add(resolved + '-theme');
+        } catch (_) {
+          var html = document.documentElement;
+          html.dataset.theme = 'dark';
+          html.classList.add('dark-theme');
+        }
+      })();
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

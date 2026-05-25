@@ -42,6 +42,14 @@ in deployment-order.
     to PocketID).
 - **Rate-limit:** 10 req/min/IP on `/v1/enroll`.
 
+!!! note "Dashboard redesign in flight (ADR-0009)"
+    A new SvelteKit SPA is being built under [`web/`](https://github.com/monxas/remote-pulse/tree/main/web)
+    and mounted in parallel at `/dash-next/`. The v1.0 Jinja+HTMX dashboard
+    at `/dash/` stays live until the Phase 3 cutover. See
+    [ADR-0009](adr/ADR-0009-web-dashboard-redesign.md) for the phase plan
+    and the [Caddy runbook](../runbooks/rp-dash-next-caddy.md) for the
+    public-matcher change required on LXC 270/271.
+
 ## Storage
 
 Postgres 16 + TimescaleDB on LXC 280:

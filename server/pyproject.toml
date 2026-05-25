@@ -41,6 +41,24 @@ postgres-tests = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Ship the SvelteKit SPA build output alongside the package. The directory
+# is populated by `scripts/build_dashboard.sh` (ADR-0009 Phase 0) prior to
+# `hatch build`; in dev / CI it stays empty (only `.gitkeep`) and the
+# runtime `StaticFiles` mount no-ops gracefully.
+[tool.hatch.build.targets.wheel]
+packages = ["src/rp_server"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/rp_server/static/dash-next" = "rp_server/static/dash-next"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "alembic.ini",
+    "alembic/",
+    "config/",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

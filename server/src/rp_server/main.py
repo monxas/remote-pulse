@@ -3,12 +3,14 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from rp_server import __version__
 from rp_server.config import settings
@@ -162,6 +164,36 @@ app.include_router(approvals.router)
 app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
 app.include_router(web.router)  # F5: Web dashboard
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
+
+
+# ADR-0009 Phase 0: mount the SvelteKit SPA at /dash-next/ in parallel to the
+# v1.0 Jinja dashboard at /dash/. The SPA itself enforces auth (it fetches
+# /auth/me on boot and redirects to /auth/login on 401), so we mount the
+# static files with no dependency-injected auth gate — `StaticFiles` is a
+# raw ASGI app that bypasses FastAPI's dependency system anyway. Caddy's
+# public matcher will be extended to cover /dash-next/* so the SPA shell
+# loads without forward_auth headers (see docs/runbooks/rp-dash-next-caddy.md).
+#
+# The directory lives inside the installed package via
+# `static/dash-next/<built assets>`. `scripts/build_dashboard.sh` populates
+# it from `web/build/` after `npm run build`. The path is computed off
+# `__file__` so it works both from a dev `uv run uvicorn …` checkout and
+# from an installed wheel.
+_DASH_NEXT_DIR = Path(__file__).parent / "static" / "dash-next"
+if _DASH_NEXT_DIR.is_dir():
+    # `html=True` makes StaticFiles serve `index.html` for any path that
+    # doesn't match a file — exactly what the SPA's client-side router
+    # needs for deep links like /dash-next/hosts/<id>.
+    app.mount(
+        "/dash-next",
+        StaticFiles(directory=str(_DASH_NEXT_DIR), html=True),
+        name="dash-next",
+    )
+else:
+    logger.warning(
+        "dash-next static directory not found; SPA mount skipped (%s)",
+        _DASH_NEXT_DIR,
+    )
 
 
 @app.get("/health")

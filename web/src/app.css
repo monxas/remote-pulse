@@ -1,0 +1,102 @@
+/*
+ * Global stylesheet — Tailwind v4 entrypoint plus design tokens.
+ *
+ * Tailwind v4 is CSS-first: `@import "tailwindcss"` pulls in Preflight,
+ * utilities, etc. We extend its `@theme` with our radix-mapped semantic
+ * tokens so utilities like `bg-base`, `text-muted`, `border-default`
+ * resolve to our palette. See ADR-0009 §3.2 / §6.1.
+ */
+
+/* Self-hosted variable fonts — no CDN, no Google Fonts. ADR-0009 §3.7. */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource-variable/geist-mono/index.css';
+
+@import 'tailwindcss';
+
+/* Design tokens (radix-colors -> semantic). Must precede `@theme` so the
+   `--color-*` aliases below can reference the semantic vars. */
+@import './lib/styles/tokens.css';
+
+/*
+ * Tailwind v4 `@theme` block. Each `--color-*` token becomes a utility
+ * (`bg-base`, `text-default`, `border-default`, ...). `--font-*` tokens
+ * power `font-sans`, `font-mono`. `--radius-*` powers `rounded-md`, etc.
+ *
+ * We point at the CSS variables (rather than hard-coding values) so the
+ * radix ramp swap on theme change cascades into every utility.
+ */
+@theme {
+  --color-base: var(--bg-base);
+  --color-subtle: var(--bg-subtle);
+  --color-elevated: var(--bg-elevated);
+  --color-hover: var(--bg-hover);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  --color-muted: var(--text-muted);
+  --color-default: var(--text-default);
+
+  --color-accent: var(--accent-solid);
+  --color-accent-hover: var(--accent-solid-hover);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-text: var(--accent-text);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-success: var(--success-solid);
+  --color-success-bg: var(--success-bg);
+  --color-success-text: var(--success-text);
+
+  --color-warn: var(--warn-solid);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-text: var(--warn-text);
+
+  --color-danger: var(--danger-solid);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-text: var(--danger-text);
+
+  --color-ring: var(--ring);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+}
+
+/* Baseline element styles. */
+html,
+body {
+  background: var(--bg-base);
+  color: var(--text-default);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Honour user motion preference site-wide (ADR-0009 §6.5). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

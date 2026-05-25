@@ -1,0 +1,63 @@
+{
+  "name": "rp-web",
+  "version": "0.1.0-phase0",
+  "private": true,
+  "description": "Remote-Pulse SvelteKit dashboard (ADR-0009). Mounted by the FastAPI server at /dash-next/.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
+    "test": "npm run test:unit -- --run",
+    "test:unit": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@playwright/test": "1.60.0",
+    "@sveltejs/adapter-static": "3.0.10",
+    "@sveltejs/kit": "2.61.1",
+    "@sveltejs/vite-plugin-svelte": "7.1.2",
+    "@tailwindcss/vite": "4.3.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/svelte": "5.3.1",
+    "@types/node": "22.19.19",
+    "eslint": "9.39.4",
+    "eslint-config-prettier": "10.1.5",
+    "eslint-plugin-svelte": "3.13.1",
+    "globals": "16.4.0",
+    "jsdom": "27.0.0",
+    "prettier": "3.8.3",
+    "prettier-plugin-svelte": "4.0.1",
+    "prettier-plugin-tailwindcss": "0.8.0",
+    "svelte": "5.55.9",
+    "svelte-check": "4.4.8",
+    "tailwindcss": "4.3.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.2",
+    "vite": "8.0.14",
+    "vitest": "4.1.7"
+  },
+  "overrides": {
+    "picomatch": "^4.0.4"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist-mono": "5.2.8",
+    "@fontsource-variable/inter": "5.2.8",
+    "@radix-ui/colors": "3.0.0",
+    "bits-ui": "2.18.1",
+    "clsx": "2.1.1",
+    "@lucide/svelte": "1.16.0",
+    "svelte-sonner": "1.1.1",
+    "tailwind-merge": "3.6.0",
+    "tailwind-variants": "3.2.2"
+  }
+}

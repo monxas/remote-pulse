@@ -134,6 +134,38 @@ See [GitHub Issues](https://github.com/monxas/remote-pulse/issues) for feature r
 
 ## Development
 
+### Dashboard (SvelteKit SPA — ADR-0009 Phase 0)
+
+The new dashboard lives in [`web/`](./web/) and is mounted by the FastAPI
+server at `/dash-next/` while the v1.0 Jinja dashboard at `/dash/` stays
+live. Phase 0 ships the scaffold + "Hello fleet" landing page; the full
+information architecture lands across Phases 1-5 (see [ADR-0009](docs/docs/architecture/adr/ADR-0009-web-dashboard-redesign.md)).
+
+```sh
+cd web
+npm install
+npm run dev      # vite dev server on :5173, proxies /v1, /auth, /health to :8080
+```
+
+The dev server proxies API and auth calls to the local FastAPI server, so
+start the server in another terminal:
+
+```sh
+cd server
+uv run uvicorn rp_server.main:app --port 8080 --reload
+```
+
+To produce the production build and stage it into the FastAPI static tree
+(what CI does on every PR):
+
+```sh
+./scripts/build_dashboard.sh
+```
+
+After Caddy is updated per
+[`docs/docs/runbooks/rp-dash-next-caddy.md`](docs/docs/runbooks/rp-dash-next-caddy.md)
+the SPA is reachable at `https://rp.monxas.casa/dash-next/`.
+
 ### Testing GitHub Actions locally
 
 You can test workflows locally using [act](https://github.com/nektos/act):
