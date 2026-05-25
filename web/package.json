@@ -52,12 +52,14 @@
   "dependencies": {
     "@fontsource-variable/geist-mono": "5.2.8",
     "@fontsource-variable/inter": "5.2.8",
+    "@lucide/svelte": "1.16.0",
     "@radix-ui/colors": "3.0.0",
+    "@tanstack/svelte-query": "^5.90.2",
     "bits-ui": "2.18.1",
     "clsx": "2.1.1",
-    "@lucide/svelte": "1.16.0",
     "svelte-sonner": "1.1.1",
     "tailwind-merge": "3.6.0",
-    "tailwind-variants": "3.2.2"
+    "tailwind-variants": "3.2.2",
+    "uplot": "^1.6.32"
   }
 }

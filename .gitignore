@@ -12,6 +12,11 @@ eggs/
 .eggs/
 lib/
 lib64/
+
+# But: SvelteKit dashboard library code lives at web/src/lib/ — make sure
+# the broad `lib/` Python rule above does not eat it (ADR-0009 Phase 0).
+!web/src/lib/
+!web/src/lib/**
 parts/
 sdist/
 var/
