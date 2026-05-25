@@ -1,7 +1,8 @@
 """Application configuration using Pydantic Settings."""
+
 from typing import Annotated
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field, PostgresDsn, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +53,43 @@ class Settings(BaseSettings):
     ]
 
     log_level: str = "INFO"
+
+    # Tailscale API integration (F2)
+    tailscale_api_key: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description="Tailscale API key for ephemeral auth-key generation",
+        ),
+    ] = None
+
+    tailscale_tailnet: Annotated[
+        str,
+        Field(
+            default="-",
+            description='Tailnet identifier ("-" = default tailnet of API key owner)',
+        ),
+    ] = "-"
+
+    tailscale_authkey_expiry_seconds: Annotated[
+        int,
+        Field(
+            default=86400,
+            ge=60,
+            le=604800,
+            description="Expiration time for ephemeral auth-keys (seconds, max 7d)",
+        ),
+    ] = 86400
+
+    tailscale_tags_by_group: dict[str, str] = Field(
+        default_factory=lambda: {
+            "prod": "tag:rp-agent-prod",
+            "family": "tag:rp-agent-family",
+            "iarq": "tag:rp-agent-iarq",
+            "default": "tag:rp-agent-default",
+        },
+        description="Mapping of group names to Tailscale ACL tags",
+    )
 
 
 settings = Settings()

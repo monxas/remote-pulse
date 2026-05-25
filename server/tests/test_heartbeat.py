@@ -1,4 +1,5 @@
 """Tests for heartbeat endpoint."""
+
 import uuid
 
 import pytest

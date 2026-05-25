@@ -1,5 +1,7 @@
 """Pytest fixtures for async testing."""
+
 import asyncio
+import os
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +13,19 @@ from rp_server.auth import create_enrollment_token
 from rp_server.database import get_db
 from rp_server.main import app
 from rp_server.models import Base, Enrollment
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_env():
+    """Set up minimal test environment variables."""
+    os.environ["POSTGRES_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test"
+    os.environ["JWT_SECRET"] = "test-secret-key-minimum-32-characters-long"
+    os.environ["SERVER_URL"] = "http://test"
+    os.environ["TAILSCALE_API_KEY"] = ""  # Empty by default for tests
+    yield
+    # Cleanup
+    for key in ["POSTGRES_URL", "JWT_SECRET", "SERVER_URL", "TAILSCALE_API_KEY"]:
+        os.environ.pop(key, None)
 
 
 @pytest.fixture(scope="session")

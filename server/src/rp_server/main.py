@@ -1,4 +1,5 @@
 """FastAPI application factory and configuration."""
+
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator

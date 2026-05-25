@@ -1,4 +1,5 @@
 """Database session factory and async connection management."""
+
 from collections.abc import AsyncGenerator
 from typing import Annotated
 

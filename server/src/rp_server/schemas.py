@@ -1,4 +1,5 @@
 """Pydantic request/response schemas."""
+
 import uuid
 from datetime import datetime
 
@@ -27,7 +28,10 @@ class AgentConfig(BaseModel):
 
     server_url: str
     heartbeat_interval_s: int
-    # F2: tailscale_authkey will be added here
+    tailscale_authkey: str | None = Field(
+        default=None,
+        description="Ephemeral Tailscale auth-key for joining tailnet (F2)",
+    )
 
 
 class EnrollResponse(BaseModel):

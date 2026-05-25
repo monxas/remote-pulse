@@ -2,23 +2,26 @@
 
 import logging
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from rp_server.database import DbSession
-from rp_server.deps import TailscaleIdentity, tailscale_identity
+from rp_server.deps import TailscaleIdentity, tailscale_identity_optional
 from rp_server.models import Heartbeat, Host
 from rp_server.schemas import HeartbeatData, HostDetail, HostListItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["hosts"])
 
+OptionalTsIdentity = Annotated[TailscaleIdentity | None, Depends(tailscale_identity_optional)]
+
 
 @router.get("/hosts", response_model=list[HostListItem])
 async def list_hosts(
     db: DbSession,
-    ts_identity: TailscaleIdentity = Depends(tailscale_identity),
+    ts_identity: OptionalTsIdentity = None,
 ) -> list[HostListItem]:
     """
     List all registered hosts with summary information.
@@ -37,7 +40,7 @@ async def list_hosts(
 async def get_host_detail(
     host_id: uuid.UUID,
     db: DbSession,
-    ts_identity: TailscaleIdentity = Depends(tailscale_identity),
+    ts_identity: OptionalTsIdentity = None,
 ) -> HostDetail:
     """
     Get detailed host information including recent heartbeats.

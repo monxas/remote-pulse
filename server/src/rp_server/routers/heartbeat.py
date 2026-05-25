@@ -1,20 +1,29 @@
 """Heartbeat endpoint for agent health reporting."""
+
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 
 from rp_server.database import DbSession
+from rp_server.deps import TailscaleIdentity, tailscale_identity_optional
 from rp_server.models import Heartbeat, Host
 from rp_server.schemas import HeartbeatRequest, HeartbeatResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["heartbeat"])
 
+OptionalTsIdentity = Annotated[TailscaleIdentity | None, Depends(tailscale_identity_optional)]
+
 
 @router.post("/heartbeat", response_model=HeartbeatResponse)
-async def receive_heartbeat(request: HeartbeatRequest, db: DbSession) -> HeartbeatResponse:
+async def receive_heartbeat(
+    request: HeartbeatRequest,
+    db: DbSession,
+    ts_identity: OptionalTsIdentity = None,
+) -> HeartbeatResponse:
     """
     Receive agent heartbeat with metrics.
 
@@ -56,11 +65,7 @@ async def receive_heartbeat(request: HeartbeatRequest, db: DbSession) -> Heartbe
     db.add(heartbeat)
 
     # Update host last_seen
-    stmt = (
-        update(Host)
-        .where(Host.id == request.host_id)
-        .values(last_seen_at=now)
-    )
+    stmt = update(Host).where(Host.id == request.host_id).values(last_seen_at=now)
     await db.execute(stmt)
 
     await db.commit()
@@ -71,6 +76,7 @@ async def receive_heartbeat(request: HeartbeatRequest, db: DbSession) -> Heartbe
             "host_id": str(request.host_id),
             "hostname": host.hostname,
             "cpu_pct": request.cpu_pct,
+            "tailscale_login": ts_identity.login,
         },
     )
 
