@@ -1,13 +1,23 @@
 /**
  * Live-stream bridge for `/v1/dash/stream` (Server-Sent Events).
  *
- * Phase-1 contract:
+ * Phase-1 + Phase-2 contract:
  *   - host.heartbeat          -> invalidate ['hosts']
  *   - host.status_change      -> invalidate ['hosts'] + ['overview']
- *   - command.status_change   -> invalidate ['commands']  (Phase 2 stub)
- *   - approval.created        -> invalidate ['overview']  (Phase 2 stub)
+ *   - command.issued          -> invalidate ['commands'] + ['audit']
+ *   - command.status_change   -> invalidate ['commands'] + ['commands', id]
+ *                                          + ['audit'] + ['overview']
+ *   - approval.created        -> invalidate ['approvals'] + ['audit']
+ *                                          + ['overview']
+ *   - approval.resolved       -> invalidate ['approvals'] + ['commands']
+ *                                          + ['audit'] + ['overview']
  *
- * If the endpoint is missing (404) we fall back to the 5s polling intervals
+ * Event payloads (best-effort): when JSON we look for `{ command_id }` or
+ * `{ id }` to surface a more granular invalidation on the per-id detail
+ * query. Anything else falls back to a broad invalidation, which the
+ * QueryClient batches efficiently in-memory.
+ *
+ * If the endpoint is missing (404) we fall back to the polling intervals
  * baked into the query hooks — no crash, just a warning.
  *
  * Auto-reconnect: exponential backoff (1s → 30s) on close/error.
@@ -55,6 +65,10 @@ export function useLiveStream(client: QueryClient): LiveStream {
     events.push({ type, data, ts: Date.now() });
     while (events.length > HISTORY) events.shift();
 
+    // Try to extract a command id from the payload so we can scope per-id
+    // detail-query invalidations precisely. We accept `command_id` or `id`.
+    const commandId = extractId(data);
+
     switch (type) {
       case 'host.heartbeat':
         void client.invalidateQueries({ queryKey: ['hosts'] });
@@ -63,15 +77,47 @@ export function useLiveStream(client: QueryClient): LiveStream {
         void client.invalidateQueries({ queryKey: ['hosts'] });
         void client.invalidateQueries({ queryKey: ['overview'] });
         break;
+      case 'command.issued':
+        void client.invalidateQueries({ queryKey: ['commands'] });
+        void client.invalidateQueries({ queryKey: ['audit'] });
+        void client.invalidateQueries({ queryKey: ['overview'] });
+        break;
       case 'command.status_change':
         void client.invalidateQueries({ queryKey: ['commands'] });
+        if (commandId) {
+          void client.invalidateQueries({
+            queryKey: ['commands', 'detail', commandId],
+          });
+        }
+        void client.invalidateQueries({ queryKey: ['audit'] });
+        void client.invalidateQueries({ queryKey: ['overview'] });
         break;
       case 'approval.created':
+        void client.invalidateQueries({ queryKey: ['approvals'] });
+        void client.invalidateQueries({ queryKey: ['audit'] });
+        void client.invalidateQueries({ queryKey: ['overview'] });
+        break;
+      case 'approval.resolved':
+        void client.invalidateQueries({ queryKey: ['approvals'] });
+        void client.invalidateQueries({ queryKey: ['commands'] });
+        if (commandId) {
+          void client.invalidateQueries({
+            queryKey: ['commands', 'detail', commandId],
+          });
+        }
+        void client.invalidateQueries({ queryKey: ['audit'] });
         void client.invalidateQueries({ queryKey: ['overview'] });
         break;
       default:
         break;
     }
+  }
+
+  function extractId(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object') return null;
+    const obj = payload as Record<string, unknown>;
+    const candidate = obj.command_id ?? obj.id;
+    return typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
   }
 
   function scheduleReconnect(): void {
@@ -143,8 +189,10 @@ export function useLiveStream(client: QueryClient): LiveStream {
     for (const name of [
       'host.heartbeat',
       'host.status_change',
+      'command.issued',
       'command.status_change',
       'approval.created',
+      'approval.resolved',
     ]) {
       source.addEventListener(name, handle(name) as EventListener);
     }

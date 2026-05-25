@@ -4,6 +4,7 @@
   import { setContext } from 'svelte';
   import { QueryClientProvider } from '@tanstack/svelte-query';
   import NavBar from '$lib/components/app/NavBar.svelte';
+  import CommandPalette from '$lib/components/app/CommandPalette.svelte';
   import { Toaster } from '$lib/components/ui/sonner';
   import { queryClient } from '$lib/queries/client';
   import { useLiveStream } from '$lib/queries/sse.svelte';
@@ -28,8 +29,10 @@
       {@render children()}
     </main>
     <footer class="border-t border-border-subtle py-4 text-center text-xs text-muted">
-      <span class="font-mono">remote-pulse</span> · ADR-0009 · /dash-next
+      <span class="font-mono">remote-pulse</span> · ADR-0009 · /dash-next ·
+      <kbd class="rounded border border-border-default bg-subtle px-1 font-mono">⌘K</kbd> palette
     </footer>
   </div>
+  <CommandPalette />
 </QueryClientProvider>
 <Toaster />

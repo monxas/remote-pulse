@@ -1,25 +1,54 @@
 /**
- * Typed query hooks for the Phase-1 dashboard.
+ * Typed query hooks for the Phase-1/Phase-2 dashboard.
  *
  * svelte-query v5 accepts either a static options object or a Svelte
  * `Readable<options>`. To stay reactive against Svelte 5 runes that live
  * in components, we expose helpers that consume a Svelte `Readable<Params>`
  * (the caller wires the readable to runes inside a `$effect`).
  *
- * Query keys are namespaced so the SSE invalidator can target precisely
- * (`['overview']`, `['hosts', ...]`, `['host', id]`, `['timeseries', id]`).
+ * Query keys are namespaced so the SSE invalidator can target precisely:
+ *   ['overview']                          -> /v1/dash/overview
+ *   ['hosts', params?]                    -> /v1/dash/hosts
+ *   ['host', id]                          -> single host (derived)
+ *   ['timeseries', id, params]            -> /v1/dash/hosts/:id/timeseries
+ *   ['commands', params]                  -> /v1/dash/commands (infinite)
+ *   ['commands', id]                      -> /v1/dash/commands/:id
+ *   ['approvals', 'pending']              -> /v1/dash/approvals/pending
+ *   ['audit', params]                     -> /v1/dash/audit (infinite)
  */
 
 import { derived, readable, type Readable } from 'svelte/store';
-import { createQuery } from '@tanstack/svelte-query';
 import {
+  createInfiniteQuery,
+  createMutation,
+  createQuery,
+  useQueryClient,
+} from '@tanstack/svelte-query';
+import { toast } from 'svelte-sonner';
+import {
+  approveDashCommand,
+  getDashAudit,
+  getDashCommand,
+  getDashCommands,
   getDashHosts,
   getDashOverview,
+  getDashPendingApprovals,
   getDashTimeseries,
+  IN_FLIGHT_STATUSES,
+  issueDashCommand,
+  rejectDashCommand,
+  retryDashCommand,
+  type AuditListPage,
+  type AuditQueryParams,
+  type CommandRecord,
+  type CommandsListPage,
+  type CommandsQueryParams,
   type DashOverview,
   type HostStatus,
   type HostsList,
   type HostSummary,
+  type IssueCommandInput,
+  type PendingApprovalsResponse,
   type TimeseriesPayload,
 } from '$lib/api';
 
@@ -30,6 +59,13 @@ export const qk = {
   hostsAll: () => ['hosts'] as const,
   host: (hostId: string) => ['host', hostId] as const,
   timeseries: (hostId: string, params: TimeseriesParams) => ['timeseries', hostId, params] as const,
+  commandsList: (params: CommandsQueryParams = {}) => ['commands', 'list', params] as const,
+  commandsAll: () => ['commands'] as const,
+  command: (id: string) => ['commands', 'detail', id] as const,
+  approvalsPending: () => ['approvals', 'pending'] as const,
+  approvalsAll: () => ['approvals'] as const,
+  auditList: (params: AuditQueryParams = {}) => ['audit', 'list', params] as const,
+  auditAll: () => ['audit'] as const,
 } as const;
 
 export interface HostsParams {
@@ -45,7 +81,6 @@ export interface TimeseriesParams {
 }
 
 // ---- /v1/dash/overview ----
-// No params, so static options are fine.
 export function createOverviewQuery() {
   return createQuery<DashOverview>({
     queryKey: qk.overview(),
@@ -98,6 +133,153 @@ export function createTimeseriesQuery(
       enabled: id.length > 0 && p.series.length > 0,
     })),
   );
+}
+
+// ---- /v1/dash/commands (infinite list) ----
+export function createCommandsQuery(params: Readable<CommandsQueryParams>) {
+  return createInfiniteQuery<
+    CommandsListPage,
+    Error,
+    { pages: CommandsListPage[]; pageParams: (string | undefined)[] },
+    ReturnType<typeof qk.commandsList>,
+    string | undefined
+  >(
+    derived(params, (p) => ({
+      queryKey: qk.commandsList(p),
+      queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) =>
+        getDashCommands({ ...p, cursor: pageParam ?? undefined }, undefined, signal),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: CommandsListPage) => last.next_cursor ?? undefined,
+      staleTime: 5_000,
+    })),
+  );
+}
+
+// ---- single command (polls when in flight) ----
+export function createCommandDetailQuery(commandId: Readable<string>) {
+  return createQuery<CommandRecord>(
+    derived(commandId, (id) => ({
+      queryKey: qk.command(id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => getDashCommand(id, undefined, signal),
+      enabled: id.length > 0,
+      // Poll every 3s while the command is still moving through the
+      // lifecycle. Steady-state finishes are static, no need to refetch.
+      refetchInterval: (q: { state: { data: CommandRecord | undefined } }) => {
+        const data = q.state.data;
+        if (!data) return 3_000;
+        return IN_FLIGHT_STATUSES.has(data.status) ? 3_000 : false;
+      },
+      staleTime: 1_000,
+    })),
+  );
+}
+
+// ---- /v1/dash/approvals/pending ----
+export function createPendingApprovalsQuery() {
+  return createQuery<PendingApprovalsResponse>({
+    queryKey: qk.approvalsPending(),
+    queryFn: ({ signal }) => getDashPendingApprovals(undefined, signal),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+}
+
+// ---- /v1/dash/audit (infinite list) ----
+export function createAuditQuery(params: Readable<AuditQueryParams>) {
+  return createInfiniteQuery<
+    AuditListPage,
+    Error,
+    { pages: AuditListPage[]; pageParams: (string | undefined)[] },
+    ReturnType<typeof qk.auditList>,
+    string | undefined
+  >(
+    derived(params, (p) => ({
+      queryKey: qk.auditList(p),
+      queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) =>
+        getDashAudit({ ...p, cursor: pageParam ?? undefined }, undefined, signal),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (last: AuditListPage) => last.next_cursor ?? undefined,
+      staleTime: 5_000,
+    })),
+  );
+}
+
+// ---- Mutations ----
+
+/** Issue one or more commands. Invalidates command + audit lists on success. */
+export function createIssueCommandMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (input: IssueCommandInput) => issueDashCommand(input),
+    onSuccess: (data) => {
+      const n = data.commands.length;
+      toast.success(n === 1 ? 'Command issued' : `Issued ${n} commands`);
+      void client.invalidateQueries({ queryKey: qk.commandsAll() });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+      void client.invalidateQueries({ queryKey: qk.overview() });
+      if (data.commands.some((c) => c.status === 'pending-approval')) {
+        void client.invalidateQueries({ queryKey: qk.approvalsAll() });
+      }
+    },
+    onError: (err: Error) => {
+      toast.error('Could not issue command', { description: err.message });
+    },
+  });
+}
+
+/** Retry a finished or failed command (server clones + re-queues). */
+export function createRetryCommandMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (id: string) => retryDashCommand(id),
+    onSuccess: (cmd) => {
+      toast.success('Command re-issued');
+      void client.invalidateQueries({ queryKey: qk.commandsAll() });
+      void client.invalidateQueries({ queryKey: qk.command(cmd.id) });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Retry failed', { description: err.message });
+    },
+  });
+}
+
+/** Approve a pending command. */
+export function createApproveMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (id: string) => approveDashCommand(id),
+    onSuccess: (resp) => {
+      toast.success('Approved');
+      void client.invalidateQueries({ queryKey: qk.approvalsAll() });
+      void client.invalidateQueries({ queryKey: qk.commandsAll() });
+      void client.invalidateQueries({ queryKey: qk.command(resp.command.id) });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+      void client.invalidateQueries({ queryKey: qk.overview() });
+    },
+    onError: (err: Error) => {
+      toast.error('Approve failed', { description: err.message });
+    },
+  });
+}
+
+/** Reject a pending command with a reason. */
+export function createRejectMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectDashCommand(id, reason),
+    onSuccess: (resp) => {
+      toast.success('Rejected');
+      void client.invalidateQueries({ queryKey: qk.approvalsAll() });
+      void client.invalidateQueries({ queryKey: qk.commandsAll() });
+      void client.invalidateQueries({ queryKey: qk.command(resp.command.id) });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+      void client.invalidateQueries({ queryKey: qk.overview() });
+    },
+    onError: (err: Error) => {
+      toast.error('Reject failed', { description: err.message });
+    },
+  });
 }
 
 // ---- ergonomic helper: wrap a value-returning accessor into a Readable ----
