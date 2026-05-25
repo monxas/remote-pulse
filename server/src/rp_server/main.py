@@ -12,7 +12,16 @@ from fastapi.responses import JSONResponse, Response
 from rp_server import __version__
 from rp_server.config import settings
 from rp_server.database import DbSession, engine
-from rp_server.routers import admin, enroll, heartbeat, hosts, keys, metrics
+from rp_server.routers import (
+    admin,
+    approvals,
+    commands,
+    enroll,
+    heartbeat,
+    hosts,
+    keys,
+    metrics,
+)
 
 # Configure structured logging
 structlog.configure(
@@ -83,6 +92,8 @@ app.include_router(hosts.router)
 app.include_router(metrics.router)
 app.include_router(keys.router)
 app.include_router(admin.router)
+app.include_router(commands.router)
+app.include_router(approvals.router)
 
 
 @app.get("/health")
