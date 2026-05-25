@@ -129,12 +129,15 @@ async def current_user(
             detail="Authentication required (PocketID forward_auth headers missing)",
         )
 
-    # Look up user by PocketID sub
-    stmt = select(User).where(User.pocketid_sub == x_forwarded_user)
+    # Look up user by PocketID sub OR email (seed users have placeholder sub
+    # until first OIDC login binds the real sub).
+    stmt = select(User).where(
+        (User.pocketid_sub == x_forwarded_user) | (User.email == x_forwarded_email)
+    )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
-    # Create user on first login (lookup-or-create)
+    # Create user on first login (lookup-or-create by sub OR email)
     if not user:
         user = User(
             pocketid_sub=x_forwarded_user,
@@ -148,6 +151,10 @@ async def current_user(
         await db.commit()
         await db.refresh(user)
     else:
+        # On first OIDC login, bind real PocketID sub to seed user (was placeholder)
+        if user.pocketid_sub != x_forwarded_user:
+            user.pocketid_sub = x_forwarded_user
+            user.name = x_forwarded_preferred_username or user.name
         # Update last login timestamp
         stmt = (
             update(User).where(User.id == user.id).values(last_login_at=datetime.now(timezone.utc))
