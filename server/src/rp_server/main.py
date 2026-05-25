@@ -18,6 +18,7 @@ from rp_server.database import DbSession, engine
 from rp_server.middleware.compat import APICompatMiddleware
 from rp_server.routers import (
     admin,
+    agent_commands,
     approvals,
     auth_oidc,
     commands,
@@ -168,6 +169,8 @@ app.include_router(keys.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
 app.include_router(approvals.router)
+# Phase 2.5 — agent execution loop (pull commands + post results).
+app.include_router(agent_commands.router)
 app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
 # ADR-0009 Phase 1+2: JSON API for the SvelteKit SPA. Mounted BEFORE the SPA
 # static-files mount so /v1/dash/* is dispatched here, not by the catch-all.

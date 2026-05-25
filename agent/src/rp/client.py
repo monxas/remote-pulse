@@ -203,6 +203,43 @@ class RPClient:
                 "will resync on next heartbeat.",
             }
 
+    async def poll_commands(self) -> list[dict[str, Any]]:
+        """Pull approved-but-not-yet-executed commands for this host.
+
+        Phase 2.5: hits ``GET /v1/agent/commands/pending`` (see the
+        ``agent_commands`` router). Returns the raw command dicts as
+        emitted by the server; the daemon converts them to
+        :class:`rp.commands.runner.RemoteCommand` before dispatch.
+        """
+        path = f"/v1/agent/commands/pending?host_id={self.config.host_id}"
+        # retry_count=1 so a slow server doesn't stack 3x retries on every
+        # 5s poll. The daemon's own back-off layer handles repeated misses.
+        resp = await self._request("GET", path, retry_count=1)
+        commands = resp.get("commands", [])
+        if not isinstance(commands, list):
+            logger.warning(
+                "poll_commands: server returned non-list commands payload",
+                got=type(commands).__name__,
+            )
+            return []
+        return commands
+
+    async def post_command_result(
+        self,
+        command_id: str,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Report execution outcome to the server.
+
+        ``result`` keys: ``exit_code`` (int|None), ``stdout`` (str),
+        ``stderr`` (str), ``duration_ms`` (int), ``agent_ts`` (ISO str),
+        ``rejected_reason`` (str|None).
+        """
+        path = (
+            f"/v1/agent/commands/{command_id}/result?host_id={self.config.host_id}"
+        )
+        return await self._request("POST", path, json=result, retry_count=3)
+
     async def deregister(self) -> dict[str, Any]:
         """
         Deregister host from server.
