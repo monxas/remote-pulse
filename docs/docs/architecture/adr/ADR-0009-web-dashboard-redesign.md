@@ -1,7 +1,8 @@
 # ADR-0009: Remote-Pulse Web Dashboard Redesign — SvelteKit SPA + JSON API
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-05-25
+**Accepted:** 2026-05-25
 **Deciders:** Ramón Kamibayashi
 **Supersedes (partially):** ADR-0008 §F5 (server-rendered Jinja2 + HTMX + Pico dashboard).
 **Technical Story:** Rebuild the Remote-Pulse web UI as a SvelteKit single-page app over a clean JSON API. Full information-architecture overhaul (fleet overview, host detail, commands, approvals, audit log, settings, enroll wizard). Dark-mode-first design system based on Tailwind v4 + shadcn-svelte. Replaces the v1.0.0 GA dashboard shipped in F5.
