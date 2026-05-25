@@ -275,22 +275,27 @@ async def current_user_optional(
     x_forwarded_user: Annotated[str | None, Header()] = None,
     x_forwarded_email: Annotated[str | None, Header()] = None,
     x_forwarded_preferred_username: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ):
-    """Optional current_user dependency for dual-mode auth endpoints.
+    """Optional current_user: returns User or None.
 
-    Returns None if PocketID headers absent (allows Tailscale-only auth).
-    Trusted-proxy enforcement is delegated to current_user().
+    Defers to current_user() and swallows 401 so the caller can decide what
+    to do (e.g. redirect to /auth/login). Keeps all four auth paths in scope:
+    OIDC session cookie, emergency bearer, Tailscale identity, forward_auth.
     """
-    if not x_forwarded_user or not x_forwarded_email:
-        return None
-
-    return await current_user(
-        request=request,
-        db=db,
-        x_forwarded_user=x_forwarded_user,
-        x_forwarded_email=x_forwarded_email,
-        x_forwarded_preferred_username=x_forwarded_preferred_username,
-    )
+    try:
+        return await current_user(
+            request=request,
+            db=db,
+            x_forwarded_user=x_forwarded_user,
+            x_forwarded_email=x_forwarded_email,
+            x_forwarded_preferred_username=x_forwarded_preferred_username,
+            authorization=authorization,
+        )
+    except HTTPException as e:
+        if e.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
 
 
 async def require_admin(user=Depends(current_user)):
