@@ -261,13 +261,25 @@ async def approve_command(
         host=host.hostname,
     )
 
-    # ADR-0009 Phase 1: SSE notification
+    # ADR-0009 Phase 1: SSE notification (status transition)
     fire_and_forget(
         "command.status_change",
         {
             "command_id": str(command.id),
             "host_id": str(host_id),
             "status": "approved",
+            "ts": now.isoformat(),
+        },
+    )
+    # ADR-0009 Phase 2: explicit approval resolution event for the Approvals page.
+    fire_and_forget(
+        "approval.resolved",
+        {
+            "approval_id": str(command.id),
+            "command_id": str(command.id),
+            "resolution": "approved",
+            "resolved_by": f"telegram:{payload.approver_id}",
+            "reason": None,
             "ts": now.isoformat(),
         },
     )
@@ -351,14 +363,27 @@ async def reject_command(
         host=host.hostname,
     )
 
-    # ADR-0009 Phase 1: SSE notification
+    # ADR-0009 Phase 1: SSE notification (status transition)
+    _now_iso = datetime.now(timezone.utc).isoformat()
     fire_and_forget(
         "command.status_change",
         {
             "command_id": str(command.id),
             "host_id": str(command.host_id),
             "status": "rejected",
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": _now_iso,
+        },
+    )
+    # ADR-0009 Phase 2: explicit approval resolution event for the Approvals page.
+    fire_and_forget(
+        "approval.resolved",
+        {
+            "approval_id": str(command.id),
+            "command_id": str(command.id),
+            "resolution": "rejected",
+            "resolved_by": f"telegram:{payload.approver_id}",
+            "reason": reason,
+            "ts": _now_iso,
         },
     )
 

@@ -23,6 +23,8 @@ from rp_server.routers import (
     commands,
     compat,
     dash_api,
+    dash_audit,
+    dash_commands,
     enroll,
     enrollment_links,
     heartbeat,
@@ -167,9 +169,11 @@ app.include_router(admin.router)
 app.include_router(commands.router)
 app.include_router(approvals.router)
 app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
-# ADR-0009 Phase 1: JSON API for the SvelteKit SPA. Mounted BEFORE the SPA
+# ADR-0009 Phase 1+2: JSON API for the SvelteKit SPA. Mounted BEFORE the SPA
 # static-files mount so /v1/dash/* is dispatched here, not by the catch-all.
 app.include_router(dash_api.router)
+app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
+app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
 app.include_router(web.router)  # F5: Web dashboard (legacy Jinja UI)
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
