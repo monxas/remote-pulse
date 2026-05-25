@@ -43,7 +43,14 @@ def _fetch_pocketid_metadata() -> dict:
     """Fetch the OIDC discovery document synchronously at registration time."""
     url = f"{settings.pocketid_base_url}/.well-known/openid-configuration"
     try:
-        resp = httpx.get(url, timeout=10.0, follow_redirects=True)
+        resp = httpx.get(
+            url,
+            timeout=10.0,
+            follow_redirects=True,
+            # PocketID does content negotiation: without an explicit JSON Accept
+            # header it returns its SPA HTML shell. Force the API representation.
+            headers={"Accept": "application/json"},
+        )
         resp.raise_for_status()
         if not resp.text or not resp.text.lstrip().startswith("{"):
             raise RuntimeError(
