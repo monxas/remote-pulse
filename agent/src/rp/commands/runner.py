@@ -5,10 +5,12 @@ and local policy enforcement.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 import structlog
 
 from rp.local_policy import LocalPolicy, CommandDecision, TelegramApprovalRequest
+from rp.signature import ServerTrust
 
 logger = structlog.get_logger()
 
@@ -23,6 +25,7 @@ class RemoteCommand:
     target_group: str
     issued_by: str
     server_signature: str
+    expires_at: datetime
 
 
 @dataclass
@@ -37,10 +40,12 @@ class CommandResult:
 
 
 async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
-    """Execute remote command with local-policy enforcement.
+    """Execute remote command with signature + local-policy enforcement.
 
-    This is a stub for F4-4. Currently implements only the local-policy
-    pre-check layer.
+    Defense-in-depth layers:
+    1. Server signature verification (cryptographic trust)
+    2. Local policy check (defense against server compromise)
+    3. Optional Telegram approval (human-in-loop for destructive ops)
 
     Args:
         cmd: Remote command to execute
@@ -51,7 +56,32 @@ async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
     Raises:
         NotImplementedError: Command execution not yet implemented (F4-4)
     """
-    # Pre-execution local-policy check
+    # Layer 1: Verify server signature FIRST
+    trust = ServerTrust.load()
+    if not trust:
+        logger.error(
+            "no server trust anchor",
+            cmd_id=cmd.id,
+            command_type=cmd.command_type,
+        )
+        return CommandResult(ack=False, rejected_reason="no_server_trust_anchor")
+
+    if not trust.verify_command(
+        command_id=cmd.id,
+        command_type=cmd.command_type,
+        payload=cmd.payload,
+        expires_at=cmd.expires_at,
+        signature_b64=cmd.server_signature,
+    ):
+        logger.warning(
+            "signature verification FAILED",
+            cmd_id=cmd.id,
+            command_type=cmd.command_type,
+            fingerprint=trust.fingerprint,
+        )
+        return CommandResult(ack=False, rejected_reason="signature_invalid")
+
+    # Layer 2: Local-policy check (defense against server compromise per ADR-0008 §13)
     policy = LocalPolicy()
     decision, reason = policy.evaluate(cmd.command_type, cmd.payload, cmd.target_group)
 

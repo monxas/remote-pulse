@@ -1,0 +1,73 @@
+# Expected output from: curl http://192.168.0.196:8080/metrics | head -30
+#
+# This is a sample of what the Prometheus metrics endpoint returns.
+# The actual output will vary based on enrolled hosts and activity.
+
+# HELP rp_enroll_total Agent enrollments
+# TYPE rp_enroll_total counter
+rp_enroll_total{group="homelab",result="success"} 3.0
+rp_enroll_total{group="family",result="success"} 1.0
+
+# HELP rp_heartbeat_total Heartbeats received
+# TYPE rp_heartbeat_total counter
+rp_heartbeat_total{group="homelab"} 1284.0
+rp_heartbeat_total{group="family"} 456.0
+
+# HELP rp_commands_executed_total Remote commands executed
+# TYPE rp_commands_executed_total counter
+rp_commands_executed_total{command_type="exec",group="homelab",result="success"} 12.0
+
+# HELP rp_signature_invalid_total Signature verification failures
+# TYPE rp_signature_invalid_total counter
+rp_signature_invalid_total{host_id="550e8400-e29b-41d4-a716-446655440000"} 0.0
+
+# HELP rp_local_policy_deny_total Local-policy denies reported by agents
+# TYPE rp_local_policy_deny_total counter
+
+# HELP rp_host_up Host is reporting (last_seen < 180s)
+# TYPE rp_host_up gauge
+rp_host_up{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 1.0
+rp_host_up{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440001",hostname="pmx-51"} 1.0
+rp_host_up{group="family",host_id="550e8400-e29b-41d4-a716-446655440002",hostname="mac-mini"} 0.0
+
+# HELP rp_host_cpu_pct Latest CPU% per host
+# TYPE rp_host_cpu_pct gauge
+rp_host_cpu_pct{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 23.5
+rp_host_cpu_pct{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440001",hostname="pmx-51"} 12.8
+
+# HELP rp_host_mem_pct Latest mem% per host
+# TYPE rp_host_mem_pct gauge
+rp_host_mem_pct{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 67.2
+
+# HELP rp_host_load_1m Latest load 1m per host
+# TYPE rp_host_load_1m gauge
+rp_host_load_1m{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 1.45
+
+# HELP rp_host_uptime_seconds Host uptime in seconds
+# TYPE rp_host_uptime_seconds gauge
+rp_host_uptime_seconds{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 1234567.0
+
+# HELP rp_host_last_seen_age_seconds Seconds since last heartbeat
+# TYPE rp_host_last_seen_age_seconds gauge
+rp_host_last_seen_age_seconds{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50"} 12.5
+
+# HELP rp_host_agent_version Agent version per host (1 always, labels carry value)
+# TYPE rp_host_agent_version gauge
+rp_host_agent_version{group="homelab",host_id="550e8400-e29b-41d4-a716-446655440000",hostname="pmx-50",version="0.1.0"} 1.0
+
+# HELP rp_enrollment_tokens_active Enrollment tokens not yet exhausted/expired
+# TYPE rp_enrollment_tokens_active gauge
+rp_enrollment_tokens_active 2.0
+
+# HELP rp_ssh_keys_total SSH keys registered
+# TYPE rp_ssh_keys_total gauge
+rp_ssh_keys_total{revoked="false"} 5.0
+rp_ssh_keys_total{revoked="true"} 1.0
+
+# HELP rp_http_request_duration_seconds HTTP request latency
+# TYPE rp_http_request_duration_seconds histogram
+rp_http_request_duration_seconds_bucket{method="GET",path="/health",status="200",le="0.005"} 42.0
+rp_http_request_duration_seconds_bucket{method="GET",path="/health",status="200",le="0.01"} 56.0
+rp_http_request_duration_seconds_bucket{method="POST",path="/v1/heartbeat",status="200",le="0.025"} 1284.0
+rp_http_request_duration_seconds_sum{method="GET",path="/health",status="200"} 0.234
+rp_http_request_duration_seconds_count{method="GET",path="/health",status="200"} 56.0

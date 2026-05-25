@@ -34,6 +34,14 @@ class AgentConfig(BaseModel):
         default=None,
         description="Ephemeral Tailscale auth-key for joining tailnet (F2)",
     )
+    server_pubkey: str | None = Field(
+        default=None,
+        description="Server's Ed25519 public key PEM for command verification (F4)",
+    )
+    server_pubkey_fingerprint: str | None = Field(
+        default=None,
+        description="SHA256 fingerprint of server pubkey for trust pinning (F4)",
+    )
 
 
 class EnrollResponse(BaseModel):

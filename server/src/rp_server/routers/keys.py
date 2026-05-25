@@ -15,9 +15,21 @@ from rp_server.database import get_db
 from rp_server.deps import TailscaleIdentity, tailscale_identity, tailscale_identity_optional
 from rp_server.models import Group, Host, SSHKey
 from rp_server.schemas import SSHKeyRegister, SSHKeyResponse
+from rp_server.signing import ServerSigningKey
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/v1/keys", tags=["keys"])
+
+# Module-level server signing key (loaded once)
+_server_signing_key: ServerSigningKey | None = None
+
+
+def get_server_signing_key() -> ServerSigningKey:
+    """Get or initialize server signing key."""
+    global _server_signing_key
+    if _server_signing_key is None:
+        _server_signing_key = ServerSigningKey.load_or_generate()
+    return _server_signing_key
 
 
 def compute_ssh_fingerprint(pubkey: str) -> str:
@@ -403,3 +415,27 @@ async def get_authorized_keys(
     )
 
     return {"content": content, "sha256": sha256_hash}
+
+
+@router.get("/server-pubkey")
+async def get_server_pubkey() -> dict:
+    """Get server's Ed25519 public key for command signature verification.
+
+    Public endpoint (no auth required). Agents call this during bootstrap
+    to establish trust anchor for remote command verification.
+
+    Returns:
+        Dict with public_key_pem, fingerprint, and key_id
+    """
+    signing_key = get_server_signing_key()
+
+    pubkey_pem = signing_key.public_key_pem()
+    fingerprint = signing_key.public_key_fingerprint()
+
+    logger.info("server_pubkey_requested", fingerprint=fingerprint)
+
+    return {
+        "public_key_pem": pubkey_pem,
+        "fingerprint": fingerprint,
+        "key_id": "server-ed25519-v1",  # Version hint for future rotation
+    }

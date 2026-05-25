@@ -80,4 +80,9 @@ async def receive_heartbeat(
         },
     )
 
+    # Record metrics
+    from rp_server.metrics_exporter import record_heartbeat
+
+    record_heartbeat(host.group_name or "default")
+
     return HeartbeatResponse(status="ok", server_ts=now)

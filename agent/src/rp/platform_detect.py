@@ -2,6 +2,7 @@
 
 import hashlib
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -145,6 +146,88 @@ def detect_capabilities() -> dict[str, bool]:
         caps["docker"] = False
 
     return caps
+
+
+def detect_screen_capabilities() -> dict[str, any]:
+    """Detect available screen-sharing tools on this host."""
+    caps = {}
+
+    # RustDesk
+    rustdesk_installed = False
+    for name in ["rustdesk", "RustDesk"]:
+        if shutil.which(name):
+            rustdesk_installed = True
+            break
+
+    # Check platform-specific paths
+    if not rustdesk_installed:
+        os_type = get_os()
+        if os_type == "macos":
+            rustdesk_installed = Path("/Applications/RustDesk.app").exists()
+        elif os_type == "windows":
+            rustdesk_installed = Path("C:/Program Files/RustDesk/rustdesk.exe").exists()
+
+    if rustdesk_installed:
+        caps["rustdesk_installed"] = True
+        caps["rustdesk_password"] = _read_rustdesk_password()
+
+    # Sunshine (Windows GPU host)
+    os_type = get_os()
+    if os_type == "windows":
+        sunshine_path = Path("C:/Program Files/Sunshine/sunshine.exe")
+        if sunshine_path.exists():
+            caps["sunshine_installed"] = True
+            # Admin URL uses Tailscale IP if available
+            caps["sunshine_admin_url"] = "https://localhost:47990"
+
+    # VNC fallback (Linux)
+    if shutil.which("vncserver") or shutil.which("x11vnc"):
+        caps["vnc_installed"] = True
+
+    # Tailscale SSH
+    caps["tailscale_ssh_enabled"] = _check_tailscale_ssh_enabled()
+
+    return caps
+
+
+def _read_rustdesk_password() -> Optional[str]:
+    """Read RustDesk password from config if available."""
+    try:
+        config_path = Path("/etc/rp/rustdesk.toml")
+        if config_path.exists():
+            # Simple TOML parsing for password = "..."
+            for line in config_path.read_text().splitlines():
+                if line.startswith("password"):
+                    return line.split('"')[1]
+    except Exception as e:
+        logger.debug("failed to read rustdesk password", error=str(e))
+
+    return None
+
+
+def _check_tailscale_ssh_enabled() -> bool:
+    """Check if Tailscale SSH is enabled on this host."""
+    # Check if tailscale binary exists
+    if not shutil.which("tailscale"):
+        return False
+
+    try:
+        # Check tailscale status for SSH enabled
+        import json
+
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            status = json.loads(result.stdout)
+            # Check if SSH is enabled in peer capabilities
+            return status.get("Self", {}).get("CapMap", {}).get("ssh", False)
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        pass
+
+    return False
 
 
 def get_platform_info() -> dict[str, any]:

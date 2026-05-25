@@ -13,6 +13,9 @@ from rp.commands.uninstall import uninstall
 from rp.commands.dash import dash
 from rp.commands.local import local
 from rp.commands.keys import keys
+from rp.commands.ssh import ssh
+from rp.commands.screen import screen
+from rp.commands.exec import exec_
 
 # Configure structured logging
 structlog.configure(
@@ -48,6 +51,9 @@ main.add_command(uninstall)
 main.add_command(dash)
 main.add_command(local)
 main.add_command(keys)
+main.add_command(ssh)
+main.add_command(screen)
+main.add_command(exec_)
 
 
 if __name__ == "__main__":

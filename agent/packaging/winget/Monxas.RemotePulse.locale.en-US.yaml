@@ -1,36 +1,39 @@
-# Locale manifest for Remote-Pulse (en-US)
-# Template placeholders to be replaced by release workflow:
-#   {VERSION} - e.g., "0.1.0"
-
+# Locale manifest for Remote-Pulse (en-US, winget-pkgs schema 1.6.0)
+# Template placeholders replaced by render-manifests.sh / release.yml:
+#   {VERSION} - semver, e.g., "0.1.0"
+---
 PackageIdentifier: Monxas.RemotePulse
-PackageVersion: {VERSION}
+PackageVersion: "{VERSION}"
 PackageLocale: en-US
-Publisher: Monxas
+Publisher: monxas
 PublisherUrl: https://github.com/monxas
 PublisherSupportUrl: https://github.com/monxas/remote-pulse/issues
 Author: Ramón Kamibayashi
 PackageName: Remote-Pulse
 PackageUrl: https://github.com/monxas/remote-pulse
 License: Apache-2.0
-LicenseUrl: https://github.com/monxas/remote-pulse/blob/main/LICENSE
+LicenseUrl: https://raw.githubusercontent.com/monxas/remote-pulse/main/LICENSE
 Copyright: Copyright (c) 2026 Ramón Kamibayashi
-ShortDescription: Fleet monitoring and remote control agent over Tailscale
+CopyrightUrl: https://raw.githubusercontent.com/monxas/remote-pulse/main/LICENSE
+ShortDescription: Fleet monitoring + remote control over Tailscale
 Description: |-
-  Remote-Pulse is an agent + server platform for single-pane-of-glass fleet
-  monitoring across Linux, macOS, and Windows hosts. Features include:
-  - Live sparklines for CPU, memory, disk, and network metrics
-  - One-command installation with Tailscale onboarding
-  - Centralized SSH key lifecycle management
-  - Remote shell and screen access over WireGuard P2P
-  - Defense-in-depth security with local-approval gates
+  Remote-Pulse is an agent + server platform for fleet monitoring and remote
+  control over Tailscale. One-command onboarding for any Linux, macOS, or
+  Windows host. Includes live sparklines dashboard, centralised SSH key
+  lifecycle, audit log, and defense-in-depth local-approval enforcement.
+
+  Pre-alpha — see https://rp.monxas.casa/docs for documentation.
 Moniker: rp
 Tags:
-- monitoring
-- fleet-management
-- remote-access
-- tailscale
-- ssh-keys
-- observability
-- devops
+  - monitoring
+  - fleet
+  - tailscale
+  - ssh
+  - remote-control
+  - devops
+  - homelab
+ReleaseNotes: |-
+  Initial pre-alpha release. See https://github.com/monxas/remote-pulse/releases.
+ReleaseNotesUrl: https://github.com/monxas/remote-pulse/releases/tag/v{VERSION}
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

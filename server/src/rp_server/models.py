@@ -244,6 +244,20 @@ class Command(Base):
     rejected_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     server_signature: Mapped[str] = mapped_column(Text, nullable=False)
     agent_node_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # F4-6: Telegram approval flow
+    approval_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        unique=True,
+        nullable=True,
+    )
+    approval_requested_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    approval_responded_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Prevent modification of committed records (defense in depth)."""

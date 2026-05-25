@@ -174,6 +174,38 @@ class RPClient:
             logger.warning("deregister failed (endpoint may not exist)", error=str(e))
             return {"status": "warning", "message": "Server endpoint not available"}
 
+    async def get(self, path: str, **kwargs) -> httpx.Response:
+        """
+        HTTP GET request.
+
+        Args:
+            path: Request path
+            **kwargs: Additional httpx.request arguments
+
+        Returns:
+            httpx.Response object
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized, use async with")
+
+        return await self._client.get(path, **kwargs)
+
+    async def post(self, path: str, **kwargs) -> httpx.Response:
+        """
+        HTTP POST request.
+
+        Args:
+            path: Request path
+            **kwargs: Additional httpx.request arguments (json, data, etc.)
+
+        Returns:
+            httpx.Response object
+        """
+        if not self._client:
+            raise RuntimeError("Client not initialized, use async with")
+
+        return await self._client.post(path, **kwargs)
+
 
 def create_sync_client(server_url: str, timeout: float = 10.0) -> httpx.Client:
     """

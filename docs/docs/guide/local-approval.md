@@ -98,6 +98,28 @@ sudo rp local whitelist-rm restart nginx.service
 
 Patterns use shell-glob semantics.
 
+## Telegram approval flow
+
+When a command requires **Telegram approval** (two-tier policy: server sig + human ack),
+the flow works as follows:
+
+1. **Server**: Command created with `approval_token` UUID, fires webhook to n8n
+2. **n8n**: Sends Telegram message with inline keyboard [Approve / Reject]
+3. **Admin**: Clicks button within 5 minutes
+4. **n8n**: Calls server callback `/v1/admin/commands/approve/{token}` or `/reject/{token}`
+5. **Server**: Marks command `human_approved=true` or `rejected_reason="..."`
+6. **Agent**: Polls for pending commands, sees `human_approved=true`, executes (after passing local policy check)
+
+**TTL**: 5 minutes. Commands not responded to auto-reject with `rejected_reason="approval_timeout"`.
+
+**Setup**: See [Telegram Approval Setup Runbook](/Users/ramonkamibayashicarrera/homelab-infra/docs/docs/runbooks/rp-telegram-approval-setup.md)
+
+**Defense-in-depth**: Even with Telegram approval, agent still checks local flags. Example:
+- `exec_shell` on `prod` requires Telegram approval (server-side) **AND** `/etc/rp/allow-remote-exec` flag (agent-side)
+- If either is missing, command is rejected
+
+This prevents server compromise from escalating to full fleet control, even if attacker compromises Telegram bot.
+
 ### Check current state
 
 ```bash

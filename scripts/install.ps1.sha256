@@ -1,0 +1,35 @@
+70233de671d7880bcd0ef1708fad51e5bdf2aa2a05895e0ea42a6909090e0813  install.ps1
+
+# ---------------------------------------------------------------------------
+# How the SHA256 is generated and published (F7 — ADR-0008)
+# ---------------------------------------------------------------------------
+#
+# Local (dev) generation:
+#   PowerShell : (Get-FileHash .\install.ps1 -Algorithm SHA256).Hash.ToLower()
+#   macOS/Linux: shasum -a 256 install.ps1   # or  sha256sum install.ps1
+#
+# CI pipeline (.github/workflows/release.yml — F7 ticket):
+#   1. Build / package install.ps1 (no transformation, just copy).
+#   2. Compute SHA256:
+#        $hash = (Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower()
+#   3. Inject the hash into the install.ps1 header in place of the placeholder:
+#        sed -i "s|<auto-injected at release time.*$|$hash|" install.ps1
+#   4. Re-compute SHA256 AFTER injection (the file changed!):
+#        $finalHash = (Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower()
+#        echo "$finalHash  install.ps1" > install.ps1.sha256
+#   5. Upload both files to:
+#        - GitHub Release assets (rp-vX.Y.Z release)
+#        - https://rp.monxas.casa/install.ps1            (Caddy LXC HA route)
+#        - https://rp.monxas.casa/install.ps1.sha256
+#   6. Sign with cosign (sigstore) — see F7 SBOM/signing task.
+#
+# User verification (recommended pre-execute):
+#   PS> iwr https://rp.monxas.casa/install.ps1 -OutFile install.ps1
+#   PS> iwr https://rp.monxas.casa/install.ps1.sha256 -OutFile install.ps1.sha256
+#   PS> $expected = (Get-Content install.ps1.sha256).Split(' ')[0]
+#   PS> $actual   = (Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower()
+#   PS> if ($expected -ne $actual) { throw 'HASH MISMATCH — DO NOT RUN' }
+#   PS> .\install.ps1 -Token <JWT>
+#
+# Note: the hash above is the LOCAL dev build hash; will be replaced on every
+# tagged release. Do NOT rely on this value across versions.

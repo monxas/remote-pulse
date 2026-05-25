@@ -17,10 +17,22 @@ from rp_server.integrations.tailscale_api import (
 )
 from rp_server.models import Enrollment, Host
 from rp_server.schemas import AgentConfig, EnrollRequest, EnrollResponse
+from rp_server.signing import ServerSigningKey
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["enrollment"])
+
+# Module-level server signing key (loaded once)
+_server_signing_key: ServerSigningKey | None = None
+
+
+def get_server_signing_key() -> ServerSigningKey:
+    """Get or initialize server signing key."""
+    global _server_signing_key
+    if _server_signing_key is None:
+        _server_signing_key = ServerSigningKey.load_or_generate()
+    return _server_signing_key
 
 
 @router.post("/enroll", response_model=EnrollResponse, status_code=status.HTTP_201_CREATED)
@@ -43,12 +55,18 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
         payload = decode_enrollment_token(request.token)
         validate_token_claims(payload)
     except JWTError as e:
+        from rp_server.metrics_exporter import record_enroll_failure
+
+        record_enroll_failure("unknown", "invalid_token")
         logger.warning("Invalid enrollment token", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired enrollment token",
         )
     except ValueError as e:
+        from rp_server.metrics_exporter import record_enroll_failure
+
+        record_enroll_failure("unknown", "missing_claims")
         logger.warning("Token missing required claims", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,12 +83,18 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
+        from rp_server.metrics_exporter import record_enroll_failure
+
+        record_enroll_failure(token_group, "token_not_found")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Enrollment token not found in database",
         )
 
     if enrollment.used_count >= enrollment.max_uses:
+        from rp_server.metrics_exporter import record_enroll_failure
+
+        record_enroll_failure(token_group, "token_exhausted")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Enrollment token has been exhausted",
@@ -78,6 +102,9 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
 
     now = datetime.now(timezone.utc)
     if enrollment.expires_at < now:
+        from rp_server.metrics_exporter import record_enroll_failure
+
+        record_enroll_failure(token_group, "token_expired")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Enrollment token has expired",
@@ -176,11 +203,21 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
         },
     )
 
-    # Return agent config
+    # Record metrics
+    from rp_server.metrics_exporter import record_enroll_success
+
+    record_enroll_success(host.group_name or "default")
+
+    # Get server signing key for distribution
+    signing_key = get_server_signing_key()
+
+    # Return agent config (with server pubkey for command verification)
     agent_config = AgentConfig(
         server_url=settings.server_url,
         heartbeat_interval_s=settings.heartbeat_interval_s,
         tailscale_authkey=tailscale_authkey,
+        server_pubkey=signing_key.public_key_pem(),
+        server_pubkey_fingerprint=signing_key.public_key_fingerprint(),
     )
 
     return EnrollResponse(host_id=host.id, agent_config=agent_config)

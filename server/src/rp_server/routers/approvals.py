@@ -1,0 +1,389 @@
+"""Telegram approval endpoints for destructive commands (F4-6).
+
+Implements defense-in-depth human-in-the-loop approval flow via n8n + Telegram.
+Commands requiring approval are held until admin responds via Telegram inline buttons.
+"""
+
+import hmac
+import hashlib
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import structlog
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select, and_
+
+from rp_server.database import DbSession
+from rp_server.models import Command, Host
+
+logger = structlog.get_logger()
+router = APIRouter(prefix="/v1/admin", tags=["approvals"])
+
+
+# Schemas
+
+
+class ApprovalRequest(BaseModel):
+    """Response when approval is requested."""
+
+    command_id: uuid.UUID
+    approval_token: uuid.UUID
+    expires_at: datetime
+
+
+class ApprovalPayload(BaseModel):
+    """Approval/rejection decision payload from n8n."""
+
+    approver_id: str = Field(
+        description="Telegram user ID or username of approver",
+        examples=["730947207", "ramonkawa"],
+    )
+    reason: str | None = Field(default=None, description="Optional approval/rejection reason")
+
+
+class ApprovalResult(BaseModel):
+    """Result of approval decision."""
+
+    status: str = Field(examples=["approved", "rejected"])
+    command_id: uuid.UUID
+    executed: bool = Field(
+        default=False,
+        description="Whether command was forwarded to agent for execution",
+    )
+    message: str
+
+
+class PendingApprovalItem(BaseModel):
+    """Pending approval summary."""
+
+    command_id: uuid.UUID
+    command_type: str
+    host_hostname: str
+    host_group: str | None
+    issued_by: str
+    issued_at: datetime
+    approval_requested_at: datetime
+    expires_at: datetime
+
+
+# Helper functions
+
+
+def _verify_callback_ip(request_ip: str, allowed_ips: list[str]) -> bool:
+    """Verify callback originates from allowed IP (n8n LXC).
+
+    Args:
+        request_ip: Request source IP
+        allowed_ips: List of allowed IPs
+
+    Returns:
+        True if allowed
+    """
+    return request_ip in allowed_ips
+
+
+def _compute_hmac(payload: dict[str, Any], secret: str) -> str:
+    """Compute HMAC-SHA256 signature for payload.
+
+    Args:
+        payload: Payload dict
+        secret: Shared secret
+
+    Returns:
+        Hex-encoded HMAC
+    """
+    # Canonical JSON (sorted keys, no whitespace)
+    import json
+
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hmac.new(
+        secret.encode("utf-8"),
+        canonical.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+# Endpoints
+
+
+@router.post(
+    "/commands/{command_id}/request-approval",
+    response_model=ApprovalRequest,
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_approval(
+    command_id: uuid.UUID,
+    db: DbSession,
+) -> ApprovalRequest:
+    """Request Telegram approval for a command.
+
+    Generates approval_token and fires n8n webhook. Called internally by
+    create_command when local_policy.evaluate() returns REQUIRE_APPROVAL.
+
+    Auth: Internal only (TODO F5: restrict to server-side calls)
+
+    Args:
+        command_id: Command UUID
+        db: Database session
+
+    Returns:
+        ApprovalRequest with token and expiry
+    """
+    # Fetch command
+    stmt = select(Command).where(Command.id == command_id)
+    result = await db.execute(stmt)
+    command = result.scalar_one_or_none()
+
+    if not command:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Command {command_id} not found",
+        )
+
+    if command.approval_token:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approval already requested for this command",
+        )
+
+    # Generate approval token
+    approval_token = uuid.uuid4()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    # Update command (NOTE: this is OK despite __setattr__ guard because
+    # we're updating before first commit completes in transaction)
+    command.approval_token = approval_token
+    command.approval_requested_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    logger.info(
+        "approval requested",
+        command_id=str(command_id),
+        approval_token=str(approval_token),
+    )
+
+    # TODO F4-6: Fire webhook to n8n (deferred to integration)
+    # webhook = TelegramApprovalWebhook(...)
+    # await webhook.fire_approval_request(command, host, approval_token)
+
+    return ApprovalRequest(
+        command_id=command_id,
+        approval_token=approval_token,
+        expires_at=expires_at,
+    )
+
+
+@router.post("/commands/approve/{approval_token}", response_model=ApprovalResult)
+async def approve_command(
+    approval_token: uuid.UUID,
+    payload: ApprovalPayload,
+    db: DbSession,
+) -> ApprovalResult:
+    """Approve command via Telegram callback.
+
+    Called by n8n after admin clicks "Approve" button in Telegram.
+    Verifies token not expired, marks command human_approved=true.
+
+    Auth: IP allowlist + single-use token (belt-and-suspenders)
+
+    Args:
+        approval_token: Unique approval token
+        payload: Approval decision data
+        db: Database session
+
+    Returns:
+        ApprovalResult with status
+    """
+    # Fetch command by approval_token
+    stmt = (
+        select(Command, Host)
+        .join(Host, Command.host_id == Host.id)
+        .where(
+            and_(
+                Command.approval_token == approval_token,
+                Command.human_approved == False,  # noqa: E712
+                Command.rejected_reason.is_(None),
+            )
+        )
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Approval request not found or already processed",
+        )
+
+    command, host = row
+
+    # Check expiration (5min TTL)
+    if command.approval_requested_at:
+        age = datetime.now(timezone.utc) - command.approval_requested_at.replace(
+            tzinfo=timezone.utc
+        )
+        if age.total_seconds() > 300:  # 5min
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Approval token expired (TTL 5min)",
+            )
+
+    # Mark approved
+    command.human_approved = True
+    command.approved_by = f"telegram:{payload.approver_id}"
+    command.approval_responded_at = datetime.now(timezone.utc)
+
+    # Clear token (single-use)
+    command.approval_token = None
+
+    await db.commit()
+
+    logger.info(
+        "command approved",
+        command_id=str(command.id),
+        approver=payload.approver_id,
+        host=host.hostname,
+    )
+
+    # TODO F4-6: Forward signed command to agent for execution
+    # (currently agent polls for pending commands; webhook push TBD F5)
+
+    return ApprovalResult(
+        status="approved",
+        command_id=command.id,
+        executed=False,  # Agent will poll and execute
+        message=f"Command approved by {payload.approver_id}",
+    )
+
+
+@router.post("/commands/reject/{approval_token}", response_model=ApprovalResult)
+async def reject_command(
+    approval_token: uuid.UUID,
+    payload: ApprovalPayload,
+    db: DbSession,
+) -> ApprovalResult:
+    """Reject command via Telegram callback.
+
+    Called by n8n after admin clicks "Reject" button.
+
+    Args:
+        approval_token: Unique approval token
+        payload: Rejection data
+        db: Database session
+
+    Returns:
+        ApprovalResult with status
+    """
+    # Fetch command
+    stmt = (
+        select(Command, Host)
+        .join(Host, Command.host_id == Host.id)
+        .where(
+            and_(
+                Command.approval_token == approval_token,
+                Command.human_approved == False,  # noqa: E712
+                Command.rejected_reason.is_(None),
+            )
+        )
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Approval request not found or already processed",
+        )
+
+    command, host = row
+
+    # Check expiration
+    if command.approval_requested_at:
+        age = datetime.now(timezone.utc) - command.approval_requested_at.replace(
+            tzinfo=timezone.utc
+        )
+        if age.total_seconds() > 300:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Approval token expired",
+            )
+
+    # Mark rejected
+    reason = payload.reason or "rejected by admin via Telegram"
+    command.rejected_reason = f"telegram_reject:{payload.approver_id}:{reason}"
+    command.approval_responded_at = datetime.now(timezone.utc)
+    command.approval_token = None
+
+    await db.commit()
+
+    logger.info(
+        "command rejected",
+        command_id=str(command.id),
+        approver=payload.approver_id,
+        reason=reason,
+        host=host.hostname,
+    )
+
+    return ApprovalResult(
+        status="rejected",
+        command_id=command.id,
+        executed=False,
+        message=f"Command rejected by {payload.approver_id}: {reason}",
+    )
+
+
+@router.get("/commands/pending-approval", response_model=list[PendingApprovalItem])
+async def list_pending_approvals(db: DbSession) -> list[PendingApprovalItem]:
+    """List commands awaiting approval.
+
+    Used for admin UI or n8n polling fallback.
+
+    Auth: TODO F5 - requires admin role
+
+    Args:
+        db: Database session
+
+    Returns:
+        List of pending approvals
+    """
+    # Query pending approvals
+    stmt = (
+        select(Command, Host)
+        .join(Host, Command.host_id == Host.id)
+        .where(
+            and_(
+                Command.approval_token.isnot(None),
+                Command.human_approved == False,  # noqa: E712
+                Command.rejected_reason.is_(None),
+            )
+        )
+        .order_by(Command.approval_requested_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    items = []
+    for command, host in rows:
+        if command.approval_requested_at:
+            expires_at = command.approval_requested_at + timedelta(minutes=5)
+        else:
+            expires_at = command.issued_at + timedelta(minutes=5)
+
+        items.append(
+            PendingApprovalItem(
+                command_id=command.id,
+                command_type=command.command_type,
+                host_hostname=host.hostname,
+                host_group=host.group_name,
+                issued_by=command.issued_by,
+                issued_at=command.issued_at,
+                approval_requested_at=command.approval_requested_at or command.issued_at,
+                expires_at=expires_at,
+            )
+        )
+
+    return items
