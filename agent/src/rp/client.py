@@ -155,10 +155,19 @@ class RPClient:
         Returns:
             Server response
         """
-        payload = {
-            "host_id": self.config.host_id,
-            "metrics": metrics,
-        }
+        # Server's HeartbeatRequest schema is flat (cpu_pct / mem_pct / ...)
+        # at the top level — not nested under "metrics". Also convert
+        # agent_ts from float seconds to ISO so Pydantic's datetime parser
+        # accepts it.
+        from datetime import datetime, timezone
+
+        flat_metrics = dict(metrics)
+        if isinstance(flat_metrics.get("agent_ts"), (int, float)):
+            flat_metrics["agent_ts"] = datetime.fromtimestamp(
+                flat_metrics["agent_ts"], tz=timezone.utc
+            ).isoformat()
+
+        payload = {"host_id": self.config.host_id, **flat_metrics}
 
         logger.debug("sending heartbeat", host_id=self.config.host_id)
         return await self._request("POST", "/v1/heartbeat", json=payload)
