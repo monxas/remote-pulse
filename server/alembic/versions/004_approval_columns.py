@@ -46,19 +46,18 @@ def upgrade() -> None:
     )
 
     # Extend audit-log trigger to also block TRUNCATE (M1 review gap).
-    # PG triggers don't directly support per-row TRUNCATE; use statement-level.
+    # asyncpg requires statements to be issued one at a time (no multi-stmt prepared).
     op.execute(
-        """
-        CREATE OR REPLACE FUNCTION block_command_truncate() RETURNS trigger AS $$
-        BEGIN
-            RAISE EXCEPTION 'commands table is append-only (TRUNCATE blocked)';
-        END;
-        $$ LANGUAGE plpgsql;
-
-        CREATE TRIGGER commands_truncate_immutable
-            BEFORE TRUNCATE ON commands
-            FOR EACH STATEMENT EXECUTE FUNCTION block_command_truncate();
-        """
+        "CREATE OR REPLACE FUNCTION block_command_truncate() RETURNS trigger AS $$ "
+        "BEGIN "
+        "RAISE EXCEPTION 'commands table is append-only (TRUNCATE blocked)'; "
+        "END; "
+        "$$ LANGUAGE plpgsql;"
+    )
+    op.execute(
+        "CREATE TRIGGER commands_truncate_immutable "
+        "BEFORE TRUNCATE ON commands "
+        "FOR EACH STATEMENT EXECUTE FUNCTION block_command_truncate();"
     )
 
 
