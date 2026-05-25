@@ -104,8 +104,16 @@ async def get_sparkline_data(
             )
             continue
 
-        # Query heartbeats with time_bucket aggregation
-        # Use time_bucket to group by bucket_seconds and avg() the metric
+        # SECURITY: metric is whitelisted above (HEARTBEAT_METRICS is constant),
+        # but we additionally enforce identifier-safe charset before interpolation
+        # for defense-in-depth (defensive against future refactors).
+        if not metric.replace("_", "").isalnum():
+            logger.error("Rejected non-identifier metric name", extra={"metric": metric})
+            continue
+
+        # Query heartbeats with time_bucket aggregation.
+        # Column name `metric` is identifier-safe + whitelisted; interpolated
+        # only into column position (not value). avg() over NULL skips rows naturally.
         query = text(
             f"""
             SELECT

@@ -183,8 +183,13 @@ async def sparkline_data_json(
     uplot_data = []
     timestamps = []
 
+    ALLOWED_METRICS = {"cpu_pct", "mem_pct", "load_1m", "uptime_s"}
     for metric in series:
-        if metric not in ["cpu_pct", "mem_pct", "load_1m", "uptime_s"]:
+        if metric not in ALLOWED_METRICS:
+            continue
+        # Defense-in-depth: even though `metric` is whitelisted, enforce
+        # identifier-safe charset before SQL interpolation.
+        if not metric.replace("_", "").isalnum():
             continue
 
         query = text(

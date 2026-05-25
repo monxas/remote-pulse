@@ -175,7 +175,7 @@ async def delete_group(
             detail=f"Group {name} not found",
         )
 
-    await db.delete(group)
+    db.delete(group)
     await db.commit()
 
     logger.info("group_deleted", name=name)

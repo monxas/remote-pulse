@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from rp_server import __version__
@@ -70,7 +71,18 @@ app = FastAPI(
 )
 
 
-# API Compatibility middleware (before custom middleware)
+# CORS middleware — explicit allowlist (M11 review).
+# Without this, FastAPI defaults to no CORS handling, which means browsers
+# block cross-origin XHR. We allow only configured dashboard origins.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_dashboard_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+)
+
+# API Compatibility middleware
 app.add_middleware(APICompatMiddleware)
 
 
@@ -98,16 +110,26 @@ async def security_headers(request: Request, call_next):
 # Prometheus metrics middleware
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
-    """Record HTTP request duration for Prometheus metrics."""
+    """Record HTTP request duration for Prometheus metrics.
+
+    M8 fix: use route template path (e.g. ``/v1/hosts/{host_id}``) instead of
+    raw path so we don't blow up Prometheus cardinality with UUIDs / variable
+    segments.
+    """
     from rp_server.metrics_exporter import rp_http_request_duration_seconds
 
     start = time.perf_counter()
     response = await call_next(request)
     duration = time.perf_counter() - start
 
+    # Use route template if matched; fall back to "unmatched" for 404s so
+    # unknown paths collapse into a single label instead of one per attacker URL.
+    route = request.scope.get("route")
+    path_label = getattr(route, "path", None) or "unmatched"
+
     rp_http_request_duration_seconds.labels(
         method=request.method,
-        path=request.url.path,
+        path=path_label,
         status=response.status_code,
     ).observe(duration)
 

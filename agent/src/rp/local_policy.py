@@ -16,6 +16,15 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _is_relative_to(child: "Path", parent: "Path") -> bool:
+    """Backport of Path.is_relative_to for Py3.9+; built-in on 3.12+."""
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
 class CommandDecision(StrEnum):
     """Decision outcome for command evaluation."""
 
@@ -206,9 +215,25 @@ class LocalPolicy:
                     "file_write denied: allow-remote-write flag expired",
                 )
 
-        # Check path restrictions (both sensitive and non-sensitive)
-        safe_prefixes = ("/etc/rp/", "/opt/rp/")
-        if not any(path.startswith(prefix) for prefix in safe_prefixes):
+        # Path restrictions (both sensitive and non-sensitive).
+        # Resolve symlinks to defeat traversal-via-link bypass (review M5):
+        # /etc/rp/managed -> /etc/passwd would pass startswith() but fails
+        # resolved containment check.
+        from pathlib import Path
+
+        safe_prefixes = (Path("/etc/rp/").resolve(), Path("/opt/rp/").resolve())
+        try:
+            resolved = Path(path).resolve(strict=False)
+        except (OSError, RuntimeError) as e:
+            return (
+                CommandDecision.DENY,
+                f"file_write denied: cannot resolve path {path}: {e}",
+            )
+
+        if not any(
+            resolved == prefix or _is_relative_to(resolved, prefix)
+            for prefix in safe_prefixes
+        ):
             return (
                 CommandDecision.REQUIRE_APPROVAL,
                 f"file_write requires approval: {path} outside /etc/rp/ or /opt/rp/",

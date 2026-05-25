@@ -8,28 +8,47 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from rp_server.database import DbSession
-from rp_server.deps import TailscaleIdentity, tailscale_identity_optional
-from rp_server.models import Heartbeat, Host
+from rp_server.deps import (
+    TailscaleIdentity,
+    current_user_optional,
+    tailscale_identity_optional,
+)
+from rp_server.middleware.group_filter import filter_hosts_by_user_groups
+from rp_server.models import Heartbeat, Host, User
 from rp_server.schemas import HeartbeatData, HostDetail, HostListItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["hosts"])
 
 OptionalTsIdentity = Annotated[TailscaleIdentity | None, Depends(tailscale_identity_optional)]
+OptionalUser = Annotated[User | None, Depends(current_user_optional)]
 
 
 @router.get("/hosts", response_model=list[HostListItem])
 async def list_hosts(
     db: DbSession,
+    user: OptionalUser = None,
     ts_identity: OptionalTsIdentity = None,
 ) -> list[HostListItem]:
-    """
-    List all registered hosts with summary information.
+    """List all registered hosts.
 
-    Returns basic host info and last_seen_at for quick status overview.
-    F5 TODO: Filter by user's accessible_groups for multi-tenant access.
+    Dual-mode auth:
+    - Tailscale identity (agent or admin via tailnet): full visibility
+    - PocketID web user (via Caddy forward_auth): filtered by accessible_groups
+    - Neither: 401
+
+    Multi-tenant: non-admin web users see only hosts whose group_name is in
+    their accessible_groups list.
     """
+    if user is None and ts_identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
     stmt = select(Host).order_by(Host.hostname)
+    if user is not None:
+        stmt = filter_hosts_by_user_groups(stmt, user)
     result = await db.execute(stmt)
     hosts = result.scalars().all()
 
@@ -40,18 +59,23 @@ async def list_hosts(
 async def get_host_detail(
     host_id: uuid.UUID,
     db: DbSession,
+    user: OptionalUser = None,
     ts_identity: OptionalTsIdentity = None,
 ) -> HostDetail:
-    """
-    Get detailed host information including recent heartbeats.
+    """Get detailed host info including recent heartbeats.
 
-    Returns:
-        Host detail with last 100 heartbeats ordered by timestamp descending.
-
-    F5 TODO: Verify user has access to this host's group.
+    Dual-mode auth (see list_hosts). Non-admin web users only see hosts in
+    their accessible_groups; otherwise 404 (avoid leaking host existence).
     """
-    # Get host
+    if user is None and ts_identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
     stmt = select(Host).where(Host.id == host_id)
+    if user is not None:
+        stmt = filter_hosts_by_user_groups(stmt, user)
     result = await db.execute(stmt)
     host = result.scalar_one_or_none()
 

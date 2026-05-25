@@ -12,7 +12,7 @@ from uuid import uuid4
 import jwt
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -93,8 +93,35 @@ async def generate_enrollment_link(
     db.add(enrollment)
     await db.commit()
 
-    # Generate magic URLs
+    # Generate magic URLs. Validate base_url against an allowlist to prevent
+    # an attacker-controlled env (SERVER_URL=https://evil.example) from
+    # turning admins into open-redirect launchers (review M10).
     base_url = settings.server_url.rstrip("/")
+    allowed_install_hosts = {
+        "rp.monxas.casa",
+        "127.0.0.1",
+        "localhost",
+        # Tailnet MagicDNS name once F2 active
+        "rp-server.monxas.ts.net",
+    }
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        host = (parsed.hostname or "").lower()
+    except Exception:
+        host = ""
+
+    if host and host not in allowed_install_hosts:
+        logger.error(
+            "Refusing to emit magic-link with unrecognised server_url",
+            extra={"server_url": base_url, "host": host},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server misconfigured: server_url not in install allowlist",
+        )
+
     magic_url_unix = f"{base_url}/install?token={token}"
     magic_url_windows = f"{base_url}/install.ps1?token={token}"
 

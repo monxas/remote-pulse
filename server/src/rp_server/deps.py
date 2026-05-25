@@ -1,13 +1,17 @@
 """FastAPI dependencies for request handling."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, HttpUrl
 from sqlalchemy import select, update
 
+from rp_server.config import settings
 from rp_server.database import DbSession
+
+logger = logging.getLogger(__name__)
 
 
 class TailscaleIdentity(BaseModel):
@@ -94,6 +98,7 @@ async def tailscale_identity_optional(
 
 
 async def current_user(
+    request: Request,
     db: DbSession,
     x_forwarded_user: Annotated[str | None, Header()] = None,
     x_forwarded_email: Annotated[str | None, Header()] = None,
@@ -101,27 +106,40 @@ async def current_user(
 ):
     """Resolve authenticated user from Caddy forward_auth PocketID headers.
 
-    Caddy injects headers after PocketID OIDC verification:
-    - X-Forwarded-User: PocketID subject (sub claim)
-    - X-Forwarded-Email: User email
-    - X-Forwarded-Preferred-Username: Display name
+    Defense against X-Forwarded-* header spoofing (review C3): the request
+    must originate from a trusted reverse proxy. We verify either:
+        a) client.host is in settings.trusted_proxies (allowlist), OR
+        b) `tailscale serve` injected Tailscale-* identity headers, meaning
+           the request crossed our Caddy or tsnet wrapper, OR
+        c) request explicitly came over the Unix socket / loopback (dev).
+
+    If none of those hold, the X-Forwarded-* headers could have been forged
+    by any LAN client → reject 401.
 
     On first login, creates user record with default viewer role.
-    Updates last_login_at on each request.
-
-    Args:
-        db: Database session
-        x_forwarded_user: PocketID sub from Caddy
-        x_forwarded_email: User email from Caddy
-        x_forwarded_preferred_username: Display name from Caddy
-
-    Returns:
-        User model instance
-
-    Raises:
-        HTTPException 401: If forward_auth headers missing
     """
     from rp_server.models import User
+
+    # --- Trusted-proxy gate (anti-spoofing) ---
+    client_host = request.client.host if request.client else None
+    came_via_tailscale = bool(request.headers.get("Tailscale-User-Login"))
+    trusted_proxies = set(settings.trusted_proxies or [])
+    trusted_proxies.update({"127.0.0.1", "::1"})
+    is_trusted_source = client_host in trusted_proxies or came_via_tailscale
+
+    if (x_forwarded_user or x_forwarded_email) and not is_trusted_source:
+        logger.warning(
+            "Rejected X-Forwarded-* headers from untrusted source",
+            extra={
+                "client_host": client_host,
+                "x_forwarded_user": x_forwarded_user,
+                "trusted_proxies": list(trusted_proxies),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Forward-auth headers from untrusted source rejected",
+        )
 
     if not x_forwarded_user or not x_forwarded_email:
         raise HTTPException(
@@ -174,6 +192,7 @@ async def current_user(
 
 
 async def current_user_optional(
+    request: Request,
     db: DbSession,
     x_forwarded_user: Annotated[str | None, Header()] = None,
     x_forwarded_email: Annotated[str | None, Header()] = None,
@@ -182,11 +201,13 @@ async def current_user_optional(
     """Optional current_user dependency for dual-mode auth endpoints.
 
     Returns None if PocketID headers absent (allows Tailscale-only auth).
+    Trusted-proxy enforcement is delegated to current_user().
     """
     if not x_forwarded_user or not x_forwarded_email:
         return None
 
     return await current_user(
+        request=request,
         db=db,
         x_forwarded_user=x_forwarded_user,
         x_forwarded_email=x_forwarded_email,
@@ -194,41 +215,25 @@ async def current_user_optional(
     )
 
 
-async def require_admin(user):
-    """Require admin role for endpoint access.
-
-    Args:
-        user: Current authenticated user
-
-    Returns:
-        User if admin
-
-    Raises:
-        HTTPException 403: If user not admin
-    """
+async def require_admin(user=Depends(current_user)):
+    """Dependency: caller must have role=admin."""
     if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required",
+            detail=f"Admin role required (current role: {user.role})",
         )
     return user
 
 
-async def require_operator_or_admin(user):
-    """Require operator or admin role for endpoint access.
-
-    Args:
-        user: Current authenticated user
-
-    Returns:
-        User if operator or admin
-
-    Raises:
-        HTTPException 403: If user not operator/admin
-    """
+async def require_operator_or_admin(user=Depends(current_user)):
+    """Dependency: caller must have role=admin or role=operator."""
     if user.role not in ("admin", "operator"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operator or admin role required",
+            detail=f"Operator+ role required (current role: {user.role})",
         )
     return user
+
+
+# (Older stub variants of require_admin/require_operator_or_admin removed;
+# canonical definitions live above with `Depends(current_user)`.)

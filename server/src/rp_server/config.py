@@ -42,6 +42,27 @@ class Settings(BaseSettings):
         ),
     ]
 
+    trusted_proxies: Annotated[
+        list[str],
+        Field(
+            default_factory=lambda: ["192.168.0.247", "192.168.0.248", "192.168.0.250"],
+            description=(
+                "IPs of trusted reverse proxies (Caddy LXC 270/271 + VIP) that may "
+                "set X-Forwarded-User / X-Forwarded-Email headers. Requests from any "
+                "other source carrying those headers are rejected as spoof attempts "
+                "(review C3)."
+            ),
+        ),
+    ]
+
+    allowed_dashboard_origins: Annotated[
+        list[str],
+        Field(
+            default_factory=lambda: ["https://dash.rp.monxas.casa"],
+            description="CORS allow-list for web dashboard origins.",
+        ),
+    ]
+
     heartbeat_interval_s: Annotated[
         int,
         Field(

@@ -82,7 +82,7 @@ async def receive_heartbeat(
         api_compat_max="1.0.0",  # TODO: Parse from Sec-RP-Agent-Version header
         last_check=now,
     )
-    await db.merge(agent_ver)
+    db.merge(agent_ver)
 
     await db.commit()
 
@@ -203,7 +203,7 @@ async def version_handshake(
         api_compat_max=api_compat_max,
         last_check=datetime.now(timezone.utc),
     )
-    await db.merge(agent_ver)
+    db.merge(agent_ver)
     await db.commit()
 
     return {"status": "ok"}
@@ -242,7 +242,7 @@ async def report_rollback(
             api_compat_max="1.0.0",  # Stub
             last_check=datetime.now(timezone.utc),
         )
-        await db.merge(agent_ver)
+        db.merge(agent_ver)
         await db.commit()
 
     return {"status": "ok"}

@@ -8,15 +8,16 @@ import hmac
 import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 
 from rp_server.database import DbSession
-from rp_server.models import Command, Host
+from rp_server.deps import require_admin, require_operator_or_admin
+from rp_server.models import Command, Host, User
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/admin", tags=["approvals"])
@@ -116,13 +117,14 @@ def _compute_hmac(payload: dict[str, Any], secret: str) -> str:
 async def request_approval(
     command_id: uuid.UUID,
     db: DbSession,
+    user: Annotated[User, Depends(require_operator_or_admin)],
 ) -> ApprovalRequest:
     """Request Telegram approval for a command.
 
     Generates approval_token and fires n8n webhook. Called internally by
     create_command when local_policy.evaluate() returns REQUIRE_APPROVAL.
 
-    Auth: Internal only (TODO F5: restrict to server-side calls)
+    Auth: operator+ role required (used by server-side workflows or admin UI).
 
     Args:
         command_id: Command UUID
@@ -197,49 +199,49 @@ async def approve_command(
     Returns:
         ApprovalResult with status
     """
-    # Fetch command by approval_token
+    # Atomic claim: clear token + mark approved in single UPDATE with WHERE
+    # guard (TOCTOU-safe). Only the first request wins; subsequent requests
+    # for same token observe rowcount=0.
+    now = datetime.now(timezone.utc)
+    ttl_cutoff = now - timedelta(seconds=300)  # 5min TTL per ADR §13
+
     stmt = (
-        select(Command, Host)
-        .join(Host, Command.host_id == Host.id)
+        update(Command)
         .where(
             and_(
                 Command.approval_token == approval_token,
-                Command.human_approved == False,  # noqa: E712
+                Command.human_approved.is_(False),
                 Command.rejected_reason.is_(None),
+                Command.approval_requested_at >= ttl_cutoff,
             )
         )
+        .values(
+            human_approved=True,
+            approved_by=f"telegram:{payload.approver_id}",
+            approval_responded_at=now,
+            approval_token=None,  # single-use
+        )
+        .returning(Command.id, Command.host_id)
     )
     result = await db.execute(stmt)
-    row = result.first()
+    claimed = result.first()
+    await db.commit()
 
-    if not row:
+    if not claimed:
+        # Distinguish 404 (not found / already processed) vs 403 (expired)
+        # by a follow-up read — but report consistently to avoid leaking state.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Approval request not found or already processed",
+            detail="Approval token not found, expired (>5min), or already processed",
         )
 
-    command, host = row
-
-    # Check expiration (5min TTL)
-    if command.approval_requested_at:
-        age = datetime.now(timezone.utc) - command.approval_requested_at.replace(
-            tzinfo=timezone.utc
-        )
-        if age.total_seconds() > 300:  # 5min
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Approval token expired (TTL 5min)",
-            )
-
-    # Mark approved
-    command.human_approved = True
-    command.approved_by = f"telegram:{payload.approver_id}"
-    command.approval_responded_at = datetime.now(timezone.utc)
-
-    # Clear token (single-use)
-    command.approval_token = None
-
-    await db.commit()
+    command_id, host_id = claimed
+    # Fetch host hostname for logging
+    host_row = await db.execute(select(Host.hostname).where(Host.id == host_id))
+    host_hostname = host_row.scalar_one_or_none() or "unknown"
+    # Construct minimal command stub for response
+    command = type("CmdStub", (), {"id": command_id})()
+    host = type("HostStub", (), {"hostname": host_hostname})()
 
     logger.info(
         "command approved",
@@ -336,12 +338,15 @@ async def reject_command(
 
 
 @router.get("/commands/pending-approval", response_model=list[PendingApprovalItem])
-async def list_pending_approvals(db: DbSession) -> list[PendingApprovalItem]:
+async def list_pending_approvals(
+    db: DbSession,
+    user: Annotated[User, Depends(require_admin)],
+) -> list[PendingApprovalItem]:
     """List commands awaiting approval.
 
     Used for admin UI or n8n polling fallback.
 
-    Auth: TODO F5 - requires admin role
+    Auth: admin role required.
 
     Args:
         db: Database session

@@ -6,22 +6,23 @@ Commands stored in immutable audit log, agents poll for pending.
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
 from rp_server.database import DbSession
-from rp_server.models import CanaryDeploy, Command, Host
-from rp_server.signing import ServerSigningKey
+from rp_server.deps import require_admin, require_operator_or_admin
+from rp_server.models import CanaryDeploy, Command, Host, User
 from rp_server.schemas import (
-    CommandResponse,
+    CanaryStatus,
     CanaryUpgradeRequest,
     CanaryUpgradeResponse,
-    CanaryStatus,
+    CommandResponse,
 )
+from rp_server.signing import ServerSigningKey
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/admin", tags=["commands"])
@@ -67,24 +68,27 @@ class CommandCreate(BaseModel):
 
 
 @router.post("/commands", response_model=CommandResponse, status_code=status.HTTP_201_CREATED)
-async def create_command(request: CommandCreate, db: DbSession) -> CommandResponse:
+async def create_command(
+    request: CommandCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(require_operator_or_admin)],
+) -> CommandResponse:
     """Create and sign a remote command.
 
     Command is inserted into immutable audit log and signed with server's
     Ed25519 private key. Agent will verify signature before execution.
 
-    Auth: TODO F5 - requires admin/operator role (stub for now)
+    Auth: operator+ role required.
 
     Args:
         request: Command creation parameters
         db: Database session
+        user: Authenticated user (operator+)
 
     Returns:
         CommandResponse with signature included
     """
-    # TODO F5: Add role-based auth check here
-    # For now, stub with hardcoded "admin" issuer
-    issued_by = "admin"  # Will be replaced with TsIdentity.user_login in F5
+    issued_by = user.email
 
     # Verify host exists
     stmt = select(Host).where(Host.id == request.host_id)
@@ -143,6 +147,7 @@ async def create_command(request: CommandCreate, db: DbSession) -> CommandRespon
 @router.get("/commands", response_model=list[CommandResponse])
 async def list_commands(
     db: DbSession,
+    user: Annotated[User, Depends(require_operator_or_admin)],
     host_id: uuid.UUID | None = Query(default=None, description="Filter by host ID"),
     command_type: str | None = Query(default=None, description="Filter by command type"),
     completed: bool | None = Query(default=None, description="Filter by completion status"),
@@ -150,7 +155,8 @@ async def list_commands(
 ) -> list[CommandResponse]:
     """List commands with optional filters.
 
-    Auth: TODO F5 - requires admin/operator role
+    Auth: operator+ role required. Non-admin users only see commands for
+    hosts in their accessible_groups.
 
     Args:
         db: Database session
@@ -164,6 +170,12 @@ async def list_commands(
     """
     # Build query
     stmt = select(Command).order_by(Command.issued_at.desc()).limit(limit)
+
+    # Multi-tenant filtering: non-admins only see commands for accessible hosts
+    if user.role != "admin":
+        stmt = stmt.join(Host, Command.host_id == Host.id).where(
+            Host.group_name.in_(user.accessible_groups)
+        )
 
     if host_id:
         stmt = stmt.where(Command.host_id == host_id)
@@ -184,19 +196,21 @@ async def list_commands(
 
 
 @router.get("/commands/{command_id}", response_model=CommandResponse)
-async def get_command(command_id: uuid.UUID, db: DbSession) -> CommandResponse:
+async def get_command(
+    command_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(require_operator_or_admin)],
+) -> CommandResponse:
     """Get single command by ID.
 
-    Auth: TODO F5 - requires admin/operator role
-
-    Args:
-        command_id: Command UUID
-        db: Database session
-
-    Returns:
-        Command details
+    Auth: operator+ role. Non-admin users can only see commands for hosts
+    in their accessible_groups.
     """
     stmt = select(Command).where(Command.id == command_id)
+    if user.role != "admin":
+        stmt = stmt.join(Host, Command.host_id == Host.id).where(
+            Host.group_name.in_(user.accessible_groups)
+        )
     result = await db.execute(stmt)
     command = result.scalar_one_or_none()
 
@@ -220,20 +234,13 @@ async def get_command(command_id: uuid.UUID, db: DbSession) -> CommandResponse:
 async def initiate_canary_upgrade(
     request: CanaryUpgradeRequest,
     db: DbSession,
+    user: Annotated[User, Depends(require_admin)],
 ) -> CanaryUpgradeResponse:
     """Initiate canary deploy upgrade.
 
-    Process:
-    1. Select canary host (provided or lowest-criticality in group)
-    2. Issue signed upgrade command to canary
-    3. Background task observes canary health for N minutes
-    4. If healthy: propagate to rest of group
-    5. If unhealthy: stop, rollback canary, alert
-
-    Auth: TODO F5 - requires admin role
+    Auth: admin only.
     """
-    # TODO F5: Add admin auth check
-    issued_by = "admin"  # Stub
+    issued_by = user.email
 
     # Select canary host
     if request.canary_host_id:
@@ -343,11 +350,9 @@ async def initiate_canary_upgrade(
 async def get_canary_status(
     canary_id: uuid.UUID,
     db: DbSession,
+    user: Annotated[User, Depends(require_operator_or_admin)],
 ) -> CanaryStatus:
-    """Get status of a canary deploy.
-
-    Auth: TODO F5 - requires admin/operator role
-    """
+    """Get status of a canary deploy. Auth: operator+."""
     stmt = select(CanaryDeploy).where(CanaryDeploy.id == canary_id)
     result = await db.execute(stmt)
     canary = result.scalar_one_or_none()
