@@ -108,11 +108,11 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # CSP: allow self + inline scripts for HTMX, inline styles for uPlot
+    # CSP: allow self + the specific CDNs the dashboard pulls (HTMX, uPlot, Pico).
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
         "frame-ancestors 'none'"
