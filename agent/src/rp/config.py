@@ -25,6 +25,11 @@ class AgentConfig(BaseModel):
     host_id: str
     server_url: str
     heartbeat_interval_s: int = Field(default=30, ge=5, le=3600)
+    # Phase 2.5: how often the agent pulls pending commands from the server.
+    # Kept tight (5s default) so dashboard → execution latency feels live;
+    # cheap to do because the server response is small and only returns rows
+    # in a narrow approved-but-not-completed window.
+    command_poll_interval_s: int = Field(default=5, ge=1, le=300)
     group: Optional[str] = None
 
 

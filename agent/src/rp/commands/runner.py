@@ -1,37 +1,85 @@
-"""Remote command execution (stub for F4-4).
+"""Remote command execution (Phase 2.5 — shell only).
 
-This module provides the integration point between server-issued commands
-and local policy enforcement.
+This module is the agent-side entry point for commands pulled from
+``GET /v1/agent/commands/pending``. The daemon's ``_command_loop`` calls
+:func:`execute_remote_command` for each pending row and POSTs the result
+back via ``POST /v1/agent/commands/{id}/result``.
+
+Phase 2.5 scope
+---------------
+* ``shell`` command type: executed via ``subprocess.run("/bin/sh", "-c", ...)``
+  with a configurable timeout (default 30s) and 64 KiB caps on stdout /
+  stderr to avoid pathological memory blow-ups from misbehaving commands.
+* Every other command type returns ``ack=False`` with a clean
+  ``rejected_reason`` so the dashboard surfaces the unsupported call
+  without the daemon crashing.
+
+Phase 2.5 explicitly DOES NOT enforce signature verification or local
+policy. That framework is sketched out in ``rp.signature`` /
+``rp.local_policy`` / ``rp.replay_guard`` but requires production-grade
+Ed25519 trust anchors, Telegram approval plumbing, and per-host policy
+files that the v1.0 GA install flow doesn't yet provision. The server
+is treated as trusted in Phase 2.5; defense-in-depth verification lands
+in Phase 4 alongside the per-host bearer token rollout.
 """
 
+from __future__ import annotations
+
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
-import structlog
+from typing import Any, Optional
 
-from rp.local_policy import LocalPolicy, CommandDecision, TelegramApprovalRequest
-from rp.replay_guard import ReplayGuard
-from rp.signature import ServerTrust
+import structlog
 
 logger = structlog.get_logger()
 
 
+# Cap on captured stdout / stderr before we hand the result to the server.
+# Matches the server-side Pydantic ``max_length`` upper bound and keeps a
+# rogue command (``yes`` etc.) from OOM-ing the agent VM.
+MAX_STREAM_BYTES = 64 * 1024
+
+
 @dataclass
 class RemoteCommand:
-    """Remote command from server."""
+    """Remote command pulled from the server.
+
+    The server-side schema (PendingCommand) sends ``command_payload``;
+    older agent code referred to this as ``payload``. We accept both via
+    :py:meth:`from_dict` to keep the wire shape compatible.
+    """
 
     id: str
     command_type: str
-    payload: dict
-    target_group: str
-    issued_by: str
+    payload: dict[str, Any]
     server_signature: str
-    expires_at: datetime
+    issued_by: str
+    issued_at: str
+    expires_at: Optional[datetime] = None
+    # Kept for legacy callers; not populated by the Phase 2.5 server.
+    target_group: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RemoteCommand":
+        """Build from the wire format emitted by /v1/agent/commands/pending."""
+        return cls(
+            id=str(data["id"]),
+            command_type=data["command_type"],
+            # Server uses ``command_payload``; tolerate ``payload`` for
+            # backwards-compat with the old runner stub.
+            payload=data.get("command_payload") or data.get("payload") or {},
+            server_signature=data.get("server_signature", ""),
+            issued_by=data.get("issued_by", ""),
+            issued_at=data.get("issued_at", ""),
+            expires_at=data.get("expires_at"),
+            target_group=data.get("target_group"),
+        )
 
 
 @dataclass
 class CommandResult:
-    """Result of command execution."""
+    """Result of command execution, headed back to the server."""
 
     ack: bool
     exit_code: Optional[int] = None
@@ -40,119 +88,116 @@ class CommandResult:
     rejected_reason: Optional[str] = None
 
 
-async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
-    """Execute remote command with signature + local-policy enforcement.
+def _truncate(s: str, limit: int = MAX_STREAM_BYTES) -> str:
+    """Truncate a stream to ``limit`` bytes, keeping the tail.
 
-    Defense-in-depth layers:
-    1. Server signature verification (cryptographic trust)
-    2. Local policy check (defense against server compromise)
-    3. Optional Telegram approval (human-in-loop for destructive ops)
-
-    Args:
-        cmd: Remote command to execute
-
-    Returns:
-        CommandResult with execution outcome
-
-    Raises:
-        NotImplementedError: Command execution not yet implemented (F4-4)
+    We prefer the tail because that's where the interesting failure
+    information typically is (final error, traceback, etc.).
     """
-    # Layer 1: Verify server signature FIRST
-    trust = ServerTrust.load()
-    if not trust:
-        logger.error(
-            "no server trust anchor",
-            cmd_id=cmd.id,
-            command_type=cmd.command_type,
+    if not s:
+        return ""
+    encoded = s.encode("utf-8", errors="replace")
+    if len(encoded) <= limit:
+        return s
+    return encoded[-limit:].decode("utf-8", errors="replace")
+
+
+def _run_shell(payload: dict[str, Any]) -> CommandResult:
+    """Execute ``payload['cmd']`` under /bin/sh with a hard timeout.
+
+    Payload schema::
+
+        {"cmd": "<string>", "timeout_s": <int, default 30>}
+
+    The subprocess inherits no environment except a sanitised ``PATH``
+    so commands behave predictably across distros / shells.
+    """
+    cmd_str = payload.get("cmd")
+    if not isinstance(cmd_str, str) or not cmd_str.strip():
+        return CommandResult(
+            ack=False,
+            rejected_reason="invalid_payload: missing or empty 'cmd'",
         )
-        return CommandResult(ack=False, rejected_reason="no_server_trust_anchor")
 
-    if not trust.verify_command(
-        command_id=cmd.id,
-        command_type=cmd.command_type,
-        payload=cmd.payload,
-        expires_at=cmd.expires_at,
-        signature_b64=cmd.server_signature,
-    ):
-        logger.warning(
-            "signature verification FAILED",
-            cmd_id=cmd.id,
-            command_type=cmd.command_type,
-            fingerprint=trust.fingerprint,
+    timeout = payload.get("timeout_s", 30)
+    try:
+        timeout = int(timeout)
+    except (TypeError, ValueError):
+        return CommandResult(
+            ack=False, rejected_reason="invalid_payload: 'timeout_s' must be int"
         )
-        return CommandResult(ack=False, rejected_reason="signature_invalid")
-
-    # Layer 1b: Replay protection (review M3). Even with a valid signature, an
-    # attacker who captures the blob could resend it within its 60s expiry
-    # window. We refuse to execute the same command_id twice.
-    replay_guard = ReplayGuard()
-    if replay_guard.has_seen(cmd.id):
-        logger.warning(
-            "replay attempt rejected",
-            cmd_id=cmd.id,
-            command_type=cmd.command_type,
+    if timeout <= 0 or timeout > 3600:
+        return CommandResult(
+            ack=False,
+            rejected_reason="invalid_payload: 'timeout_s' out of range (1..3600)",
         )
-        return CommandResult(ack=False, rejected_reason="replay_detected")
 
-    # Layer 2: Local-policy check (defense against server compromise per ADR-0008 §13)
-    policy = LocalPolicy()
-    decision, reason = policy.evaluate(cmd.command_type, cmd.payload, cmd.target_group)
+    try:
+        proc = subprocess.run(
+            ["/bin/sh", "-c", cmd_str],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG": "C.UTF-8",
+            },
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.warning("shell command timed out", timeout_s=timeout)
+        # subprocess sets stdout/stderr to bytes-or-None when text=True
+        # with a timeout; coerce to str defensively.
+        return CommandResult(
+            ack=True,
+            exit_code=None,
+            stdout=_truncate(exc.stdout if isinstance(exc.stdout, str) else ""),
+            stderr=_truncate(
+                (exc.stderr if isinstance(exc.stderr, str) else "")
+                + f"\ntimeout after {timeout}s"
+            ),
+            rejected_reason="timeout",
+        )
+    except OSError as exc:
+        logger.error("shell exec failed", error=str(exc))
+        return CommandResult(
+            ack=False,
+            rejected_reason=f"exec_error: {exc!s}",
+        )
 
-    logger.info(
-        "local policy decision",
-        cmd_id=cmd.id,
-        command_type=cmd.command_type,
-        decision=decision,
-        reason=reason,
+    return CommandResult(
+        ack=True,
+        exit_code=proc.returncode,
+        stdout=_truncate(proc.stdout or ""),
+        stderr=_truncate(proc.stderr or ""),
     )
 
-    if decision == CommandDecision.DENY:
-        logger.warning(
-            "local policy DENIED command",
-            cmd_id=cmd.id,
-            command_type=cmd.command_type,
-            reason=reason,
-        )
-        return CommandResult(ack=False, rejected_reason=f"local_policy_deny: {reason}")
 
-    if decision == CommandDecision.REQUIRE_APPROVAL:
-        # F4-6 will hook into Telegram approval flow
-        logger.info(
-            "command requires Telegram approval",
-            cmd_id=cmd.id,
-            command_type=cmd.command_type,
-        )
+async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
+    """Dispatch a remote command to its type-specific runner.
 
-        approval = TelegramApprovalRequest(
-            command_id=cmd.id,
-            command_type=cmd.command_type,
-            reason=reason,
-        )
+    Phase 2.5: only ``shell`` is implemented; every other type returns a
+    clean rejection so the dashboard can show "not implemented" without
+    the daemon crashing.
 
-        try:
-            approved = await approval.wait_for_decision(timeout_s=300)
-            if not approved:
-                return CommandResult(
-                    ack=False, rejected_reason="telegram_approval_rejected"
-                )
-        except NotImplementedError:
-            # F4-6 not implemented yet
-            logger.error("Telegram approval flow not available (F4-6)")
-            return CommandResult(
-                ack=False,
-                rejected_reason="telegram_approval_not_implemented",
-            )
-
-    # ALLOW: actual execution will be implemented in F4-4.
-    # Mark command as seen for replay protection BEFORE executing so a crash
-    # mid-execution cannot be exploited to retry the same payload.
-    replay_guard.mark_executed(cmd.id)
-
+    TODO Phase 4: re-introduce ``ServerTrust.verify_command`` + the
+    ``LocalPolicy`` evaluation that used to live here (see git history).
+    Those layers need a working trust-anchor distribution and Telegram
+    approval flow first.
+    """
     logger.info(
-        "command allowed by local policy (execution pending F4-4)",
+        "executing remote command",
         cmd_id=cmd.id,
         command_type=cmd.command_type,
+        issued_by=cmd.issued_by,
     )
-    raise NotImplementedError(
-        f"Command execution not yet implemented (ticket F4-4): {cmd.command_type}"
+
+    if cmd.command_type == "shell":
+        return _run_shell(cmd.payload)
+
+    return CommandResult(
+        ack=False,
+        rejected_reason=(
+            f"command_type '{cmd.command_type}' not implemented in v1.0"
+        ),
     )
