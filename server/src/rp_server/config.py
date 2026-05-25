@@ -171,31 +171,7 @@ class Settings(BaseSettings):
         description="Mapping of group names to Tailscale ACL tags",
     )
 
-    # PocketID OIDC integration (F5)
-    pocketid_base_url: Annotated[
-        HttpUrl,
-        Field(
-            default="https://id.monxas.casa",
-            description="PocketID IdP base URL",
-        ),
-    ] = "https://id.monxas.casa"  # type: ignore
-
-    pocketid_client_id: Annotated[
-        str,
-        Field(
-            default="remote-pulse-web",
-            description="OIDC client ID for web dashboard",
-        ),
-    ] = "remote-pulse-web"
-
-    pocketid_client_secret: Annotated[
-        SecretStr | None,
-        Field(
-            default=None,
-            description="OIDC client secret (optional, for token exchange)",
-        ),
-    ] = None
-
+    # Optional: PocketID admin API token for future user sync features
     pocketid_admin_token: Annotated[
         SecretStr | None,
         Field(

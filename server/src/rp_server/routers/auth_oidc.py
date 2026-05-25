@@ -41,7 +41,8 @@ _oauth: OAuth | None = None
 
 def _fetch_pocketid_metadata() -> dict:
     """Fetch the OIDC discovery document synchronously at registration time."""
-    url = f"{settings.pocketid_base_url}/.well-known/openid-configuration"
+    base = str(settings.pocketid_base_url).rstrip("/")
+    url = f"{base}/.well-known/openid-configuration"
     try:
         resp = httpx.get(
             url,
@@ -183,7 +184,7 @@ async def callback(request: Request, db: DbSession):
 async def logout(request: Request):
     """Clear local session and redirect to PocketID end-session endpoint."""
     request.session.clear()
-    end_session = f"{settings.pocketid_base_url}/api/oidc/end-session"
+    end_session = f"{str(settings.pocketid_base_url).rstrip('/')}/api/oidc/end-session"
     post_logout = settings.public_dashboard_url or "/"
     params = urlencode({"post_logout_redirect_uri": post_logout})
     return RedirectResponse(url=f"{end_session}?{params}", status_code=302)
