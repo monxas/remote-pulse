@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
+import httpx
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -38,6 +39,21 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _oauth: OAuth | None = None
 
 
+def _fetch_pocketid_metadata() -> dict:
+    """Fetch the OIDC discovery document synchronously at registration time.
+
+    Authlib's async ``load_server_metadata`` was raising JSONDecodeError when
+    fetching from PocketID (possibly a session-isolation issue with the
+    Starlette integration). Pre-loading the metadata bypasses that path
+    entirely — Authlib then has the endpoints in hand and no longer tries to
+    fetch them itself.
+    """
+    url = f"{settings.pocketid_base_url}/.well-known/openid-configuration"
+    resp = httpx.get(url, timeout=10.0)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def get_oauth() -> OAuth:
     """Return the lazily-initialised OAuth client registered with PocketID."""
     global _oauth
@@ -47,16 +63,20 @@ def get_oauth() -> OAuth:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="OIDC client not configured (POCKETID_CLIENT_ID/SECRET missing)",
             )
+        metadata = _fetch_pocketid_metadata()
         oauth = OAuth()
+        secret = settings.pocketid_client_secret
+        if hasattr(secret, "get_secret_value"):
+            secret = secret.get_secret_value()
         oauth.register(
             name="pocketid",
             client_id=settings.pocketid_client_id,
-            client_secret=(
-                settings.pocketid_client_secret.get_secret_value()
-                if hasattr(settings.pocketid_client_secret, "get_secret_value")
-                else settings.pocketid_client_secret
-            ),
-            server_metadata_url=f"{settings.pocketid_base_url}/.well-known/openid-configuration",
+            client_secret=secret,
+            # Pre-load metadata to avoid Authlib's internal fetch (which fails).
+            authorize_url=metadata["authorization_endpoint"],
+            access_token_url=metadata["token_endpoint"],
+            userinfo_endpoint=metadata.get("userinfo_endpoint"),
+            jwks_uri=metadata.get("jwks_uri"),
             client_kwargs={"scope": "openid profile email"},
         )
         _oauth = oauth
