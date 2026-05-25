@@ -10,6 +10,7 @@ from typing import Optional
 import structlog
 
 from rp.local_policy import LocalPolicy, CommandDecision, TelegramApprovalRequest
+from rp.replay_guard import ReplayGuard
 from rp.signature import ServerTrust
 
 logger = structlog.get_logger()
@@ -81,6 +82,18 @@ async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
         )
         return CommandResult(ack=False, rejected_reason="signature_invalid")
 
+    # Layer 1b: Replay protection (review M3). Even with a valid signature, an
+    # attacker who captures the blob could resend it within its 60s expiry
+    # window. We refuse to execute the same command_id twice.
+    replay_guard = ReplayGuard()
+    if replay_guard.has_seen(cmd.id):
+        logger.warning(
+            "replay attempt rejected",
+            cmd_id=cmd.id,
+            command_type=cmd.command_type,
+        )
+        return CommandResult(ack=False, rejected_reason="replay_detected")
+
     # Layer 2: Local-policy check (defense against server compromise per ADR-0008 §13)
     policy = LocalPolicy()
     decision, reason = policy.evaluate(cmd.command_type, cmd.payload, cmd.target_group)
@@ -130,7 +143,11 @@ async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
                 rejected_reason="telegram_approval_not_implemented",
             )
 
-    # ALLOW: actual execution will be implemented in F4-4
+    # ALLOW: actual execution will be implemented in F4-4.
+    # Mark command as seen for replay protection BEFORE executing so a crash
+    # mid-execution cannot be exploited to retry the same payload.
+    replay_guard.mark_executed(cmd.id)
+
     logger.info(
         "command allowed by local policy (execution pending F4-4)",
         cmd_id=cmd.id,

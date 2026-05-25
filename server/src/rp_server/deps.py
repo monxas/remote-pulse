@@ -1,5 +1,6 @@
 """FastAPI dependencies for request handling."""
 
+import hmac
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
@@ -12,6 +13,11 @@ from rp_server.config import settings
 from rp_server.database import DbSession
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_str_compare(a: str, b: str) -> bool:
+    """Constant-time string comparison to avoid timing oracle on bearer tokens."""
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 
 class TailscaleIdentity(BaseModel):
@@ -103,6 +109,7 @@ async def current_user(
     x_forwarded_user: Annotated[str | None, Header()] = None,
     x_forwarded_email: Annotated[str | None, Header()] = None,
     x_forwarded_preferred_username: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ):
     """Resolve authenticated user from Caddy forward_auth PocketID headers.
 
@@ -116,6 +123,12 @@ async def current_user(
     If none of those hold, the X-Forwarded-* headers could have been forged
     by any LAN client → reject 401.
 
+    Emergency bypass (review M7): if `settings.emergency_admin_bearer` is
+    configured and the request carries
+    ``Authorization: Bearer <that token>`` AND originates from a trusted
+    source (same gate as above), we resolve to the admin identified by
+    `emergency_admin_email`. This is break-glass auth when PocketID is down.
+
     On first login, creates user record with default viewer role.
     """
     from rp_server.models import User
@@ -126,6 +139,32 @@ async def current_user(
     trusted_proxies = set(settings.trusted_proxies or [])
     trusted_proxies.update({"127.0.0.1", "::1"})
     is_trusted_source = client_host in trusted_proxies or came_via_tailscale
+
+    # --- Emergency bearer (break-glass) ---
+    # Only honored from a trusted source: a LAN attacker can't bypass auth
+    # just by guessing/leaking the token because Caddy / Tailscale serve is
+    # still the only way in.
+    if authorization and authorization.startswith("Bearer "):
+        candidate = authorization.removeprefix("Bearer ").strip()
+        emergency = settings.emergency_admin_bearer
+        if emergency and is_trusted_source and _safe_str_compare(candidate, emergency):
+            stmt = select(User).where(User.email == settings.emergency_admin_email)
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user is None or not user.is_active:
+                logger.error(
+                    "Emergency bearer accepted but admin user missing/inactive",
+                    extra={"email": settings.emergency_admin_email},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Emergency admin user not configured",
+                )
+            logger.warning(
+                "Emergency bearer admin auth used (break-glass)",
+                extra={"email": user.email, "client_host": client_host},
+            )
+            return user
 
     if (x_forwarded_user or x_forwarded_email) and not is_trusted_source:
         logger.warning(

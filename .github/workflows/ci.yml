@@ -80,10 +80,15 @@ jobs:
           POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run alembic upgrade head
 
-      - name: Pytest
+      - name: Pytest (full suite)
         env:
           POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run pytest -v
+
+      - name: Pytest (Postgres-only — audit log immutability)
+        env:
+          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
+        run: uv run pytest -v -m postgres
 
   secrets-scan:
     name: Secrets scan (trufflehog)

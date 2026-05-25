@@ -63,6 +63,29 @@ class Settings(BaseSettings):
         ),
     ]
 
+    emergency_admin_bearer: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=32,
+            description=(
+                "Break-glass bearer token for emergency admin access when Caddy/"
+                "PocketID forward_auth is unavailable (M7 review). Sent as "
+                "'Authorization: Bearer <token>'. The bearer maps to the admin "
+                "user identified by `emergency_admin_email`. Should be rotated "
+                "regularly and stored in SOPS. Leave unset to disable."
+            ),
+        ),
+    ]
+
+    emergency_admin_email: Annotated[
+        str,
+        Field(
+            default="ramon@monxas.casa",
+            description="Email of the admin user mapped by emergency_admin_bearer.",
+        ),
+    ]
+
     heartbeat_interval_s: Annotated[
         int,
         Field(
