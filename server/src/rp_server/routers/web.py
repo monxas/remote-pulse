@@ -58,9 +58,9 @@ async def dashboard(
     available_groups = sorted([g for g in groups_result.scalars().all() if g])
 
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "user": user,
             "hosts": hosts,
             "available_groups": available_groups,
@@ -90,9 +90,9 @@ async def hosts_refresh_partial(
     hosts = result.scalars().all()
 
     return templates.TemplateResponse(
+        request,
         "partials/hosts_table_body.html",
         {
-            "request": request,
             "hosts": hosts,
         },
     )
@@ -131,9 +131,9 @@ async def host_detail_partial(
     recent_heartbeats = heartbeats_result.fetchall()
 
     return templates.TemplateResponse(
+        request,
         "partials/host_detail_card.html",
         {
-            "request": request,
             "host": host,
             "recent_heartbeats": recent_heartbeats,
         },

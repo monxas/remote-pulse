@@ -40,9 +40,9 @@ async def enroll_page(
     Admin-only access.
     """
     return templates.TemplateResponse(
+        request,
         "enroll_link.html",
         {
-            "request": request,
             "user": user,
         },
     )
@@ -176,9 +176,9 @@ async def enroll_landing_page(
     # TODO: Implement landing page with OS detection
     # For now, simple redirect to docs
     return templates.TemplateResponse(
+        request,
         "enroll_landing.html",
         {
-            "request": request,
             "token": token_short,
         },
     )
