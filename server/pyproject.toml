@@ -20,6 +20,7 @@ dependencies = [
     "pyjwt>=2.9.0",
     "authlib>=1.3.0",          # OIDC client (PocketID)
     "itsdangerous>=2.2.0",     # Starlette SessionMiddleware signing
+    "sse-starlette>=2.1.0",    # ADR-0009 Phase 1: SSE for /v1/dash/stream
 ]
 
 [project.optional-dependencies]

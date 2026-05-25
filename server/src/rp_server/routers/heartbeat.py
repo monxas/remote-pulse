@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 
 from rp_server.database import DbSession
 from rp_server.deps import TailscaleIdentity, tailscale_identity_optional
+from rp_server.events import fire_and_forget
 from rp_server.models import AgentVersion, Heartbeat, Host, CanaryDeploy
 from rp_server.schemas import (
     HeartbeatRequest,
@@ -55,6 +56,20 @@ async def receive_heartbeat(
 
     now = datetime.now(timezone.utc)
 
+    # ADR-0009 Phase 1: detect status transitions BEFORE we update last_seen_at
+    # so we can emit host.status_change events. Thresholds match dash_api.py:
+    # online ≤ 60s, stale ≤ 180s, else offline.
+    prev_status = "offline"
+    if host.last_seen_at is not None:
+        last_seen = host.last_seen_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        age = (now - last_seen).total_seconds()
+        if age <= 60:
+            prev_status = "online"
+        elif age <= 180:
+            prev_status = "stale"
+
     # Insert heartbeat
     heartbeat = Heartbeat(
         host_id=request.host_id,
@@ -100,6 +115,32 @@ async def receive_heartbeat(
     from rp_server.metrics_exporter import record_heartbeat
 
     record_heartbeat(host.group_name or "default")
+
+    # ADR-0009 Phase 1: fan out to SSE subscribers. Fire-and-forget — must
+    # NOT add latency to the heartbeat hot path. After this UPDATE, the host
+    # is by definition "online".
+    fire_and_forget(
+        "host.heartbeat",
+        {
+            "host_id": str(request.host_id),
+            "group_name": host.group_name,
+            "ts": now.isoformat(),
+            "cpu_pct": request.cpu_pct,
+            "mem_pct": request.mem_pct,
+            "load_1m": request.load_1m,
+        },
+    )
+    if prev_status != "online":
+        fire_and_forget(
+            "host.status_change",
+            {
+                "host_id": str(request.host_id),
+                "group_name": host.group_name,
+                "from": prev_status,
+                "to": "online",
+                "ts": now.isoformat(),
+            },
+        )
 
     return HeartbeatResponse(status="ok", server_ts=now)
 
