@@ -161,7 +161,8 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
                 preauthorized=True,
                 expiry_seconds=settings.tailscale_authkey_expiry_seconds,
                 tags=[group_tag],
-                description=f"rp enroll {host.hostname} {datetime.now(timezone.utc).isoformat()}",
+                # Tailscale rejects ':' and '+' in descriptions, so use a safe format.
+                description=f"rp enroll {host.hostname} {datetime.now(timezone.utc).strftime('%Y-%m-%d %H%M%S UTC')}",
             )
 
             tailscale_authkey = ts_response.key
@@ -303,7 +304,7 @@ async def reauth_agent(request: ReauthRequest, db: DbSession) -> ReauthResponse:
                 preauthorized=True,
                 expiry_seconds=settings.tailscale_authkey_expiry_seconds,
                 tags=[group_tag],
-                description=f"rp reauth {host.hostname} {datetime.now(timezone.utc).isoformat()}",
+                description=f"rp reauth {host.hostname} {datetime.now(timezone.utc).strftime('%Y-%m-%d %H%M%S UTC')}",
             )
 
             tailscale_authkey = ts_response.key
