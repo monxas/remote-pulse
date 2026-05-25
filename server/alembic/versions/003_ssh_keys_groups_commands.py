@@ -168,18 +168,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["host_id"], ["hosts.id"], ondelete="CASCADE"),
     )
 
-    # Add FK constraint from hosts.group_name to groups.name
-    op.create_foreign_key(
-        "hosts_group_fk",
-        "hosts",
-        "groups",
-        ["group_name"],
-        ["name"],
-        onupdate="CASCADE",
-        ondelete="SET NULL",
-    )
-
-    # Seed default groups
+    # Seed default groups FIRST (FK below requires referenced rows to exist
+    # because pre-existing hosts may already reference these group names).
     op.execute(
         """
         INSERT INTO groups (name, description, access_users, auto_distribute_keys) VALUES
@@ -189,6 +179,17 @@ def upgrade() -> None:
             ('iarq', 'Client iarquitectos.com hosts', ARRAY['ramon@monxas.casa'], TRUE)
         ON CONFLICT (name) DO NOTHING;
         """
+    )
+
+    # Now add FK constraint from hosts.group_name to groups.name
+    op.create_foreign_key(
+        "hosts_group_fk",
+        "hosts",
+        "groups",
+        ["group_name"],
+        ["name"],
+        onupdate="CASCADE",
+        ondelete="SET NULL",
     )
 
 
