@@ -1,0 +1,21 @@
+[Unit]
+Description=Remote-Pulse Agent (heartbeat + command-poll daemon)
+Documentation=https://github.com/monxas/remote-pulse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/bin/rp heartbeat --daemon
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

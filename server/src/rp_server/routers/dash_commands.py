@@ -628,11 +628,17 @@ async def retry_command(
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/approvals/pending", response_model=list[PendingApprovalItem])
+class PendingApprovalsResponse(BaseModel):
+    """Wrapper to match the SPA's expected ``{ approvals: [...] }`` shape."""
+
+    approvals: list[PendingApprovalItem]
+
+
+@router.get("/approvals/pending", response_model=PendingApprovalsResponse)
 async def list_pending_approvals(
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
-) -> list[PendingApprovalItem]:
+) -> PendingApprovalsResponse:
     """Pending approvals visible to the caller (group-scoped)."""
     stmt = (
         select(Command, Host)
@@ -670,7 +676,7 @@ async def list_pending_approvals(
                 command_payload=cmd.command_payload or {},
             )
         )
-    return items
+    return PendingApprovalsResponse(approvals=items)
 
 
 async def _resolve_approval(
