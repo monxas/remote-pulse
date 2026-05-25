@@ -166,6 +166,29 @@ async def current_user(
             )
             return user
 
+    # --- Tailscale identity → admin fallback (quick path until PocketID is set up) ---
+    # When the request crossed `tailscale serve` we get authenticated Tailscale
+    # identity headers. If the caller's email matches the configured emergency
+    # admin email, resolve them as the admin user. This is safe because the
+    # Tailscale-* headers are injected by tailscaled, not by the caller.
+    ts_login = request.headers.get("Tailscale-User-Login")
+    if ts_login and not (x_forwarded_user or x_forwarded_email):
+        if ts_login.lower() == settings.emergency_admin_email.lower():
+            stmt = select(User).where(User.email == settings.emergency_admin_email)
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user and user.is_active:
+                # Bind Tailscale identity to user record on first hit
+                if user.pocketid_sub.startswith("placeholder-"):
+                    user.pocketid_sub = f"tailscale:{ts_login}"
+                    await db.commit()
+                    await db.refresh(user)
+                logger.info(
+                    "Resolved admin user via Tailscale identity",
+                    extra={"login": ts_login, "user_id": str(user.id)},
+                )
+                return user
+
     if (x_forwarded_user or x_forwarded_email) and not is_trusted_source:
         logger.warning(
             "Rejected X-Forwarded-* headers from untrusted source",
