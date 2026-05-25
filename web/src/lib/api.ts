@@ -171,3 +171,276 @@ export async function getDashTimeseries(
     { fetch: f, signal },
   );
 }
+
+// ---------- /v1/dash/commands ----------
+export type CommandStatus =
+  | 'pending-approval'
+  | 'approved'
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'rejected'
+  | 'canceled';
+
+export const ALL_COMMAND_STATUSES: ReadonlyArray<CommandStatus> = [
+  'pending-approval',
+  'approved',
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'timeout',
+  'rejected',
+  'canceled',
+];
+
+export const IN_FLIGHT_STATUSES: ReadonlySet<CommandStatus> = new Set<CommandStatus>([
+  'pending-approval',
+  'approved',
+  'queued',
+  'running',
+]);
+
+export interface CommandRecord {
+  id: string;
+  host_id: string;
+  host_hostname: string;
+  issued_by: string;
+  command_type: string;
+  command_payload: Record<string, unknown>;
+  status: CommandStatus;
+  issued_at: string;
+  completed_at: string | null;
+  exit_code: number | null;
+  stdout: string | null;
+  stderr: string | null;
+  duration_ms: number | null;
+  human_approved: boolean;
+  approved_by: string | null;
+  rejected_reason: string | null;
+}
+
+export interface CommandsListPage {
+  commands: CommandRecord[];
+  next_cursor: string | null;
+}
+
+export interface CommandsQueryParams {
+  status?: CommandStatus[];
+  host_id?: string;
+  issued_by?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+function buildCommandsQuery(params: CommandsQueryParams): string {
+  const usp = new URLSearchParams();
+  if (params.status && params.status.length > 0) {
+    // Server contract: repeat the `status` key once per value.
+    for (const s of params.status) usp.append('status', s);
+  }
+  if (params.host_id) usp.set('host_id', params.host_id);
+  if (params.issued_by) usp.set('issued_by', params.issued_by);
+  if (typeof params.limit === 'number') usp.set('limit', String(params.limit));
+  if (params.cursor) usp.set('cursor', params.cursor);
+  const qs = usp.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function getDashCommands(
+  params: CommandsQueryParams = {},
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<CommandsListPage> {
+  return request<CommandsListPage>(
+    `/v1/dash/commands${buildCommandsQuery(params)}`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function getDashCommand(
+  id: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<CommandRecord> {
+  return request<CommandRecord>(
+    `/v1/dash/commands/${encodeURIComponent(id)}`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export interface IssueCommandInput {
+  host_ids: string[];
+  command_type: string;
+  command_payload: Record<string, unknown>;
+  reason?: string;
+  requires_approval?: boolean;
+}
+
+export interface IssueCommandResult {
+  commands: CommandRecord[];
+}
+
+export async function issueDashCommand(
+  body: IssueCommandInput,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<IssueCommandResult> {
+  return request<IssueCommandResult>(
+    '/v1/dash/commands',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    { fetch: f, signal },
+  );
+}
+
+export async function retryDashCommand(
+  id: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<CommandRecord> {
+  return request<CommandRecord>(
+    `/v1/dash/commands/${encodeURIComponent(id)}/retry`,
+    { method: 'POST' },
+    { fetch: f, signal },
+  );
+}
+
+// ---------- /v1/dash/approvals ----------
+export interface PendingApprovalsResponse {
+  approvals: CommandRecord[];
+}
+
+export async function getDashPendingApprovals(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<PendingApprovalsResponse> {
+  return request<PendingApprovalsResponse>(
+    '/v1/dash/approvals/pending',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export interface ApprovalActionResponse {
+  ok: true;
+  command: CommandRecord;
+}
+
+export async function approveDashCommand(
+  id: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<ApprovalActionResponse> {
+  return request<ApprovalActionResponse>(
+    `/v1/dash/approvals/${encodeURIComponent(id)}/approve`,
+    { method: 'POST' },
+    { fetch: f, signal },
+  );
+}
+
+export async function rejectDashCommand(
+  id: string,
+  reason: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<ApprovalActionResponse> {
+  return request<ApprovalActionResponse>(
+    `/v1/dash/approvals/${encodeURIComponent(id)}/reject`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+    { fetch: f, signal },
+  );
+}
+
+// ---------- /v1/dash/audit ----------
+export type AuditAction =
+  | 'command.issued'
+  | 'command.approved'
+  | 'command.rejected'
+  | 'command.completed'
+  | 'command.failed'
+  | 'host.enrolled'
+  | 'enrollment.token_issued';
+
+export const ALL_AUDIT_ACTIONS: ReadonlyArray<AuditAction> = [
+  'command.issued',
+  'command.approved',
+  'command.rejected',
+  'command.completed',
+  'command.failed',
+  'host.enrolled',
+  'enrollment.token_issued',
+];
+
+export type AuditTargetType = 'command' | 'host' | 'enrollment' | 'user';
+
+export interface AuditEvent {
+  id: string;
+  ts: string;
+  actor: string;
+  action: AuditAction;
+  target_type: AuditTargetType;
+  target_id: string;
+  target_label: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface AuditListPage {
+  events: AuditEvent[];
+  next_cursor: string | null;
+}
+
+export interface AuditQueryParams {
+  actor?: string;
+  action?: AuditAction[];
+  target_type?: AuditTargetType;
+  since?: string;
+  until?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+function buildAuditQuery(params: AuditQueryParams): string {
+  const usp = new URLSearchParams();
+  if (params.actor) usp.set('actor', params.actor);
+  if (params.action && params.action.length > 0) {
+    for (const a of params.action) usp.append('action', a);
+  }
+  if (params.target_type) usp.set('target_type', params.target_type);
+  if (params.since) usp.set('since', params.since);
+  if (params.until) usp.set('until', params.until);
+  if (typeof params.limit === 'number') usp.set('limit', String(params.limit));
+  if (params.cursor) usp.set('cursor', params.cursor);
+  const qs = usp.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function getDashAudit(
+  params: AuditQueryParams = {},
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<AuditListPage> {
+  return request<AuditListPage>(
+    `/v1/dash/audit${buildAuditQuery(params)}`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+// Exported for unit tests — keeps URL serialisation honest with the
+// backend contract (multi-value status / action, cursor-paged).
+export const __testing = {
+  buildCommandsQuery,
+  buildAuditQuery,
+};
