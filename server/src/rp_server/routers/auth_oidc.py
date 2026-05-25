@@ -40,18 +40,20 @@ _oauth: OAuth | None = None
 
 
 def _fetch_pocketid_metadata() -> dict:
-    """Fetch the OIDC discovery document synchronously at registration time.
-
-    Authlib's async ``load_server_metadata`` was raising JSONDecodeError when
-    fetching from PocketID (possibly a session-isolation issue with the
-    Starlette integration). Pre-loading the metadata bypasses that path
-    entirely — Authlib then has the endpoints in hand and no longer tries to
-    fetch them itself.
-    """
+    """Fetch the OIDC discovery document synchronously at registration time."""
     url = f"{settings.pocketid_base_url}/.well-known/openid-configuration"
-    resp = httpx.get(url, timeout=10.0)
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = httpx.get(url, timeout=10.0, follow_redirects=True)
+        resp.raise_for_status()
+        if not resp.text or not resp.text.lstrip().startswith("{"):
+            raise RuntimeError(
+                f"PocketID discovery returned non-JSON (status={resp.status_code}, "
+                f"len={len(resp.text)}, first40={resp.text[:40]!r})"
+            )
+        return resp.json()
+    except Exception as e:
+        logger.error("Failed to fetch PocketID discovery", exc_info=e, extra={"url": url})
+        raise
 
 
 def get_oauth() -> OAuth:
