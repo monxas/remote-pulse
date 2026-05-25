@@ -260,16 +260,26 @@ class Command(Base):
     )
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Prevent modification of committed records (defense in depth)."""
-        # Allow setting during construction (when _sa_instance_state not initialized)
-        if hasattr(self, "_sa_instance_state"):
-            # Check if object is persistent (already committed to DB)
-            from sqlalchemy.orm import object_state
+        """Prevent modification of committed records (defense in depth).
 
-            state = object_state(self)
-            if state.persistent or state.detached:
+        Allow assignment during ORM hydration (loading from DB) and during
+        new-instance construction; raise only on user-attempted mutation
+        of a persistent or detached instance.
+        """
+        # Allow setting private SQLAlchemy state directly.
+        if name.startswith("_sa_"):
+            super().__setattr__(name, value)
+            return
+
+        sa_state = getattr(self, "_sa_instance_state", None)
+        if sa_state is not None:
+            # During hydration from DB rows, SQLAlchemy sets attributes; allow.
+            if not sa_state.is_instance:  # pragma: no cover — defensive
+                super().__setattr__(name, value)
+                return
+            if sa_state.persistent or sa_state.detached:
                 raise RuntimeError(
-                    "Cannot modify Command after commit - table is append-only audit log"
+                    "Cannot modify Command after commit — table is append-only audit log"
                 )
         super().__setattr__(name, value)
 
