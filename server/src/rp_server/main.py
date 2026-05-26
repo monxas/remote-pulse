@@ -26,13 +26,13 @@ from rp_server.routers import (
     dash_api,
     dash_audit,
     dash_commands,
+    dash_redirect,
     enroll,
     enrollment_links,
     heartbeat,
     hosts,
     keys,
     metrics,
-    web,
 )
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -114,9 +114,11 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # CSP: legacy /dash/ Jinja UI still pulls HTMX/uPlot/Pico from CDNs — kept
-    # for backwards compat until that page is retired. The new /dash-next/ SPA
-    # is 'self' only and uses self-hosted fonts (font-src 'self' data:).
+    # CSP: legacy /dash/ Jinja UI is gone (Phase 3 cutover) — every /dash/*
+    # now 302s to /dash-next/*. The CDN allowances below remain only for the
+    # ``/enroll-link/*`` HTML surfaces that still ship HTMX inline; they
+    # will be tightened in a follow-up. The new /dash-next/ SPA is
+    # 'self' only and uses self-hosted fonts (font-src 'self' data:).
     # connect-src 'self' covers fetch() + EventSource (SSE) to /v1/dash/stream.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
@@ -177,7 +179,13 @@ app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
 app.include_router(dash_api.router)
 app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
 app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
-app.include_router(web.router)  # F5: Web dashboard (legacy Jinja UI)
+# ADR-0009 Phase 3 cutover: the legacy Jinja+HTMX dashboard previously
+# mounted via ``web.router`` is now replaced by a thin redirect shim that
+# sends ``/dash/*`` to the SvelteKit SPA at ``/dash-next/*``. The one
+# preserved endpoint (``/dash/host/{id}/sparkline-data``) lives inside
+# this same router for backwards compat. The ``web`` module itself will
+# be deleted in a follow-up cleanup commit.
+app.include_router(dash_redirect.router)
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
 
