@@ -498,13 +498,22 @@ Each phase is independently shippable. v1.0.0 dashboard stays live until phase 3
 - Components: `EnrollWizard`, settings forms.
 - **Exit criteria:** admin can onboard a host and edit users/groups/ACLs entirely from the web.
 
-### Phase 5 — Polish & accessibility audit (1 week)
+### Phase 5 — Polish & accessibility audit (1 week) — **in progress**
 
 - Full WCAG 2.1 AA pass (axe-core CI gate).
 - Performance budget: first paint ≤1 s on 3G, Lighthouse score ≥90 in all categories.
 - E2E tests (Playwright) for: login flow, issue command, approve command, enroll host.
 - Storybook (Histoire for Svelte) for component docs.
 - **Exit criteria:** v1.5 release, ADR moves to **Accepted**.
+
+Progress (2026-05-26):
+
+- [x] axe-core CI gate (baseline mode, `.github/workflows/a11y.yml` + `web/tests/e2e/a11y.spec.ts`, 2026-05-26)
+- [x] Lighthouse CI workflow (warn-only baseline, `.github/workflows/lighthouse.yml` + `web/lighthouserc.json`)
+- [ ] Lighthouse ≥90 perf/a11y/best-practices score (today: warn-only, baseline not yet measured in CI)
+- [ ] axe-core 0 critical violations (currently: baseline-N — see `web/tests/a11y-baseline/`)
+- [ ] Playwright E2E full coverage (login, issue command, approve, enroll)
+- [ ] Storybook / Histoire component catalog
 
 **Total: ~7 weeks calendar (one person, part-time).** Faster if parallelized via sub-agents (cf. ADR-0008 same-day execution playbook).
 

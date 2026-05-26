@@ -11,3 +11,8 @@ package-lock.json
 yarn.lock
 playwright-report
 test-results
+
+# axe-core baseline JSON snapshots — regenerated on every run; do not
+# reformat (Prettier would rewrite the JSON and confuse diffs).
+tests/a11y-baseline
+.lighthouseci
