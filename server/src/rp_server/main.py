@@ -26,6 +26,7 @@ from rp_server.routers import (
     dash_api,
     dash_audit,
     dash_commands,
+    dash_enroll,
     dash_redirect,
     dash_settings,
     enroll,
@@ -181,6 +182,7 @@ app.include_router(dash_api.router)
 app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
 app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
 app.include_router(dash_settings.router)  # Phase 4: groups + users management
+app.include_router(dash_enroll.router)    # Phase 4+: admin magic-link issuance
 # ADR-0009 Phase 3 cutover: the legacy Jinja+HTMX dashboard previously
 # mounted via ``web.router`` is now replaced by a thin redirect shim that
 # sends ``/dash/*`` to the SvelteKit SPA at ``/dash-next/*``. The one
