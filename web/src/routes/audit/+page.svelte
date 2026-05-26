@@ -177,7 +177,7 @@
                 type="button"
                 onclick={() => updateUrl({ range: r.value })}
                 class={cn(
-                  'flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors',
+                  'touch-target inline-flex flex-1 items-center justify-center rounded-sm px-2 py-1 text-xs font-medium transition-colors',
                   range === r.value
                     ? 'bg-accent-bg text-accent-text'
                     : 'text-muted hover:bg-subtle',
@@ -237,7 +237,7 @@
       <div>
         <button
           type="button"
-          class="text-xs text-accent-text underline-offset-4 hover:underline"
+          class="touch-target inline-flex items-center text-xs text-accent-text underline-offset-4 hover:underline"
           onclick={clearFilters}
         >
           Clear filters

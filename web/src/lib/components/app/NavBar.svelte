@@ -36,7 +36,7 @@
   <div class="mx-auto flex h-14 w-full max-w-7xl items-center gap-4 px-4 sm:px-6">
     <a
       href={resolve('/')}
-      class="inline-flex items-center gap-2 font-mono text-sm font-semibold tracking-tight"
+      class="touch-target inline-flex items-center gap-2 font-mono text-sm font-semibold tracking-tight"
     >
       <span class="inline-block size-2 rounded-full bg-success" aria-hidden="true"></span>
       remote-pulse

@@ -173,7 +173,7 @@
     <button
       type="button"
       class={cn(
-        'relative inline-flex size-8 items-center justify-center rounded-md text-muted',
+        'touch-target relative inline-flex size-8 items-center justify-center rounded-md text-muted',
         'transition-colors hover:bg-subtle hover:text-default focus:outline-none',
         'focus-visible:ring-2 focus-visible:ring-accent',
       )}

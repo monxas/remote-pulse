@@ -92,16 +92,17 @@
 
 <!-- Desktop / tablet table -->
 <!--
-  Sticky thead: on mobile/landscape tablet the table scrolls
-  vertically inside the page; we want the column labels pinned so the
-  user always knows what they're looking at. `top-14` matches NavBar
-  height; backdrop-blur keeps the labels legible over scrolling rows.
+  Note: we considered making `<thead>` `position: sticky` so column
+  labels stay visible while the table scrolls. We dropped it after
+  discovering it intercepted row-click hit-tests at desktop widths
+  (Playwright flow tests). The table only renders at `sm:` and up
+  (mobile gets the card list below) so sticky labels add little value
+  in practice; revisit if a future redesign exposes the table on
+  narrow viewports.
 -->
 <div class="hidden overflow-hidden rounded-lg border border-border-default sm:block">
   <table class="w-full border-collapse text-sm" data-testid="hosts-table">
-    <thead
-      class="sticky top-14 z-10 bg-subtle/95 text-xs tracking-wide text-muted uppercase backdrop-blur"
-    >
+    <thead class="bg-subtle text-xs tracking-wide text-muted uppercase">
       <tr>
         {#if selection}
           <th class="w-12 px-3 py-2 text-left" scope="col">

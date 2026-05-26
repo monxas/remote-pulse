@@ -422,7 +422,7 @@
                       </td>
                       <td class="px-4 py-2">
                         <select
-                          class="rounded border border-border-default bg-base px-2 py-1 text-xs"
+                          class="touch-target rounded border border-border-default bg-base px-2 py-1 text-xs"
                           value={u.role}
                           onchange={(e) =>
                             changeRole(u, (e.currentTarget as HTMLSelectElement).value as UserRole)}
@@ -554,7 +554,7 @@
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Role</span>
           <select
-            class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="touch-target w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
             bind:value={newUserRole}
           >
             <option value="viewer">viewer — read-only</option>

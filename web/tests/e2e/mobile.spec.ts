@@ -228,7 +228,60 @@ test.describe('landscape tablet (1024×600) — Family Hub use case', () => {
   });
 
   test('fleet: table view renders (not mobile card stack)', async ({ page }) => {
-    await installApiMocks(page);
+    await mockAdminAuth(page);
+    await mockSseSilent(page);
+    // Playwright matches routes in REVERSE registration order. We
+    // register the catch-all FIRST and the specific host fixture
+    // SECOND so the latter wins for the hosts endpoint.
+    await page.route('**/v1/**', (route: Route) => {
+      const url = route.request().url();
+      const overview = {
+        total: 1,
+        online: 1,
+        stale: 0,
+        offline: 0,
+        online_pct: 100,
+        online_pct_24h_ago: 100,
+        pending_approvals: 0,
+      };
+      const empty = {
+        commands: [],
+        approvals: [],
+        events: [],
+        groups: ['default'],
+        users: [],
+        links: [],
+        items: [],
+        pages: [],
+        next_cursor: null,
+      };
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(url.includes('/dash/overview') ? overview : empty),
+      });
+    });
+    await page.route('**/v1/dash/hosts**', (route: Route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hosts: [
+            {
+              id: '00000000-0000-0000-0000-000000000001',
+              hostname: 'rp-fixture-host',
+              group_name: 'default',
+              status: 'online',
+              last_seen_at: new Date().toISOString(),
+              last_seen_seconds_ago: 1,
+              current: { cpu_pct: 5, mem_pct: 25 },
+              sparkline: { ts: [], cpu_pct: [], mem_pct: [] },
+            },
+          ],
+          groups: ['default'],
+        }),
+      }),
+    );
     await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
     // The desktop/tablet table is gated `hidden sm:block`. At 1024w
     // it must be visible.

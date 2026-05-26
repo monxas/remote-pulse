@@ -102,33 +102,24 @@ body {
 }
 
 /*
- * Touch-target helper — expands a control's effective hit area to
- * ≥44×44 px on coarse-pointer devices (Apple HIG 44pt / Material 48dp),
- * without changing the visual chrome on mouse/trackpad. Used by the
- * `Button` component (`base` class) and any other primitive that opts
- * in by adding `class="touch-target"`.
+ * Touch-target helper — guarantees a ≥44×44 px hit area on
+ * coarse-pointer devices (Apple HIG 44pt / Material 48dp / WCAG 2.5.5).
  *
- * Implementation: we want the visual button to remain its declared
- * size (e.g. `h-8`/`h-9`) so cards/forms don't reflow on touch
- * devices. The trick is a `::before` pseudo-element that extends the
- * pointer-target box outwards (`position: absolute; inset: …`) when
- * the rendered element is smaller than 44px. Wrappers that already
- * meet the threshold get no extra box. This is the same pattern
- * shadcn-radix uses in `@radix-ui/themes` v3.
+ * Mouse/trackpad pointers keep the desktop chrome (h-8 buttons, h-7
+ * dialog close, 16px native checkboxes). On touch we grow the actual
+ * element so the layout and hit area are honest with each other — the
+ * pure-pseudo-element trick we tried first works for pointer events but
+ * fails axe / WCAG / our own e2e gate, which assert on
+ * `getBoundingClientRect()`.
+ *
+ * Anything that opts in (Button primitive, filter pills, table
+ * checkbox labels, dialog close) gets `min-h: 44px; min-w: 44px` on
+ * coarse pointers without changing desktop rendering.
  */
 @media (hover: none) and (pointer: coarse) {
   .touch-target {
-    position: relative;
-  }
-  .touch-target::before {
-    content: '';
-    position: absolute;
-    inset: 50% 50%;
-    width: 44px;
-    height: 44px;
-    transform: translate(-50%, -50%);
-    /* Only the pointer hit-test cares; visually invisible. */
-    pointer-events: auto;
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 

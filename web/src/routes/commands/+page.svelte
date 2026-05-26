@@ -161,7 +161,7 @@
         <div>
           <button
             type="button"
-            class="text-xs text-accent-text underline-offset-4 hover:underline"
+            class="touch-target inline-flex items-center text-xs text-accent-text underline-offset-4 hover:underline"
             onclick={clearFilters}
           >
             Clear filters
