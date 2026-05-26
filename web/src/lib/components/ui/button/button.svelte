@@ -30,6 +30,8 @@
     type = 'button',
     onclick,
     disabled,
+    'aria-label': ariaLabel,
+    title,
     ...rest
   }: Props = $props();
 
@@ -57,11 +59,24 @@
 </script>
 
 {#if href}
-  <a class={cn(base, variants[variant], sizes[size], className)} {href} {...rest}>
+  <a
+    class={cn(base, variants[variant], sizes[size], className)}
+    {href}
+    aria-label={ariaLabel}
+    {title}
+    {...rest}
+  >
     {@render children?.()}
   </a>
 {:else}
-  <button class={cn(base, variants[variant], sizes[size], className)} {type} {onclick} {disabled}>
+  <button
+    class={cn(base, variants[variant], sizes[size], className)}
+    {type}
+    {onclick}
+    {disabled}
+    aria-label={ariaLabel}
+    {title}
+  >
     {@render children?.()}
   </button>
 {/if}

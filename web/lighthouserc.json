@@ -1,6 +1,6 @@
 {
-  "//": "Phase 5 (ADR-0009) Lighthouse CI config — WARN-ONLY baseline.",
-  "//target": "Production target: performance >= 0.9, accessibility >= 0.9, best-practices >= 0.9 (per ADR-0009 §7 Phase 5). Today every assertion is 'warn' so the gate captures a baseline without failing PRs. Flip to 'error' once each page meets the budget.",
+  "//": "Phase 5 (ADR-0009) Lighthouse CI config — a11y enforced, perf/SEO/best-practices still warn-only.",
+  "//target": "Production target: performance >= 0.9, accessibility >= 0.9, best-practices >= 0.9 (per ADR-0009 §7 Phase 5). Accessibility is now 'error' (v1.0.5: axe-core baseline went green); performance / best-practices / seo stay 'warn' until each page meets the budget.",
   "//auth": "The SPA's main pages require an OIDC cookie. Lighthouse runs unauthenticated against `vite preview` (no FastAPI in this workflow), which means most routes will land on the SPA shell + auth-redirect logic. That still measures the shell perf/a11y baseline; full authed runs require an integration job with the FastAPI server which is deferred until the score budgets are taken seriously.",
   "ci": {
     "collect": {
@@ -23,7 +23,7 @@
     "assert": {
       "assertions": {
         "categories:performance": ["warn", { "minScore": 0.9 }],
-        "categories:accessibility": ["warn", { "minScore": 0.9 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
         "categories:best-practices": ["warn", { "minScore": 0.9 }],
         "categories:seo": ["warn", { "minScore": 0.8 }]
       }
