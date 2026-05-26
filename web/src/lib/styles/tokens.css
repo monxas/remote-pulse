@@ -33,10 +33,18 @@
   --text-default: var(--slate-12);
   --text-muted: var(--slate-11);
 
+  /*
+   * Accent palette — WCAG 2.1 AA tuned (4.5:1 minimum for normal text).
+   * `blue-9`/`blue-10` are Radix's "low-contrast" solids and only clear 3:1
+   * against white, so we promote to `blue-11`/`blue-12` for accent surfaces
+   * that hold text (buttons, badges). `accent-text` (text on `accent-bg`)
+   * jumps from `blue-11` -> `blue-12` (4.25:1 -> 11.26:1) for the same
+   * reason.
+   */
   --accent-bg: var(--blue-3);
-  --accent-solid: var(--blue-9);
-  --accent-solid-hover: var(--blue-10);
-  --accent-text: var(--blue-11);
+  --accent-solid: var(--blue-11);
+  --accent-solid-hover: var(--blue-12);
+  --accent-text: var(--blue-12);
   --accent-contrast: white;
 
   --success-bg: var(--green-3);
@@ -76,11 +84,17 @@
   --text-default: var(--slate-12);
   --text-muted: var(--slate-11);
 
+  /*
+   * Accent — WCAG 2.1 AA tuned. In dark mode the radix dark ramp's `blue-9`
+   * is a bright sky blue (#0090ff) where white text only clears 3.26:1, so
+   * we swap `accent-contrast` to the deepest slate for ~5.78:1. `accent-text`
+   * jumps to `blue-12` for chip/badge text on `accent-bg` (~11.4:1).
+   */
   --accent-bg: var(--blue-3);
   --accent-solid: var(--blue-9);
   --accent-solid-hover: var(--blue-10);
-  --accent-text: var(--blue-11);
-  --accent-contrast: white;
+  --accent-text: var(--blue-12);
+  --accent-contrast: var(--slate-1);
 
   --success-bg: var(--green-3);
   --success-solid: var(--green-9);
