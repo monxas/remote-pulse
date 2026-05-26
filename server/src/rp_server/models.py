@@ -216,7 +216,7 @@ class Command(Base):
     )
     host_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("hosts.id"),
+        ForeignKey("hosts.id", ondelete="CASCADE"),
         nullable=False,
     )
     issued_by: Mapped[str] = mapped_column(Text, nullable=False)

@@ -10,6 +10,7 @@ Endpoints
 - ``GET /v1/dash/overview`` — fleet roll-up for the stat cards
 - ``GET /v1/dash/hosts`` — enriched host list with sparkline buffer
 - ``GET /v1/dash/hosts/{host_id}/timeseries`` — full-resolution charts
+- ``DELETE /v1/dash/hosts/{host_id}`` — drop host + cascade dependents
 - ``GET /v1/dash/stream`` — Server-Sent Events firehose
 
 See ADR-0009 §"Phase 1 — JSON API" for the full contract.
@@ -23,16 +24,25 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sse_starlette.sse import EventSourceResponse
 
 from rp_server.database import DbSession
 from rp_server.deps import current_user
 from rp_server.events import event_bus
 from rp_server.middleware.group_filter import filter_hosts_by_user_groups
-from rp_server.models import Command, Heartbeat, Host, User
+from rp_server.models import (
+    AuditEvent,
+    CanaryDeploy,
+    Command,
+    Heartbeat,
+    Host,
+    MetricSample,
+    User,
+)
+from rp_server.permissions import user_has_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/dash", tags=["dash"])
@@ -622,6 +632,143 @@ async def host_timeseries(
     }
     payload.update(series_data)
     return payload
+
+
+# --------------------------------------------------------------------------- #
+# /v1/dash/hosts/{host_id}  (DELETE)
+# --------------------------------------------------------------------------- #
+
+
+@router.delete(
+    "/hosts/{host_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_host(
+    host_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(current_user)],
+) -> Response:
+    """Permanently delete a host and its dependent rows.
+
+    Wired to the ``host.delete`` row-level permission (see
+    :mod:`rp_server.permissions`). Admins bypass; non-admins need either a
+    ``*`` grant or a grant scoped to the host's ``group_name``.
+
+    Cascade scope
+    -------------
+    Postgres FK cascades sweep up:
+
+    - ``ssh_keys``       (CASCADE, migration 003)
+    - ``agent_versions`` (CASCADE, migration 003)
+    - ``commands``       (CASCADE, migration 010 — see ADR-0009)
+    - ``canary_deploys.canary_host_id`` → ``NULL`` (SET NULL, migration 006)
+
+    The TimescaleDB hypertables ``heartbeats`` and ``metric_samples`` do
+    not carry an FK back to ``hosts``, so we delete their rows explicitly
+    inside the same transaction. Without this, time-series rows would be
+    orphaned and survive re-enrolment of a host with the same hostname.
+
+    Guard rails
+    -----------
+    - 404 if the host doesn't exist *or* is outside the caller's
+      ``accessible_groups`` (we collapse the two to avoid leaking host
+      existence across tenants).
+    - 403 if the caller lacks ``host.delete`` for the host's group.
+    - 409 if an *active* canary deploy (``observing`` / ``propagating``)
+      references this host as the canary — operator must finish or fail
+      the canary before scrapping the canary host.
+
+    Audit
+    -----
+    Emits an ``audit_events`` row with ``action="host.delete"`` and a
+    payload carrying ``hostname`` + ``group_name`` so the audit timeline
+    can render the host after the row is gone.
+    """
+    # 1) Load host, scoped by caller's accessible_groups so non-admins
+    #    can't probe other tenants.
+    stmt = select(Host).where(Host.id == host_id)
+    stmt = filter_hosts_by_user_groups(stmt, user)
+    host = (await db.execute(stmt)).scalar_one_or_none()
+    if host is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host not found or access denied",
+        )
+
+    # 2) Row-level ACL check (host.delete on the host's group).
+    if not await user_has_permission(db, user, "host.delete", host.group_name):
+        logger.warning(
+            "host.delete denied by row-level ACL: user=%s role=%s host=%s group=%s",
+            user.email,
+            user.role,
+            host.id,
+            host.group_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Missing 'host.delete' permission for this host's group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
+        )
+
+    # 3) Refuse to delete a host that is the canary of an in-flight
+    #    deploy — the canary state machine relies on the row sticking
+    #    around until the observation window closes.
+    active_canary = (
+        await db.execute(
+            select(CanaryDeploy.id)
+            .where(CanaryDeploy.canary_host_id == host_id)
+            .where(CanaryDeploy.state.in_(("observing", "propagating")))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if active_canary is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Host is the canary of an in-flight deploy; "
+                "wait for the canary to complete or roll it back before deleting."
+            ),
+        )
+
+    # 4) Snapshot identifying fields for the audit row before the delete.
+    hostname = host.hostname
+    group_name = host.group_name
+
+    # 5) Explicit time-series cleanup (no FK back to hosts on TS hypertables).
+    await db.execute(delete(Heartbeat).where(Heartbeat.host_id == host_id))
+    await db.execute(delete(MetricSample).where(MetricSample.host_id == host_id))
+
+    # 6) Delete the host. FK cascades (migration 010) sweep up commands /
+    #    agent_versions / ssh_keys; canary_deploys.canary_host_id goes NULL.
+    await db.delete(host)
+
+    # 7) Audit emit, atomic with the delete (same transaction / commit).
+    db.add(
+        AuditEvent(
+            actor=user.email,
+            action="host.delete",
+            resource_type="host",
+            resource_id=str(host_id),
+            payload={"hostname": hostname, "group_name": group_name},
+        )
+    )
+
+    await db.commit()
+
+    logger.info(
+        "Host deleted via dash-api",
+        extra={
+            "host_id": str(host_id),
+            "hostname": hostname,
+            "group": group_name,
+            "actor": user.email,
+        },
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --------------------------------------------------------------------------- #

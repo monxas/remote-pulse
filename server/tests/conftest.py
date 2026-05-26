@@ -203,11 +203,25 @@ async def test_db() -> AsyncGenerator[AsyncSession, None]:
 
     Note: For production tests, use a real PostgreSQL testcontainer.
     SQLite lacks some PG features (gen_random_uuid, JSONB) but sufficient for basic tests.
+
+    Foreign-key enforcement is enabled per-connection via ``PRAGMA
+    foreign_keys=ON`` so ``ON DELETE CASCADE`` clauses in the models
+    actually fire in tests — without it SQLite silently leaves orphans
+    and tests that assert cascade behaviour would pass for the wrong
+    reason.
     """
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
     )
+
+    from sqlalchemy import event as _sa_event
+
+    @_sa_event.listens_for(engine.sync_engine, "connect")
+    def _enable_sqlite_fks(dbapi_conn, _):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
 
     # PG-only server defaults (gen_random_uuid, now(), etc) have already
     # been replaced with Python-side ColumnDefaults at module import time

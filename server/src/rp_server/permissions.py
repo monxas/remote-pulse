@@ -41,10 +41,9 @@ The following endpoints consult this module:
   ``routers/dash_enroll.py``). ``enroll.create`` and ``enroll.revoke``
   are deliberately separate so an operator may hold one without the
   other (issuer vs. revoker).
-
-``host.delete`` is reserved in :data:`ALLOWED_ACTIONS` but no HTTP
-endpoint surfaces it today. The slot exists so the Settings UI can grant
-it ahead of the eventual ``DELETE /v1/dash/hosts/{id}`` landing.
+- ``DELETE /v1/dash/hosts/{host_id}`` -> ``host.delete`` (see
+  ``routers/dash_api.py``). Cascade-deletes heartbeats, commands,
+  ssh_keys, agent_versions, metric_samples for the host.
 """
 
 from __future__ import annotations
