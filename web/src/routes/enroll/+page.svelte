@@ -281,7 +281,7 @@
         </div>
       {:else if $linksQuery.isError}
         <div class="space-y-2 px-4 py-6 text-sm">
-          <p class="text-danger">
+          <p class="text-danger-text">
             {#if isAdminOnlyError}
               You need the admin role to issue magic-links.
             {:else}
