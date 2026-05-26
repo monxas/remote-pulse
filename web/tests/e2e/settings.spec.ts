@@ -80,7 +80,9 @@ test('settings page renders both tabs when authed as admin', async ({ page }) =>
     }),
   );
 
-  await page.goto('/settings');
+  // baseURL ends in `/dash-next/`; use a relative path so the URL
+  // constructor preserves the SPA base. See `playwright.config.ts`.
+  await page.goto('settings');
 
   // Page mounts
   await expect(page.getByTestId('settings-page')).toBeVisible();
@@ -92,14 +94,18 @@ test('settings page renders both tabs when authed as admin', async ({ page }) =>
   await expect(groupsTab).toBeVisible();
   await expect(usersTab).toBeVisible();
 
-  // Default tab = groups, table shows seeded fixture rows
-  await expect(page.getByText('prod', { exact: true })).toBeVisible();
+  // Default tab = groups, table shows seeded fixture rows. We scope to
+  // the cell role so we don't collide with the group-membership pills
+  // rendered for each user under the Users tab (also in the DOM).
+  // Note: the shared <Button> component does not forward `data-testid`
+  // to the rendered <button>, so we select by accessible name.
+  await expect(page.getByRole('cell', { name: 'prod', exact: true })).toBeVisible();
   await expect(page.getByText('Production fleet')).toBeVisible();
-  await expect(page.getByTestId('new-group-btn')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New group' })).toBeVisible();
 
   // Switch to Users tab
   await usersTab.click();
   await expect(page.getByText('admin@test.local')).toBeVisible();
   await expect(page.getByText('viewer@test.local')).toBeVisible();
-  await expect(page.getByTestId('new-user-btn')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Invite user' })).toBeVisible();
 });
