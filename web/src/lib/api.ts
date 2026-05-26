@@ -438,6 +438,139 @@ export async function getDashAudit(
   );
 }
 
+// ---------- /v1/dash/settings/* (ADR-0009 Phase 4) ----------
+export interface SettingsGroup {
+  name: string;
+  description: string | null;
+  host_count: number;
+  user_count: number;
+  auto_distribute_keys: boolean;
+  created_at: string;
+}
+
+export interface SettingsGroupsResponse {
+  groups: SettingsGroup[];
+}
+
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
+export interface SettingsUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  groups: string[];
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface SettingsUsersResponse {
+  users: SettingsUser[];
+}
+
+export interface CreateGroupInput {
+  name: string;
+  description?: string | null;
+}
+
+export interface CreateUserInput {
+  email: string;
+  name?: string | null;
+  role: UserRole;
+  groups: string[];
+}
+
+export interface UpdateUserInput {
+  role?: UserRole;
+  groups?: string[];
+  is_active?: boolean;
+}
+
+export async function getSettingsGroups(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<SettingsGroupsResponse> {
+  return request<SettingsGroupsResponse>(
+    '/v1/dash/settings/groups',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function createSettingsGroup(
+  input: CreateGroupInput,
+  f?: FetchFn,
+): Promise<SettingsGroup> {
+  return request<SettingsGroup>(
+    '/v1/dash/settings/groups',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function deleteSettingsGroup(name: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/settings/groups/${encodeURIComponent(name)}`,
+    { method: 'DELETE' },
+    { fetch: f },
+  );
+}
+
+export async function getSettingsUsers(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<SettingsUsersResponse> {
+  return request<SettingsUsersResponse>(
+    '/v1/dash/settings/users',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function createSettingsUser(
+  input: CreateUserInput,
+  f?: FetchFn,
+): Promise<SettingsUser> {
+  return request<SettingsUser>(
+    '/v1/dash/settings/users',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function updateSettingsUser(
+  id: string,
+  input: UpdateUserInput,
+  f?: FetchFn,
+): Promise<SettingsUser> {
+  return request<SettingsUser>(
+    `/v1/dash/settings/users/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function deleteSettingsUser(id: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/settings/users/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    { fetch: f },
+  );
+}
+
 // Exported for unit tests — keeps URL serialisation honest with the
 // backend contract (multi-value status / action, cursor-paged).
 export const __testing = {
