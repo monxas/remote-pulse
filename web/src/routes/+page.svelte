@@ -10,6 +10,9 @@
   import HostTable from '$lib/components/app/HostTable.svelte';
   import HostFilters from '$lib/components/app/HostFilters.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
+  import BulkActionBar from '$lib/components/app/BulkActionBar.svelte';
+  import BulkIssueCommandDialog from '$lib/components/app/BulkIssueCommandDialog.svelte';
+  import { createHostSelection } from '$lib/components/app/host-selection.svelte';
   import { createOverviewQuery, createHostsQuery, type HostsParams } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -55,6 +58,37 @@
   );
 
   const loginNext = $derived(encodeURIComponent($page.url.pathname + $page.url.search));
+
+  // ---- Multi-select state ----
+  const selection = createHostSelection();
+  let bulkDialogOpen = $state(false);
+
+  // Hostnames shown as a preview in the floating action bar. The bar is
+  // tight on space, so we slice to the first few and surface "+N more"
+  // when the selection is larger.
+  const selectedHostnames = $derived.by(() => {
+    const all = $hosts.data?.hosts ?? [];
+    const byId = new Map(all.map((h) => [h.id, h.hostname]));
+    return selection.ids.map((id) => byId.get(id) ?? id);
+  });
+  const previewLabels = $derived(selectedHostnames.slice(0, 3));
+
+  function openBulkDialog(): void {
+    bulkDialogOpen = true;
+  }
+
+  function onBulkDialogClose(next: boolean): void {
+    bulkDialogOpen = next;
+    // We deliberately keep the selection alive on cancel so the user
+    // doesn't lose work if they bumped Escape. The mutation success
+    // handler in `BulkIssueCommandDialog` clears it explicitly.
+  }
+
+  function onBulkSubmitted(): void {
+    // All requests resolved (success or partial). Wipe selection so the
+    // table returns to its neutral state and the bar disappears.
+    selection.clear();
+  }
 </script>
 
 <svelte:head>
@@ -171,6 +205,22 @@
       </CardContent>
     </Card>
   {:else if $hosts.data}
-    <HostTable hosts={$hosts.data.hosts} />
+    <HostTable hosts={$hosts.data.hosts} {selection} />
   {/if}
 </section>
+
+<BulkActionBar
+  count={selection.count}
+  {previewLabels}
+  totalLabels={selectedHostnames.length}
+  onIssue={openBulkDialog}
+  onClear={() => selection.clear()}
+/>
+
+<BulkIssueCommandDialog
+  open={bulkDialogOpen}
+  onOpenChange={onBulkDialogClose}
+  hostIds={selection.ids}
+  hostnamesById={selectedHostnames}
+  onAllSubmitted={onBulkSubmitted}
+/>
