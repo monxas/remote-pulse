@@ -27,6 +27,7 @@ param(
     [ValidateSet('auto','winget','binary','wsl')]
     [string]$InstallMode = 'auto',
     [switch]$Show,
+    [switch]$DryRun,
     [switch]$Offline,
     [string]$LocalBinary,
     [switch]$Help
@@ -76,6 +77,7 @@ Flags:
   -Version <ref>        Agent version/release. Default: 'latest'
   -InstallMode <mode>   auto | winget | binary | wsl  (default: auto)
   -Show                 Print plan + expected SHA256; no mutations
+  -DryRun               Validate paths + repo layout for NSSM installer; no mutations.
   -Offline              Skip downloads; use -LocalBinary
   -LocalBinary <path>   Path to pre-downloaded rp.exe (air-gapped install)
   -Verbose              Detailed logging
@@ -511,6 +513,22 @@ function Invoke-SmokeTest {
 try {
     if ($Show) {
         Show-Plan
+        exit 0
+    }
+
+    if ($DryRun) {
+        $plat = Get-PlatformInfo
+        Write-Host "[dry-run] Windows $($plat.OsVersion) / $($plat.Arch)"
+        $nssmScript = Join-Path $PSScriptRoot '..\packaging\windows\install-nssm.ps1'
+        if (-not (Test-Path $nssmScript)) {
+            $nssmScript = Join-Path $PSScriptRoot 'install-nssm.ps1'
+        }
+        if (-not (Test-Path $nssmScript)) {
+            Write-ErrLine "[dry-run] FAIL: install-nssm.ps1 not found in packaging/windows/ or alongside install.ps1"
+            exit 1
+        }
+        Write-Ok "[dry-run] NSSM installer resolved: $nssmScript"
+        Write-Ok "[dry-run] Would create service '$Script:ServiceName' (auto-start, restart-on-fail)"
         exit 0
     }
 

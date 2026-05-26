@@ -16,10 +16,14 @@ RP_GROUP="${RP_GROUP:-default}"
 RP_HOSTNAME="${RP_HOSTNAME:-$(hostname -s 2>/dev/null || hostname)}"
 RP_VERSION="${RP_VERSION:-latest}"
 SHOW_MODE=0
+DRY_RUN=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 PACKAGING_DIR="$SCRIPT_DIR/../packaging"
+# Per-OS service installer locations (resolved at runtime below).
+PACKAGING_LINUX_DIR="$PACKAGING_DIR/linux"
+PACKAGING_MACOS_DIR="$PACKAGING_DIR/macos"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -44,6 +48,8 @@ Flags:
   --hostname=HOST   Override hostname for enrollment. Default: $(hostname -s)
   --version=REF     Agent version / git ref to install. Default: "latest"
   --show            Print plan and SHA256 instead of executing.
+  --dry-run         Run installer but skip mutating steps (service unit, enroll, config write).
+                    Useful for smoke-testing path resolution / OS detection.
   -h, --help        Show this help.
 
 Env vars equivalent to flags:
@@ -74,6 +80,7 @@ while [ $# -gt 0 ]; do
         --hostname=*) RP_HOSTNAME="${1#*=}" ;;
         --version=*)  RP_VERSION="${1#*=}" ;;
         --show)       SHOW_MODE=1 ;;
+        --dry-run)    DRY_RUN=1 ;;
         -h|--help)    print_help; exit 0 ;;
         *) err "Unknown flag: $1"; print_help >&2; exit 2 ;;
     esac
@@ -127,6 +134,39 @@ Target:
 
 Inspect SHA256: <published in F7 at $RP_SERVER/install.sha256>
 EOF
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# --dry-run mode: validate paths + OS without root / token / network mutations
+# ---------------------------------------------------------------------------
+if [ "$DRY_RUN" = "1" ]; then
+    log "[dry-run] OS=$OS ARCH=$ARCH"
+    case "$OS" in
+        linux)
+            DRY_SVC="$PACKAGING_LINUX_DIR/install-systemd.sh"
+            DRY_UNIT="$PACKAGING_LINUX_DIR/remote-pulse.service"
+            ;;
+        darwin)
+            DRY_SVC="$PACKAGING_MACOS_DIR/install-launchd.sh"
+            DRY_UNIT="$PACKAGING_MACOS_DIR/com.monxas.remote-pulse.plist"
+            ;;
+        *)
+            err "[dry-run] Unsupported OS: $OS"
+            exit 1
+            ;;
+    esac
+    log "[dry-run] Service installer: $DRY_SVC"
+    log "[dry-run] Service unit/plist: $DRY_UNIT"
+    if [ ! -x "$DRY_SVC" ]; then
+        err "[dry-run] FAIL: service installer not executable at $DRY_SVC"
+        exit 1
+    fi
+    if [ ! -f "$DRY_UNIT" ]; then
+        err "[dry-run] FAIL: service unit/plist not found at $DRY_UNIT"
+        exit 1
+    fi
+    ok "[dry-run] All persistence assets resolved correctly."
     exit 0
 fi
 
@@ -279,24 +319,48 @@ $SUDO chown -R root:root /etc/rp /var/lib/rp 2>/dev/null || \
 $SUDO chmod 600 /etc/rp/config.toml
 
 # ---------------------------------------------------------------------------
-# 6. Install service unit
+# 6. Install service unit (persistent: systemd unit on Linux, launchd plist on macOS)
 # ---------------------------------------------------------------------------
+SERVICE_INSTALL_RC=0
 if [ "$OS" = "linux" ]; then
-    if [ -x "$PACKAGING_DIR/install-systemd.sh" ]; then
-        log "Installing systemd unit..."
-        $SUDO "$PACKAGING_DIR/install-systemd.sh" || warn "systemd install failed (no systemd?). Skip."
+    SERVICE_INSTALLER="$PACKAGING_LINUX_DIR/install-systemd.sh"
+    if [ ! -x "$SERVICE_INSTALLER" ]; then
+        err "packaging/linux/install-systemd.sh missing or not executable at $SERVICE_INSTALLER"
+        err "Repo layout broken — service unit will NOT be installed. Aborting."
+        exit 1
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+        log "[dry-run] Would invoke: $SUDO $SERVICE_INSTALLER"
     else
-        warn "packaging/install-systemd.sh not found — service not registered (F1 stub)."
+        log "Installing systemd unit (persistent service via $SERVICE_INSTALLER)..."
+        if ! $SUDO "$SERVICE_INSTALLER"; then
+            SERVICE_INSTALL_RC=$?
+            err "systemd unit install failed (exit=$SERVICE_INSTALL_RC)."
+            err "Recent logs: journalctl -u remote-pulse.service -n 50 --no-pager"
+            exit 1
+        fi
     fi
 elif [ "$OS" = "darwin" ]; then
-    if [ -x "$PACKAGING_DIR/install-launchd.sh" ]; then
-        log "Installing launchd plist..."
-        $SUDO "$PACKAGING_DIR/install-launchd.sh" || warn "launchd install failed. Skip."
+    SERVICE_INSTALLER="$PACKAGING_MACOS_DIR/install-launchd.sh"
+    if [ ! -x "$SERVICE_INSTALLER" ]; then
+        err "packaging/macos/install-launchd.sh missing or not executable at $SERVICE_INSTALLER"
+        err "Repo layout broken — launchd plist will NOT be installed. Aborting."
+        exit 1
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+        log "[dry-run] Would invoke: $SUDO $SERVICE_INSTALLER"
     else
-        warn "packaging/install-launchd.sh not found — service not registered (F1 stub)."
+        log "Installing launchd plist (persistent service via $SERVICE_INSTALLER)..."
+        if ! $SUDO "$SERVICE_INSTALLER"; then
+            SERVICE_INSTALL_RC=$?
+            err "launchd plist install failed (exit=$SERVICE_INSTALL_RC)."
+            err "Inspect: sudo launchctl print system/com.monxas.remote-pulse"
+            err "Logs:    tail -f /var/log/rp/stderr.log /var/log/rp/stdout.log"
+            exit 1
+        fi
     fi
 else
-    warn "Unsupported OS for service install: $OS"
+    warn "Unsupported OS for service install: $OS (no systemd/launchd persistence configured)"
 fi
 
 # ---------------------------------------------------------------------------
