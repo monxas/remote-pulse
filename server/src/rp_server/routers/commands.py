@@ -17,6 +17,7 @@ from rp_server.database import DbSession
 from rp_server.deps import require_admin, require_operator_or_admin
 from rp_server.events import fire_and_forget
 from rp_server.models import CanaryDeploy, Command, Host, User
+from rp_server.permissions import user_has_permission
 from rp_server.schemas import (
     CanaryStatus,
     CanaryUpgradeRequest,
@@ -100,6 +101,27 @@ async def create_command(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Host {request.host_id} not found",
+        )
+
+    # Row-level ACL: admins bypass, operators must hold ``command.issue``
+    # either with scope ``*`` or scoped to this host's ``group_name``.
+    # See ``rp_server.permissions`` for the resolution rules.
+    if not await user_has_permission(
+        db, user, "command.issue", host.group_name
+    ):
+        logger.warning(
+            "command.issue denied by row-level ACL",
+            user_email=user.email,
+            user_role=user.role,
+            host_id=str(host.id),
+            host_group=host.group_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Missing 'command.issue' permission for this host's group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
         )
 
     # Generate command ID and expiration
