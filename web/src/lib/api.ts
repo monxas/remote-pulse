@@ -46,6 +46,15 @@ async function request<T>(path: string, init: RequestInit, opts: ApiOptions = {}
         : `HTTP ${res.status}`;
     throw new ApiError(res.status, msg, body);
   }
+
+  // Guard against non-JSON 200s: some dev/preview proxies (e.g. `vite
+  // preview`'s SPA fallback) return the index.html for unknown `/v1/*`
+  // paths with a 200 status. Without this check the caller would get a
+  // raw string typed as `T`, triggering downstream `.toFixed`/`.length`
+  // errors and dragging the Lighthouse best-practices score down.
+  if (!isJson) {
+    throw new ApiError(res.status, `Expected JSON, got ${ctype || 'unknown'}`, body);
+  }
   return body as T;
 }
 

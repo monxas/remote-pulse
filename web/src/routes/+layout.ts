@@ -8,6 +8,15 @@ export const prerender = false;
 export const ssr = false;
 export const csr = true;
 
+// Lighthouse CI bypass: compiled out unless the SPA is built with
+// `VITE_LH_BYPASS=1`. Production CI/release builds set it to "0" (or just
+// don't pass the flag) so the constant is `false` after dead-code-elimination
+// and the branch below is stripped from the bundle. Only the dedicated
+// Lighthouse workflow builds with the flag on, and it does so with a
+// throwaway per-run token. See `.github/workflows/lighthouse.yml` and
+// `lighthouserc.json`.
+const LH_BYPASS_BUILD_FLAG = import.meta.env.VITE_LH_BYPASS === '1';
+
 /**
  * Root layout load: bootstrap the authenticated session.
  *
@@ -23,6 +32,22 @@ export const csr = true;
 export const load: LayoutLoad = async ({ fetch, url }): Promise<{ user: AuthMe | null }> => {
   if (!browser) {
     return { user: null };
+  }
+
+  // Lighthouse CI short-circuit. Only honored in builds that opt in via
+  // VITE_LH_BYPASS=1 *and* receive `?_lh=1` in the URL. Production bundles
+  // tree-shake the whole branch (LH_BYPASS_BUILD_FLAG = false). When active
+  // we synthesize an admin AuthMe so the SPA shell paints the real authed
+  // routes against `vite preview` (where /auth/me is unreachable).
+  if (LH_BYPASS_BUILD_FLAG && url.searchParams.get('_lh') === '1') {
+    const synthetic: AuthMe = {
+      authenticated: true,
+      user_id: '00000000-0000-0000-0000-00000000000a',
+      user_email: 'lighthouse@test',
+      user_role: 'admin',
+    };
+    userStore.set(synthetic);
+    return { user: synthetic };
   }
 
   let me: AuthMe | null = null;
