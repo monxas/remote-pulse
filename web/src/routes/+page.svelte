@@ -12,6 +12,7 @@
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import BulkActionBar from '$lib/components/app/BulkActionBar.svelte';
   import BulkIssueCommandDialog from '$lib/components/app/BulkIssueCommandDialog.svelte';
+  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import { createHostSelection } from '$lib/components/app/host-selection.svelte';
   import { createOverviewQuery, createHostsQuery, type HostsParams } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
@@ -95,6 +96,11 @@
   <title>Fleet · Remote-Pulse</title>
 </svelte:head>
 
+<PullToRefresh
+  onRefresh={async () => {
+    await Promise.all([$overview.refetch(), $hosts.refetch()]);
+  }}
+>
 <section class="space-y-6">
   <header class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
     <div>
@@ -208,6 +214,7 @@
     <HostTable hosts={$hosts.data.hosts} {selection} />
   {/if}
 </section>
+</PullToRefresh>
 
 <BulkActionBar
   count={selection.count}

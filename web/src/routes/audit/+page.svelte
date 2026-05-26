@@ -10,6 +10,7 @@
   import { cn } from '$lib/utils';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import AuditEvent from '$lib/components/app/AuditEvent.svelte';
+  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import { createAuditQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -130,6 +131,7 @@
   <title>Audit · Remote-Pulse</title>
 </svelte:head>
 
+<PullToRefresh onRefresh={() => $audit.refetch()}>
 <section class="space-y-6">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
@@ -158,7 +160,7 @@
           value={selectedTarget}
           onchange={(e) =>
             updateUrl({ target_type: (e.target as HTMLSelectElement).value || null })}
-          class="h-9 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="h-11 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
         >
           {#each targetTypes as t (t.value)}
             <option value={t.value}>{t.label}</option>
@@ -167,7 +169,7 @@
       </label>
       <div class="space-y-1">
         <span class="text-xs font-medium text-muted">Range</span>
-        <div class="flex h-9 items-center gap-1 rounded-md border border-border-default p-0.5">
+        <div class="flex h-11 items-center gap-1 rounded-md border border-border-default p-0.5 sm:h-9">
           {#each ranges as r (r.value)}
             <button
               type="button"
@@ -216,7 +218,7 @@
           type="button"
           onclick={() => toggleAction(a)}
           class={cn(
-            'rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
+            'touch-target inline-flex min-h-9 items-center rounded-full border px-3 py-1 font-mono text-xs transition-colors',
             on
               ? 'border-accent bg-accent-bg text-accent-text'
               : 'border-border-default text-muted hover:bg-subtle',
@@ -286,3 +288,4 @@
     {/if}
   {/if}
 </section>
+</PullToRefresh>

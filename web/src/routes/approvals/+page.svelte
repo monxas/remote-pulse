@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import ApprovalCard from '$lib/components/app/ApprovalCard.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
+  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import { createPendingApprovalsQuery } from '$lib/queries';
   import { getLiveStream } from '$lib/queries/live-context';
 
@@ -18,6 +19,7 @@
   <title>Approvals · Remote-Pulse</title>
 </svelte:head>
 
+<PullToRefresh onRefresh={() => $approvals.refetch()}>
 <section class="space-y-6">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
@@ -64,3 +66,4 @@
     </div>
   {/if}
 </section>
+</PullToRefresh>

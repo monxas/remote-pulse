@@ -11,6 +11,7 @@
   import CommandRow from '$lib/components/app/CommandRow.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
+  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import { createCommandsQuery, createHostsQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -93,6 +94,7 @@
   <title>Commands · Remote-Pulse</title>
 </svelte:head>
 
+<PullToRefresh onRefresh={() => $commands.refetch()}>
 <section class="space-y-6">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
@@ -120,7 +122,7 @@
           type="button"
           onclick={() => toggleStatus(s)}
           class={cn(
-            'rounded-full border px-2.5 py-0.5 text-xs font-mono transition-colors',
+            'touch-target inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-mono transition-colors',
             on
               ? 'border-accent bg-accent-bg text-accent-text'
               : 'border-border-default text-muted hover:bg-subtle',
@@ -137,7 +139,7 @@
         <select
           value={selectedHostId}
           onchange={(e) => updateUrl({ host_id: (e.target as HTMLSelectElement).value || null })}
-          class="h-9 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="h-11 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
         >
           <option value="">All hosts</option>
           {#each $hosts.data?.hosts ?? [] as h (h.id)}
@@ -222,5 +224,6 @@
     {/if}
   {/if}
 </section>
+</PullToRefresh>
 
 <IssueCommandDialog bind:open={issueOpen} onOpenChange={(v) => (issueOpen = v)} />
