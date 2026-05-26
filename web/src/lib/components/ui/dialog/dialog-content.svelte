@@ -23,11 +23,17 @@
     ...rest
   }: Props = $props();
 
+  // Positioning. The `center` variant becomes a bottom-sheet on
+  // mobile (<sm) so dialogs that include forms — and therefore the
+  // virtual keyboard — anchor to the bottom of the viewport and keep
+  // the inputs reachable. This matches iOS/Android native modal
+  // patterns and avoids the centered-modal-keyboard-overlap trap that
+  // plagued Phase 1.
   const positioning: Record<'center' | 'bottom', string> = {
     center:
-      'fixed top-1/2 left-1/2 z-50 max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-auto',
+      'fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] w-full overflow-auto rounded-t-xl pb-safe sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:max-w-lg sm:w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:pb-0',
     bottom:
-      'fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] w-full overflow-auto rounded-t-xl sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl',
+      'fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] w-full overflow-auto rounded-t-xl pb-safe sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:pb-0',
   };
 </script>
 
@@ -45,7 +51,7 @@
     {@render children?.()}
     {#if showClose}
       <DialogPrimitive.Close
-        class="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="touch-target absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-3 sm:top-3 sm:h-7 sm:w-7"
         aria-label={closeLabel}
       >
         <X class="size-4" aria-hidden="true" />

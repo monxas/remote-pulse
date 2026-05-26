@@ -24,12 +24,12 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
-  <div class="flex min-h-dvh flex-col bg-base text-default">
+  <div class="flex min-h-dvh flex-col bg-base text-default pl-safe pr-safe">
     <NavBar />
     <main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
       {@render children()}
     </main>
-    <footer class="border-t border-border-subtle py-4 text-center text-xs text-muted">
+    <footer class="border-t border-border-subtle py-4 pb-safe text-center text-xs text-muted">
       <span class="font-mono">remote-pulse</span> · ADR-0009 · /dash-next ·
       <kbd class="rounded border border-border-default bg-subtle px-1 font-mono">⌘K</kbd> palette
     </footer>

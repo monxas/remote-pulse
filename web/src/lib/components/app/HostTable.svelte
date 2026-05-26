@@ -91,24 +91,35 @@
 </script>
 
 <!-- Desktop / tablet table -->
+<!--
+  Note: we considered making `<thead>` `position: sticky` so column
+  labels stay visible while the table scrolls. We dropped it after
+  discovering it intercepted row-click hit-tests at desktop widths
+  (Playwright flow tests). The table only renders at `sm:` and up
+  (mobile gets the card list below) so sticky labels add little value
+  in practice; revisit if a future redesign exposes the table on
+  narrow viewports.
+-->
 <div class="hidden overflow-hidden rounded-lg border border-border-default sm:block">
   <table class="w-full border-collapse text-sm" data-testid="hosts-table">
     <thead class="bg-subtle text-xs tracking-wide text-muted uppercase">
       <tr>
         {#if selection}
-          <th class="w-10 px-3 py-2 text-left" scope="col">
-            <input
-              type="checkbox"
-              class="size-4 cursor-pointer accent-[var(--accent-solid)]"
-              checked={allState === 'all'}
-              use:indeterminate={allState === 'some'}
-              onchange={() => selection?.toggleAllVisible(visibleIds)}
-              onclick={stop}
-              aria-label={allState === 'all'
-                ? 'Deselect all visible hosts'
-                : 'Select all visible hosts'}
-              data-testid="select-all-hosts"
-            />
+          <th class="w-12 px-3 py-2 text-left" scope="col">
+            <label class="inline-flex h-11 w-11 cursor-pointer items-center justify-center">
+              <input
+                type="checkbox"
+                class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                checked={allState === 'all'}
+                use:indeterminate={allState === 'some'}
+                onchange={() => selection?.toggleAllVisible(visibleIds)}
+                onclick={stop}
+                aria-label={allState === 'all'
+                  ? 'Deselect all visible hosts'
+                  : 'Select all visible hosts'}
+                data-testid="select-all-hosts"
+              />
+            </label>
           </th>
         {/if}
         <SortableHeader
@@ -174,16 +185,18 @@
         >
           {#if selection}
             <td class="px-3 py-2">
-              <input
-                type="checkbox"
-                class="size-4 cursor-pointer accent-[var(--accent-solid)]"
-                checked={selection.has(host.id)}
-                onchange={() => selection?.toggle(host.id)}
-                onclick={stop}
-                onkeydown={stop}
-                aria-label={`Select host ${host.hostname}`}
-                data-testid={`select-host-${host.hostname}`}
-              />
+              <label class="inline-flex h-11 w-11 cursor-pointer items-center justify-center">
+                <input
+                  type="checkbox"
+                  class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                  checked={selection.has(host.id)}
+                  onchange={() => selection?.toggle(host.id)}
+                  onclick={stop}
+                  onkeydown={stop}
+                  aria-label={`Select host ${host.hostname}`}
+                  data-testid={`select-host-${host.hostname}`}
+                />
+              </label>
             </td>
           {/if}
           <td class="px-3 py-2">
@@ -233,26 +246,36 @@
 </div>
 
 <!-- Mobile card list -->
+<!--
+  On portrait phones (<sm) we render a vertical stack. We deliberately
+  do NOT promote to a multi-col grid at landscape phone widths because
+  the table view kicks in at `sm:` (640px); the card list stays
+  single-col below that to keep tap targets generous.
+-->
 <ul class="space-y-2 sm:hidden">
   {#each hosts as host (host.id)}
     <li class="relative">
       {#if selection}
-        <input
-          type="checkbox"
-          class="absolute right-3 top-3 z-10 size-4 cursor-pointer accent-[var(--accent-solid)]"
-          checked={selection.has(host.id)}
-          onchange={() => selection?.toggle(host.id)}
-          onclick={stop}
-          aria-label={`Select host ${host.hostname}`}
-          data-testid={`select-host-mobile-${host.hostname}`}
-        />
+        <label
+          class="absolute right-1 top-1 z-10 inline-flex h-11 w-11 cursor-pointer items-center justify-center"
+        >
+          <input
+            type="checkbox"
+            class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+            checked={selection.has(host.id)}
+            onchange={() => selection?.toggle(host.id)}
+            onclick={stop}
+            aria-label={`Select host ${host.hostname}`}
+            data-testid={`select-host-mobile-${host.hostname}`}
+          />
+        </label>
       {/if}
       <button
         type="button"
-        class="w-full rounded-lg border border-border-default bg-elevated p-3 text-left transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        class="min-h-16 w-full rounded-lg border border-border-default bg-elevated p-3 text-left transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         onclick={() => navigate(host.id)}
       >
-        <div class="flex items-center justify-between {selection ? 'pr-7' : ''}">
+        <div class="flex items-center justify-between {selection ? 'pr-11' : ''}">
           <span class="font-mono text-sm font-medium text-default">{host.hostname}</span>
           <HostStatusBadge
             status={host.status}

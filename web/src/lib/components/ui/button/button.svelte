@@ -58,6 +58,13 @@
       'bg-danger text-accent-contrast hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring',
     link: 'bg-transparent text-accent-text underline-offset-4 hover:underline',
   };
+  // Sizes set the desktop chrome. On coarse-pointer (touch) devices we
+  // grow every size to a 44×44 px minimum hit area via the `touch-target`
+  // helper below (Apple HIG 44pt / Material 48dp). The visual padding /
+  // typography stay desktop-sized; only the hit-area expands. The
+  // matching CSS lives at the bottom of this component in a scoped
+  // `:global(.touch-target)` selector so it applies via Tailwind class
+  // composition without leaking to `<button>` elements that don't opt in.
   const sizes: Record<ButtonSize, string> = {
     sm: 'h-8 px-3 text-xs',
     md: 'h-9 px-4 text-sm',
@@ -66,7 +73,7 @@
   };
 
   const base =
-    'inline-flex select-none items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none';
+    'touch-target inline-flex select-none items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none';
 </script>
 
 {#if href}

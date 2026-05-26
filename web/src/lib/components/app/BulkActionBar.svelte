@@ -31,13 +31,13 @@
 
 {#if count > 0}
   <div
-    class="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 sm:bottom-6"
+    class="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 pb-safe sm:bottom-6"
     data-testid="bulk-action-bar"
     role="region"
     aria-label={`Bulk actions: ${count} hosts selected`}
   >
     <div
-      class="flex w-full max-w-3xl items-center gap-3 rounded-full border border-border-default bg-elevated px-3 py-2 shadow-lg backdrop-blur"
+      class="flex min-h-14 w-full max-w-3xl items-center gap-3 rounded-full border border-border-default bg-elevated px-3 py-2 shadow-lg backdrop-blur"
     >
       <span class="flex items-center gap-2 text-sm" aria-live="polite">
         <Badge variant="default" class="font-mono">{count}</Badge>

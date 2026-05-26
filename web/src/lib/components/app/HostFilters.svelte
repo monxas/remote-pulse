@@ -96,7 +96,7 @@
         value={group}
         onchange={(e) => updateUrl({ group: (e.target as HTMLSelectElement).value || null })}
         class={cn(
-          'h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
+          'touch-target h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         )}
       >
@@ -113,7 +113,7 @@
         value={status}
         onchange={(e) => updateUrl({ status: (e.target as HTMLSelectElement).value || null })}
         class={cn(
-          'h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
+          'touch-target h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         )}
       >
@@ -133,7 +133,7 @@
   {#if q || group || status || (window && window !== '5m')}
     <button
       type="button"
-      class="text-xs text-accent-text underline-offset-4 hover:underline"
+      class="touch-target inline-flex items-center text-xs text-accent-text underline-offset-4 hover:underline"
       onclick={clearAll}
     >
       Clear filters

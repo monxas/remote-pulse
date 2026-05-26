@@ -173,7 +173,7 @@
         <label class="space-y-1 text-sm">
           <span class="font-medium">Group</span>
           <select
-            class="block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="touch-target block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
             bind:value={groupName}
             data-testid="enroll-group"
             disabled={$createLink.isPending}
@@ -191,7 +191,7 @@
         <label class="space-y-1 text-sm">
           <span class="font-medium">Expiration</span>
           <select
-            class="block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="touch-target block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
             bind:value={ttlMinutes}
             data-testid="enroll-ttl"
             disabled={$createLink.isPending}

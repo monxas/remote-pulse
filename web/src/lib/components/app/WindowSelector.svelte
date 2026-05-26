@@ -28,7 +28,7 @@
       role="radio"
       aria-checked={selected}
       class={cn(
-        'rounded-sm px-2.5 py-1 font-mono transition-colors',
+        'touch-target inline-flex items-center justify-center rounded-sm px-2.5 py-1 font-mono transition-colors',
         selected ? 'bg-elevated text-default shadow-sm' : 'text-muted hover:text-default',
       )}
       onclick={() => onchange(opt)}

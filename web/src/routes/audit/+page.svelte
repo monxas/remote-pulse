@@ -10,6 +10,7 @@
   import { cn } from '$lib/utils';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import AuditEvent from '$lib/components/app/AuditEvent.svelte';
+  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import { createAuditQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -123,6 +124,7 @@
   <title>Audit · Remote-Pulse</title>
 </svelte:head>
 
+<PullToRefresh onRefresh={() => $audit.refetch()}>
 <section class="space-y-6">
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
@@ -352,3 +354,4 @@
     {/if}
   {/if}
 </section>
+</PullToRefresh>

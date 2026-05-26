@@ -100,3 +100,69 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Touch-target helper — guarantees a ≥44×44 px hit area on
+ * coarse-pointer devices (Apple HIG 44pt / Material 48dp / WCAG 2.5.5).
+ *
+ * Mouse/trackpad pointers keep the desktop chrome (h-8 buttons, h-7
+ * dialog close, 16px native checkboxes). On touch we grow the actual
+ * element so the layout and hit area are honest with each other — the
+ * pure-pseudo-element trick we tried first works for pointer events but
+ * fails axe / WCAG / our own e2e gate, which assert on
+ * `getBoundingClientRect()`.
+ *
+ * Anything that opts in (Button primitive, filter pills, table
+ * checkbox labels, dialog close) gets `min-h: 44px; min-w: 44px` on
+ * coarse pointers without changing desktop rendering.
+ */
+@media (hover: none) and (pointer: coarse) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/*
+ * Safe-area helpers for iPad/iPhone with notch + home indicator.
+ * Used by the layout footer and the BulkActionBar so floating UI
+ * doesn't tuck under the home-indicator on iPadOS 17+/iOS 17+ when
+ * displayed full-screen (e.g. Family Hub Tablet as PWA).
+ *
+ * Tailwind v4 doesn't expose `env()` utilities yet; we ship hand-rolled
+ * classes instead.
+ */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+}
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 0px);
+}
+.pl-safe {
+  padding-left: max(env(safe-area-inset-left, 0px), 0px);
+}
+.pr-safe {
+  padding-right: max(env(safe-area-inset-right, 0px), 0px);
+}
+.mb-safe {
+  margin-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+}
+
+/*
+ * iOS Safari auto-zooms text inputs whose font-size is < 16px when
+ * focused. Forms across the dashboard use `text-sm` (14px) for
+ * desktop density; on coarse pointers we promote them back to 16px so
+ * the viewport stays put when the user taps an input.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Make focus-visible never get hidden behind a sticky header. */
+:focus-visible {
+  scroll-margin-top: 5rem;
+}

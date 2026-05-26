@@ -24,7 +24,7 @@
       {initials(userStore.value.user_email)}
     </span>
     <a
-      class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-subtle hover:text-default"
+      class="touch-target inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-subtle hover:text-default"
       href="/auth/logout"
       data-sveltekit-reload
       title="Sign out"
