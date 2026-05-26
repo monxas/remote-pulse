@@ -44,6 +44,7 @@ from rp_server.config import settings
 from rp_server.database import DbSession
 from rp_server.deps import current_user, require_admin
 from rp_server.models import Enrollment, User
+from rp_server.permissions import user_has_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/dash/enroll", tags=["dash-enroll"])
@@ -177,14 +178,32 @@ async def create_enroll_link(
     payload: EnrollLinkCreate,
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
-    _admin: Annotated[User, Depends(require_admin)] = None,
 ) -> EnrollLinkOut:
     """Issue a new enrollment magic-link.
 
-    Admin-only. Reuses :func:`rp_server.auth.create_enrollment_token` so the
-    JWT shape stays in lockstep with the CLI / Telegram bot codepath. We
-    persist the resulting jti to ``enrollments`` for the agent-side validator.
+    Row-level ACL: admins bypass, everyone else needs the ``enroll.create``
+    permission scoped to ``payload.group_name`` (or ``*``). Reuses
+    :func:`rp_server.auth.create_enrollment_token` so the JWT shape stays
+    in lockstep with the CLI / Telegram bot codepath. We persist the
+    resulting jti to ``enrollments`` for the agent-side validator.
     """
+    if not await user_has_permission(
+        db, user, "enroll.create", payload.group_name
+    ):
+        logger.warning(
+            "enroll.create denied by row-level ACL: user=%s role=%s group=%s",
+            user.email,
+            user.role,
+            payload.group_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Missing 'enroll.create' permission for this group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
+        )
+
     base_url = _safe_base_url()
 
     token, jti = create_enrollment_token(

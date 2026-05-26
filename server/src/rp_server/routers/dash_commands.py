@@ -41,6 +41,7 @@ from rp_server.database import DbSession
 from rp_server.deps import current_user
 from rp_server.events import fire_and_forget
 from rp_server.models import Command, Host, User
+from rp_server.permissions import user_has_permission
 from rp_server.routers.commands import get_signing_key
 
 logger = logging.getLogger(__name__)
@@ -691,15 +692,34 @@ async def _resolve_approval(
 
     Raises:
         404 if not visible, not pending, or already resolved.
-        403 if caller lacks permission.
+        403 if caller lacks the ``command.approve`` permission for the
+            command's host group (admins bypass — see
+            :mod:`rp_server.permissions`).
     """
-    if user.role not in ("admin", "operator"):
+    cmd, host = await _load_command_for_user(db, user, approval_id)
+
+    # Row-level ACL: admins bypass, everyone else needs ``command.approve``
+    # scoped to the host's ``group_name`` (or ``*``). We check AFTER the
+    # 404-leak guard above so unknown approvals still return 404, not 403.
+    if not await user_has_permission(
+        db, user, "command.approve", host.group_name
+    ):
+        logger.warning(
+            "command.approve denied by row-level ACL: user=%s role=%s "
+            "approval_id=%s host_group=%s",
+            user.email,
+            user.role,
+            approval_id,
+            host.group_name,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Operator+ role required (current role: {user.role})",
+            detail=(
+                "Missing 'command.approve' permission for this host's group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
         )
 
-    cmd, host = await _load_command_for_user(db, user, approval_id)
     if cmd.completed_at is not None or cmd.rejected_reason is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
