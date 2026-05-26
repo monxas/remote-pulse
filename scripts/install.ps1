@@ -18,6 +18,10 @@
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
+    # Short enrollment code (preferred). Format ``XXX-XXX`` or ``XXXXXX``,
+    # case-insensitive. The server normalises before lookup. Mutually
+    # exclusive with -Token.
+    [string]$Code        = $env:RP_CODE,
     [string]$Token       = $env:RP_TOKEN,
     [string]$Server      = $(if ($env:RP_SERVER) { $env:RP_SERVER } else { 'https://rp.monxas.casa' }),
     [string]$Group       = $(if ($env:RP_GROUP)  { $env:RP_GROUP }  else { 'default' }),
@@ -70,7 +74,10 @@ Usage:
   .\install.ps1 -Token <JWT> [options]
 
 Flags:
-  -Token <JWT>          Enrollment token (required unless -Show). Env: RP_TOKEN
+  -Code  <XXX-XXX>      Short enrollment code (preferred). Env: RP_CODE
+                        Format ``XXX-XXX`` or ``XXXXXX``, case-insensitive.
+  -Token <JWT>          DEPRECATED — legacy JWT token. Env: RP_TOKEN.
+                        Use -Code instead. Mutually exclusive with -Code.
   -Server <URL>         Server URL. Default: https://rp.monxas.casa
   -Group <name>         Host group. Default: 'default'
   -Hostname <name>      Override hostname. Default: \$env:COMPUTERNAME
@@ -85,17 +92,20 @@ Flags:
   -Help                 This help
 
 Environment vars (equivalent to flags):
-  RP_TOKEN, RP_SERVER, RP_GROUP, RP_HOSTNAME, RP_VERSION
+  RP_CODE, RP_TOKEN, RP_SERVER, RP_GROUP, RP_HOSTNAME, RP_VERSION
 
 Examples:
   # Audit-first
-  .\install.ps1 -Show -Token test
+  .\install.ps1 -Show -Code K7M-X3F
 
-  # Token-driven silent install
+  # Short-code silent install
+  .\install.ps1 -Code K7M-X3F -Group family
+
+  # Legacy JWT (deprecated)
   .\install.ps1 -Token eyJhbGc... -Group family
 
   # Air-gapped
-  .\install.ps1 -Token eyJhbGc... -Offline -LocalBinary C:\tmp\rp.exe
+  .\install.ps1 -Code K7M-X3F -Offline -LocalBinary C:\tmp\rp.exe
 
 NOTE: This script requires admin privileges. It will self-elevate via UAC.
 NOTE: If iwr...|iex fails with execution policy, run first:
@@ -337,7 +347,10 @@ function Install-Agent {
         'wsl' {
             Write-Step "Delegating to WSL Linux installer"
             if (-not (Get-Command wsl -ErrorAction SilentlyContinue)) { throw "wsl.exe not found. Install WSL2 first: wsl --install" }
-            $cmd = "curl -fsSL $Server/install | sh -s -- --token=$Token --server=$Server --group=$Group --hostname=$HostnameTag --version=$Version"
+            # Forward whichever credential we have. The Linux installer
+            # accepts --code or --token (XOR enforced on the server).
+            $credFlag = if ($Code) { "--code=$Code" } else { "--token=$Token" }
+            $cmd = "curl -fsSL $Server/install | sh -s -- $credFlag --server=$Server --group=$Group --hostname=$HostnameTag --version=$Version"
             & wsl.exe -- bash -lc $cmd
             if ($LASTEXITCODE -ne 0) { throw "WSL install failed (exit=$LASTEXITCODE)" }
             return  # WSL path handles its own service registration
@@ -397,22 +410,39 @@ function Invoke-Enroll {
     param([string]$Arch)
     $resolvedVersion = Resolve-AgentVersion
     Write-Step "Enrolling with $Server/v1/enroll (agent_version=$resolvedVersion)"
+    # Build payload with either 'code' or 'token' — the server's pydantic
+    # validator XORs them, so we must NOT send both fields even as nulls.
     $payload = @{
-        token            = $Token
         hostname         = $HostnameTag
         group            = $Group
         os               = 'windows'
         arch             = $Arch
         host_fingerprint = (Get-HostFingerprint)
         agent_version    = $resolvedVersion
-    } | ConvertTo-Json -Compress
+    }
+    if ($Code) {
+        $payload['code'] = $Code
+    } else {
+        $payload['token'] = $Token
+    }
+    $payloadJson = $payload | ConvertTo-Json -Compress
 
     try {
         $resp = Invoke-RestMethod -Method Post -Uri "$Server/v1/enroll" `
-                                  -ContentType 'application/json' -Body $payload `
+                                  -ContentType 'application/json' -Body $payloadJson `
                                   -TimeoutSec 30
     } catch {
-        throw "Enrollment failed: $($_.Exception.Message)"
+        # Differentiate 403 (invalid/expired code) from other failures so the
+        # operator gets a useful one-liner instead of a stack trace.
+        $msg = $_.Exception.Message
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 403) {
+            if ($Code) {
+                throw "Invalid or expired enrollment code. Ask the operator to issue a new one (default TTL is 5 min)."
+            } else {
+                throw "Enrollment token is invalid, expired or exhausted."
+            }
+        }
+        throw "Enrollment failed: $msg"
     }
 
     if (-not $resp.host_id) { throw "Enrollment response missing host_id: $($resp | ConvertTo-Json -Compress)" }
@@ -549,8 +579,13 @@ try {
         exit 0
     }
 
-    if (-not $Token) {
-        Write-ErrLine "-Token <JWT> required (or set \$env:RP_TOKEN). Use -Show to inspect the plan."
+    # Exactly one credential. Prefer -Code; allow legacy -Token until removed.
+    if (-not $Code -and -not $Token) {
+        Write-ErrLine "-Code <XXX-XXX> required (or set \$env:RP_CODE). Legacy: -Token <JWT>. Use -Show to inspect the plan."
+        exit 1
+    }
+    if ($Code -and $Token) {
+        Write-ErrLine "-Code and -Token are mutually exclusive. Pass only one."
         exit 1
     }
 

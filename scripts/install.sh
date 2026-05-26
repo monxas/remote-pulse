@@ -12,6 +12,10 @@ set -eu
 # ---------------------------------------------------------------------------
 RP_SERVER="${RP_SERVER:-http://localhost:8080}"
 RP_TOKEN="${RP_TOKEN:-}"
+# Short enrollment code (preferred over RP_TOKEN). Format: XXX-XXX or XXXXXX
+# (dash optional, case-insensitive). The server normalises before lookup so
+# any of "K7M-X3F" / "k7m-x3f" / "K7MX3F" are accepted.
+RP_CODE="${RP_CODE:-}"
 RP_GROUP="${RP_GROUP:-default}"
 RP_HOSTNAME="${RP_HOSTNAME:-$(hostname -s 2>/dev/null || hostname)}"
 RP_VERSION="${RP_VERSION:-latest}"
@@ -38,11 +42,15 @@ print_help() {
 Remote-Pulse installer (F1)
 
 Usage:
-  install.sh [--token=JWT] [--server=URL] [--group=NAME]
+  install.sh [--code=XXX-XXX | --token=JWT] [--server=URL] [--group=NAME]
              [--hostname=HOST] [--version=REF] [--show] [--help]
 
 Flags:
-  --token=JWT       Enrollment token (required unless --show). Env: RP_TOKEN
+  --code=XXX-XXX    Short enrollment code (preferred). Env: RP_CODE
+                    Format ``XXX-XXX`` or ``XXXXXX``, case-insensitive.
+  --token=JWT       DEPRECATED legacy JWT enrollment token. Env: RP_TOKEN
+                    Use --code= instead — the JWT path is retained only for
+                    backwards compatibility with pre-1.1 servers.
   --server=URL      Remote-Pulse server. Default: http://localhost:8080
   --group=NAME      Host group. Default: "default"
   --hostname=HOST   Override hostname for enrollment. Default: $(hostname -s)
@@ -53,13 +61,16 @@ Flags:
   -h, --help        Show this help.
 
 Env vars equivalent to flags:
-  RP_SERVER, RP_TOKEN, RP_GROUP, RP_HOSTNAME, RP_VERSION
+  RP_SERVER, RP_CODE, RP_TOKEN, RP_GROUP, RP_HOSTNAME, RP_VERSION
 
 Examples:
   # Audit-first
   sh install.sh --show
 
-  # Token-driven (silent install)
+  # Short-code (preferred, silent install)
+  sh install.sh --code=K7M-X3F --group=family
+
+  # Legacy JWT (deprecated, kept for back-compat)
   sh install.sh --token=eyJhbGc... --group=family
 
 TODO (later phases):
@@ -74,6 +85,7 @@ EOF
 # ---------------------------------------------------------------------------
 while [ $# -gt 0 ]; do
     case "$1" in
+        --code=*)     RP_CODE="${1#*=}" ;;
         --token=*)    RP_TOKEN="${1#*=}" ;;
         --server=*)   RP_SERVER="${1#*=}" ;;
         --group=*)    RP_GROUP="${1#*=}" ;;
@@ -173,8 +185,13 @@ fi
 # ---------------------------------------------------------------------------
 # Validate required input
 # ---------------------------------------------------------------------------
-if [ -z "$RP_TOKEN" ]; then
-    err "--token=<JWT> requerido (o env RP_TOKEN). Run with --show to inspect plan."
+# Need one credential. Short code preferred, JWT kept for legacy installs.
+if [ -z "$RP_CODE" ] && [ -z "$RP_TOKEN" ]; then
+    err "--code=<XXX-XXX> requerido (o env RP_CODE). Legacy: --token=<JWT>. Run with --show to inspect plan."
+    exit 1
+fi
+if [ -n "$RP_CODE" ] && [ -n "$RP_TOKEN" ]; then
+    err "Pasa SOLO --code o --token, no ambos."
     exit 1
 fi
 
@@ -297,15 +314,44 @@ if [ -z "$HOST_FINGERPRINT" ]; then
     HOST_FINGERPRINT="unknown-$(date +%s)"
 fi
 
-ENROLL_PAYLOAD="$(printf '{"token":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s","agent_version":"%s"}' \
-    "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "$RESOLVED_AGENT_VERSION")"
+if [ -n "$RP_CODE" ]; then
+    # Short-code path: server normalises (uppercase, strips dash) so we
+    # forward whatever the operator typed. POSIX-portable: pass the code as
+    # the first %s slot in a token-free payload.
+    ENROLL_PAYLOAD="$(printf '{"code":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s","agent_version":"%s"}' \
+        "$RP_CODE" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "$RESOLVED_AGENT_VERSION")"
+else
+    ENROLL_PAYLOAD="$(printf '{"token":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s","agent_version":"%s"}' \
+        "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "$RESOLVED_AGENT_VERSION")"
+fi
 
-ENROLL_RESP="$(curl -fsSL -X POST "$RP_SERVER/v1/enroll" \
+# Capture stderr separately so we can surface HTTP status to the user
+# when enrollment fails (a 403 from the short-code path most commonly means
+# expired/exhausted code).
+ENROLL_HTTP_STATUS=""
+ENROLL_RESP="$(curl -sSL -w '\n__HTTP_STATUS__:%{http_code}' -X POST "$RP_SERVER/v1/enroll" \
     -H "Content-Type: application/json" \
-    -d "$ENROLL_PAYLOAD")" || {
-    err "Enrollment failed against $RP_SERVER/v1/enroll"
-    exit 1
-}
+    -d "$ENROLL_PAYLOAD")" || true
+ENROLL_HTTP_STATUS="$(printf '%s\n' "$ENROLL_RESP" | sed -n 's/^__HTTP_STATUS__://p' | tail -1)"
+ENROLL_RESP="$(printf '%s\n' "$ENROLL_RESP" | sed '/^__HTTP_STATUS__:/d')"
+case "$ENROLL_HTTP_STATUS" in
+    2*)
+        : # ok, fall through
+        ;;
+    403)
+        if [ -n "$RP_CODE" ]; then
+            err "Invalid or expired enrollment code. Ask the operator to issue a new one (default TTL is 5 min)."
+        else
+            err "Enrollment token is invalid, expired or exhausted."
+        fi
+        exit 1
+        ;;
+    *)
+        err "Enrollment failed against $RP_SERVER/v1/enroll (HTTP $ENROLL_HTTP_STATUS)."
+        err "Response: $ENROLL_RESP"
+        exit 1
+        ;;
+esac
 
 # Parse host_id (prefer python3, fallback to grep)
 HOST_ID=""
