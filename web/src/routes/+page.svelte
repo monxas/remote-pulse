@@ -10,6 +10,8 @@
   import HostTable from '$lib/components/app/HostTable.svelte';
   import HostFilters from '$lib/components/app/HostFilters.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
+  import BulkActionBar from '$lib/components/app/BulkActionBar.svelte';
+  import { createHostSelection } from '$lib/components/app/host-selection.svelte';
   import { createOverviewQuery, createHostsQuery, type HostsParams } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -55,6 +57,24 @@
   );
 
   const loginNext = $derived(encodeURIComponent($page.url.pathname + $page.url.search));
+
+  // ---- Multi-select state ----
+  // The selection store backs the Fleet table checkboxes + the floating
+  // action bar. The actual "Issue command" dialog is wired in a follow-up
+  // commit; for now the bar's onIssue is a no-op so users can still see
+  // the affordance and clear the selection.
+  const selection = createHostSelection();
+
+  const selectedHostnames = $derived.by(() => {
+    const all = $hosts.data?.hosts ?? [];
+    const byId = new Map(all.map((h) => [h.id, h.hostname]));
+    return selection.ids.map((id) => byId.get(id) ?? id);
+  });
+  const previewLabels = $derived(selectedHostnames.slice(0, 3));
+
+  function openBulkDialog(): void {
+    // Hooked up in the next commit (BulkIssueCommandDialog).
+  }
 </script>
 
 <svelte:head>
@@ -171,6 +191,14 @@
       </CardContent>
     </Card>
   {:else if $hosts.data}
-    <HostTable hosts={$hosts.data.hosts} />
+    <HostTable hosts={$hosts.data.hosts} {selection} />
   {/if}
 </section>
+
+<BulkActionBar
+  count={selection.count}
+  {previewLabels}
+  totalLabels={selectedHostnames.length}
+  onIssue={openBulkDialog}
+  onClear={() => selection.clear()}
+/>
