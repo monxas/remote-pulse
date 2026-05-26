@@ -29,5 +29,17 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{js,ts}'],
     environment: 'jsdom',
     globals: true,
+    // Svelte 5 component tests via @testing-library/svelte need the
+    // client-side build of Svelte. Without these conditions Vite
+    // resolves `svelte` to `index-server.js` and `mount()` throws
+    // `lifecycle_function_unavailable`.
+    server: {
+      deps: {
+        inline: ['@testing-library/svelte'],
+      },
+    },
+  },
+  resolve: {
+    conditions: ['browser'],
   },
 });

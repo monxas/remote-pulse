@@ -8,6 +8,16 @@
   import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
   import { cn } from '$lib/utils';
 
+  // Props extend both anchor + button HTML attribute sets (minus the
+  // ones we own / disambiguate) so the `<button>` branch can spread
+  // `{...rest}` without TS griping that `onclick`/`oncopy`/etc. have
+  // `HTMLAnchorElement`-typed handlers. Native HTML lets `data-*`,
+  // `aria-*`, `name`, `value`, `formaction`, `id`, `style`, … through
+  // on both elements; the (small) cost is that genuinely
+  // element-specific attrs (`href`/`target`/`download` on anchors;
+  // `name`/`value`/`formaction` on buttons) become loosely typed when
+  // the caller passes them to the "wrong" branch. The runtime
+  // template still picks the correct branch via the `href` discriminator.
   type Props = {
     variant?: ButtonVariant;
     size?: ButtonSize;
@@ -19,7 +29,8 @@
     disabled?: boolean;
     'aria-label'?: string;
     title?: string;
-  } & Omit<HTMLAnchorAttributes, 'class' | 'type'>;
+  } & Omit<HTMLAnchorAttributes, 'class' | 'type' | 'href' | 'onclick'> &
+    Omit<HTMLButtonAttributes, 'class' | 'type' | 'onclick' | 'disabled'>;
 
   let {
     variant = 'default',
@@ -71,6 +82,7 @@
 {:else}
   <button
     class={cn(base, variants[variant], sizes[size], className)}
+    {...rest}
     {type}
     {onclick}
     {disabled}

@@ -97,15 +97,15 @@ test('settings page renders both tabs when authed as admin', async ({ page }) =>
   // Default tab = groups, table shows seeded fixture rows. We scope to
   // the cell role so we don't collide with the group-membership pills
   // rendered for each user under the Users tab (also in the DOM).
-  // Note: the shared <Button> component does not forward `data-testid`
-  // to the rendered <button>, so we select by accessible name.
   await expect(page.getByRole('cell', { name: 'prod', exact: true })).toBeVisible();
   await expect(page.getByText('Production fleet')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New group' })).toBeVisible();
+  // Restored after Button spreads `...rest` (was role-based as a
+  // workaround for the v1.0.5 forwarding bug).
+  await expect(page.getByTestId('new-group-btn')).toBeVisible();
 
   // Switch to Users tab
   await usersTab.click();
   await expect(page.getByText('admin@test.local')).toBeVisible();
   await expect(page.getByText('viewer@test.local')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Invite user' })).toBeVisible();
+  await expect(page.getByTestId('new-user-btn')).toBeVisible();
 });
