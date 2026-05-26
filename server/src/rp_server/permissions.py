@@ -34,10 +34,8 @@ The following endpoints consult this module:
   ``routers/dash_commands.py``).
 - ``POST /v1/dash/enroll/links`` -> ``enroll.create`` (see
   ``routers/dash_enroll.py``).
-
-``host.delete`` is reserved in :data:`ALLOWED_ACTIONS` but no HTTP
-endpoint surfaces it today. The slot exists so the Settings UI can grant
-it ahead of the eventual ``DELETE /v1/dash/hosts/{id}`` landing.
+- ``DELETE /v1/dash/hosts/{host_id}`` -> ``host.delete`` (see
+  ``routers/dash_api.py``).
 """
 
 from __future__ import annotations
