@@ -35,7 +35,8 @@ from sqlalchemy import delete, func, select
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin
-from rp_server.models import AuditEvent, Group, Host, User
+from rp_server.models import AuditEvent, Group, Host, User, UserPermission
+from rp_server.permissions import ALLOWED_ACTIONS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/dash/settings", tags=["dash-settings"])
@@ -621,5 +622,236 @@ async def delete_user(
     logger.info(
         "User deleted via dash-settings",
         extra={"user_id": str(user_id), "actor": admin.email},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- #
+# User permissions (row-level ACL)
+# --------------------------------------------------------------------------- #
+#
+# These endpoints back the "Permissions" modal in the Settings → Users tab.
+# They let an admin grant or revoke fine-grained per-action ACL rows that
+# layer on top of role + accessible_groups. See ``rp_server.permissions``
+# for the resolver and ``ALLOWED_ACTIONS`` for the canonical action enum.
+
+
+class PermissionSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    action: str
+    scope: str
+    granted_by: str
+    granted_at: datetime
+
+
+class PermissionListResponse(BaseModel):
+    permissions: list[PermissionSummary]
+    # Echo the allowed action enum on every list call so the UI doesn't
+    # need to ship its own copy of the constant (and so we can grow the
+    # enum server-side without a coordinated UI deploy).
+    allowed_actions: list[str]
+
+
+class PermissionGrant(BaseModel):
+    action: str = Field(min_length=1, max_length=64)
+    scope: str = Field(default="*", min_length=1, max_length=64)
+
+    @field_validator("action")
+    @classmethod
+    def _check_action(cls, v: str) -> str:
+        if v not in ALLOWED_ACTIONS:
+            raise ValueError(f"action must be one of {sorted(ALLOWED_ACTIONS)}")
+        return v
+
+    @field_validator("scope")
+    @classmethod
+    def _check_scope(cls, v: str) -> str:
+        if v == "*":
+            return v
+        # Reuse the group-name charset: scopes either match a group name
+        # or are the wildcard. We do not currently support glob patterns.
+        if not _GROUP_NAME_RE.fullmatch(v):
+            raise ValueError(
+                "scope must be '*' or a valid group name "
+                "(alphanumeric start, 1-63 chars, [a-zA-Z0-9_.-])"
+            )
+        return v
+
+
+async def _load_user_or_404(db: DbSession, user_id: uuid.UUID) -> User:
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+    return user
+
+
+@router.get(
+    "/users/{user_id}/permissions",
+    response_model=PermissionListResponse,
+)
+async def list_user_permissions(
+    user_id: uuid.UUID,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_admin)],
+) -> PermissionListResponse:
+    """List per-action permissions granted to ``user_id``.
+
+    Note: admins implicitly have every action and may have zero rows here;
+    the UI surfaces that by labelling the table accordingly.
+    """
+    await _load_user_or_404(db, user_id)
+
+    rows = (
+        (
+            await db.execute(
+                select(UserPermission)
+                .where(UserPermission.user_id == user_id)
+                .order_by(UserPermission.granted_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return PermissionListResponse(
+        permissions=[PermissionSummary.model_validate(r) for r in rows],
+        allowed_actions=sorted(ALLOWED_ACTIONS),
+    )
+
+
+@router.post(
+    "/users/{user_id}/permissions",
+    response_model=PermissionSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_user_permission(
+    user_id: uuid.UUID,
+    payload: PermissionGrant,
+    db: DbSession,
+    admin: Annotated[User, Depends(require_admin)],
+) -> PermissionSummary:
+    """Grant ``action`` on ``scope`` to ``user_id``. 409 on duplicate."""
+    user = await _load_user_or_404(db, user_id)
+
+    # Treat a duplicate grant as a soft no-op surfaced as 409 — we want
+    # the UI to give a clear "already granted" message rather than letting
+    # the unique constraint blow up as a 500.
+    existing = (
+        await db.execute(
+            select(UserPermission).where(
+                UserPermission.user_id == user_id,
+                UserPermission.action == payload.action,
+                UserPermission.scope == payload.scope,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Permission {payload.action!r} on scope {payload.scope!r} "
+                f"is already granted to {user.email}"
+            ),
+        )
+
+    perm = UserPermission(
+        user_id=user.id,
+        action=payload.action,
+        scope=payload.scope,
+        granted_by=admin.email,
+    )
+    db.add(perm)
+    await db.flush()
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.permission.grant",
+        resource_type="user",
+        resource_id=str(user.id),
+        payload={
+            "email": user.email,
+            "action": payload.action,
+            "scope": payload.scope,
+            "permission_id": str(perm.id),
+        },
+    )
+    await db.commit()
+    await db.refresh(perm)
+
+    logger.info(
+        "Permission granted via dash-settings",
+        extra={
+            "target_email": user.email,
+            "action": payload.action,
+            "scope": payload.scope,
+            "actor": admin.email,
+        },
+    )
+    return PermissionSummary.model_validate(perm)
+
+
+@router.delete(
+    "/users/{user_id}/permissions/{permission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def revoke_user_permission(
+    user_id: uuid.UUID,
+    permission_id: uuid.UUID,
+    db: DbSession,
+    admin: Annotated[User, Depends(require_admin)],
+) -> Response:
+    """Revoke a specific permission row from a user."""
+    user = await _load_user_or_404(db, user_id)
+
+    perm = (
+        await db.execute(
+            select(UserPermission).where(
+                UserPermission.id == permission_id,
+                UserPermission.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if perm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Permission {permission_id} not found for user {user_id}",
+        )
+
+    revoked_action = perm.action
+    revoked_scope = perm.scope
+    await db.execute(
+        delete(UserPermission).where(UserPermission.id == permission_id)
+    )
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.permission.revoke",
+        resource_type="user",
+        resource_id=str(user.id),
+        payload={
+            "email": user.email,
+            "action": revoked_action,
+            "scope": revoked_scope,
+            "permission_id": str(permission_id),
+        },
+    )
+    await db.commit()
+
+    logger.info(
+        "Permission revoked via dash-settings",
+        extra={
+            "target_email": user.email,
+            "action": revoked_action,
+            "scope": revoked_scope,
+            "actor": admin.email,
+        },
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

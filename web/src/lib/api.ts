@@ -376,7 +376,9 @@ export type AuditAction =
   | 'settings.group.delete'
   | 'settings.user.create'
   | 'settings.user.update'
-  | 'settings.user.delete';
+  | 'settings.user.delete'
+  | 'settings.permission.grant'
+  | 'settings.permission.revoke';
 
 export const ALL_AUDIT_ACTIONS: ReadonlyArray<AuditAction> = [
   'command.issued',
@@ -391,6 +393,8 @@ export const ALL_AUDIT_ACTIONS: ReadonlyArray<AuditAction> = [
   'settings.user.create',
   'settings.user.update',
   'settings.user.delete',
+  'settings.permission.grant',
+  'settings.permission.revoke',
 ];
 
 export type AuditTargetType = 'command' | 'host' | 'enrollment' | 'user' | 'group';
@@ -576,6 +580,87 @@ export async function updateSettingsUser(
 export async function deleteSettingsUser(id: string, f?: FetchFn): Promise<void> {
   await request<unknown>(
     `/v1/dash/settings/users/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    { fetch: f },
+  );
+}
+
+// ---------- /v1/dash/settings/users/:id/permissions ----------
+//
+// Row-level per-action grants that layer on top of role + accessible_groups.
+// Admins implicitly hold every action and don't need rows; for non-admins
+// the server enforces these via rp_server.permissions.user_has_permission.
+
+/** Canonical action enum. Kept in sync with rp_server.permissions.ALLOWED_ACTIONS. */
+export type PermissionAction =
+  | 'command.issue'
+  | 'command.approve'
+  | 'host.delete'
+  | 'enroll.create';
+
+export const ALL_PERMISSION_ACTIONS: ReadonlyArray<PermissionAction> = [
+  'command.issue',
+  'command.approve',
+  'host.delete',
+  'enroll.create',
+];
+
+export interface UserPermission {
+  id: string;
+  user_id: string;
+  action: string;
+  scope: string;
+  granted_by: string;
+  granted_at: string;
+}
+
+export interface UserPermissionsResponse {
+  permissions: UserPermission[];
+  /** Server-supplied enum so the UI doesn't ship its own copy. */
+  allowed_actions: string[];
+}
+
+export interface GrantPermissionInput {
+  action: PermissionAction;
+  /** Group name pattern. ``*`` grants every scope. */
+  scope: string;
+}
+
+export async function listUserPermissions(
+  userId: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<UserPermissionsResponse> {
+  return request<UserPermissionsResponse>(
+    `/v1/dash/settings/users/${encodeURIComponent(userId)}/permissions`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function grantUserPermission(
+  userId: string,
+  input: GrantPermissionInput,
+  f?: FetchFn,
+): Promise<UserPermission> {
+  return request<UserPermission>(
+    `/v1/dash/settings/users/${encodeURIComponent(userId)}/permissions`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function revokeUserPermission(
+  userId: string,
+  permissionId: string,
+  f?: FetchFn,
+): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/settings/users/${encodeURIComponent(userId)}/permissions/${encodeURIComponent(permissionId)}`,
     { method: 'DELETE' },
     { fetch: f },
   );

@@ -352,6 +352,45 @@ class User(Base):
     )
 
 
+class UserPermission(Base):
+    """Row-level per-action grant for a dashboard user.
+
+    Sits below ``users.role`` (admin / operator / viewer) and
+    ``users.accessible_groups`` (group-level visibility): an explicit row
+    here grants a specific action (e.g. ``command.issue``,
+    ``command.approve``, ``host.delete``, ``enroll.create``) on a scope
+    (group name pattern or ``*``).
+
+    Admins (``users.role == 'admin'``) are implicitly granted every action
+    and don't need rows here — the permissions module short-circuits.
+    """
+
+    __tablename__ = "user_permissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    scope: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'*'"),
+    )
+    granted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    )
+
+
 class CanaryDeploy(Base):
     """Canary deployment tracking for agent upgrades.
 

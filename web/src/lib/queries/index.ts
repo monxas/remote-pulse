@@ -42,11 +42,14 @@ import {
   getEnrollLinks,
   getSettingsGroups,
   getSettingsUsers,
+  grantUserPermission,
   IN_FLIGHT_STATUSES,
   issueDashCommand,
+  listUserPermissions,
   rejectDashCommand,
   retryDashCommand,
   revokeEnrollLink,
+  revokeUserPermission,
   updateSettingsUser,
   type AuditListPage,
   type AuditQueryParams,
@@ -59,15 +62,20 @@ import {
   type EnrollLinkCreateInput,
   type EnrollLinkListResponse,
   type EnrollLinkOut,
+  type GrantPermissionInput,
   type HostStatus,
   type HostsList,
   type HostSummary,
   type IssueCommandInput,
   type PendingApprovalsResponse,
+  type SettingsGroup,
   type SettingsGroupsResponse,
+  type SettingsUser,
   type SettingsUsersResponse,
   type TimeseriesPayload,
   type UpdateUserInput,
+  type UserPermission,
+  type UserPermissionsResponse,
 } from '$lib/api';
 
 // ---- query keys ----
@@ -86,6 +94,8 @@ export const qk = {
   auditAll: () => ['audit'] as const,
   settingsGroups: () => ['settings', 'groups'] as const,
   settingsUsers: () => ['settings', 'users'] as const,
+  settingsUserPermissions: (userId: string) =>
+    ['settings', 'users', userId, 'permissions'] as const,
   settingsAll: () => ['settings'] as const,
   enrollLinks: () => ['enroll', 'links'] as const,
   enrollAll: () => ['enroll'] as const,
@@ -323,73 +333,354 @@ export function createSettingsUsersQuery() {
   });
 }
 
+// ---- Optimistic mutation helpers --------------------------------------- //
+//
+// All Settings mutations share the same shape:
+//   1. cancel in-flight refetches for the affected list so they don't
+//      stomp our optimistic update,
+//   2. snapshot the previous cache as the rollback target,
+//   3. patch the cache to reflect the pending change,
+//   4. on error -> restore the snapshot + surface a toast,
+//   5. on settle -> invalidate so the server's truth wins eventually.
+//
+// The patch helpers are pure functions exported for vitest coverage; they
+// take the raw cached payload (`old`) and the mutation input, and return
+// the next payload with the change applied. Keeping them pure means the
+// `onMutate` body stays tiny and we can unit-test the diff in isolation.
+
+export function patchGroupsAfterCreate(
+  old: SettingsGroupsResponse | undefined,
+  input: CreateGroupInput,
+): SettingsGroupsResponse {
+  const placeholder: SettingsGroup = {
+    name: input.name,
+    description: input.description ?? null,
+    host_count: 0,
+    user_count: 0,
+    auto_distribute_keys: true,
+    created_at: _nowIso(),
+  };
+  return { groups: [...(old?.groups ?? []), placeholder] };
+}
+
+export function patchGroupsAfterDelete(
+  old: SettingsGroupsResponse | undefined,
+  name: string,
+): SettingsGroupsResponse {
+  return { groups: (old?.groups ?? []).filter((g) => g.name !== name) };
+}
+
+export function patchUsersAfterCreate(
+  old: SettingsUsersResponse | undefined,
+  input: CreateUserInput,
+): SettingsUsersResponse {
+  // Placeholder id so the {#each} key tracking stays happy until the
+  // server response replaces the optimistic row on invalidation.
+  const placeholder: SettingsUser = {
+    id: `optimistic-${input.email}-${Date.now()}`,
+    email: input.email,
+    name: input.name ?? null,
+    role: input.role,
+    groups: input.groups,
+    is_active: true,
+    created_at: _nowIso(),
+    last_login_at: null,
+  };
+  return { users: [placeholder, ...(old?.users ?? [])] };
+}
+
+export function patchUsersAfterUpdate(
+  old: SettingsUsersResponse | undefined,
+  id: string,
+  input: UpdateUserInput,
+): SettingsUsersResponse {
+  return {
+    users: (old?.users ?? []).map((u) =>
+      u.id === id
+        ? {
+            ...u,
+            role: input.role ?? u.role,
+            groups: input.groups ?? u.groups,
+            is_active: input.is_active ?? u.is_active,
+          }
+        : u,
+    ),
+  };
+}
+
+export function patchUsersAfterDelete(
+  old: SettingsUsersResponse | undefined,
+  id: string,
+): SettingsUsersResponse {
+  return { users: (old?.users ?? []).filter((u) => u.id !== id) };
+}
+
 export function createCreateGroupMutation() {
   const client = useQueryClient();
-  return createMutation({
-    mutationFn: (input: CreateGroupInput) => createSettingsGroup(input),
+  return createMutation<
+    SettingsGroup,
+    Error,
+    CreateGroupInput,
+    { previous: SettingsGroupsResponse | undefined }
+  >({
+    mutationFn: (input) => createSettingsGroup(input),
+    onMutate: async (input) => {
+      await client.cancelQueries({ queryKey: qk.settingsGroups() });
+      const previous = client.getQueryData<SettingsGroupsResponse>(qk.settingsGroups());
+      client.setQueryData<SettingsGroupsResponse>(qk.settingsGroups(), (old) =>
+        patchGroupsAfterCreate(old, input),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) client.setQueryData(qk.settingsGroups(), ctx.previous);
+      toast.error('Could not create group', { description: err.message });
+    },
     onSuccess: () => {
       toast.success('Group created');
-      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
-    onError: (err: Error) => {
-      toast.error('Could not create group', { description: err.message });
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
   });
 }
 
 export function createDeleteGroupMutation() {
   const client = useQueryClient();
-  return createMutation({
-    mutationFn: (name: string) => deleteSettingsGroup(name),
+  return createMutation<
+    void,
+    Error,
+    string,
+    { previous: SettingsGroupsResponse | undefined }
+  >({
+    mutationFn: (name) => deleteSettingsGroup(name),
+    onMutate: async (name) => {
+      await client.cancelQueries({ queryKey: qk.settingsGroups() });
+      const previous = client.getQueryData<SettingsGroupsResponse>(qk.settingsGroups());
+      client.setQueryData<SettingsGroupsResponse>(qk.settingsGroups(), (old) =>
+        patchGroupsAfterDelete(old, name),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) client.setQueryData(qk.settingsGroups(), ctx.previous);
+      toast.error('Could not delete group', { description: err.message });
+    },
     onSuccess: () => {
       toast.success('Group deleted');
-      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
-    onError: (err: Error) => {
-      toast.error('Could not delete group', { description: err.message });
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
   });
 }
 
 export function createCreateUserMutation() {
   const client = useQueryClient();
-  return createMutation({
-    mutationFn: (input: CreateUserInput) => createSettingsUser(input),
+  return createMutation<
+    SettingsUser,
+    Error,
+    CreateUserInput,
+    { previous: SettingsUsersResponse | undefined }
+  >({
+    mutationFn: (input) => createSettingsUser(input),
+    onMutate: async (input) => {
+      await client.cancelQueries({ queryKey: qk.settingsUsers() });
+      const previous = client.getQueryData<SettingsUsersResponse>(qk.settingsUsers());
+      client.setQueryData<SettingsUsersResponse>(qk.settingsUsers(), (old) =>
+        patchUsersAfterCreate(old, input),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) client.setQueryData(qk.settingsUsers(), ctx.previous);
+      toast.error('Could not invite user', { description: err.message });
+    },
     onSuccess: () => {
       toast.success('User invited');
-      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
-    onError: (err: Error) => {
-      toast.error('Could not invite user', { description: err.message });
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
   });
 }
 
 export function createUpdateUserMutation() {
   const client = useQueryClient();
-  return createMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) =>
-      updateSettingsUser(id, input),
+  return createMutation<
+    SettingsUser,
+    Error,
+    { id: string; input: UpdateUserInput },
+    { previous: SettingsUsersResponse | undefined }
+  >({
+    mutationFn: ({ id, input }) => updateSettingsUser(id, input),
+    onMutate: async ({ id, input }) => {
+      await client.cancelQueries({ queryKey: qk.settingsUsers() });
+      const previous = client.getQueryData<SettingsUsersResponse>(qk.settingsUsers());
+      client.setQueryData<SettingsUsersResponse>(qk.settingsUsers(), (old) =>
+        patchUsersAfterUpdate(old, id, input),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) client.setQueryData(qk.settingsUsers(), ctx.previous);
+      toast.error('Could not update user', { description: err.message });
+    },
     onSuccess: () => {
       toast.success('User updated');
-      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
-    onError: (err: Error) => {
-      toast.error('Could not update user', { description: err.message });
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
   });
 }
 
 export function createDeleteUserMutation() {
   const client = useQueryClient();
-  return createMutation({
-    mutationFn: (id: string) => deleteSettingsUser(id),
+  return createMutation<
+    void,
+    Error,
+    string,
+    { previous: SettingsUsersResponse | undefined }
+  >({
+    mutationFn: (id) => deleteSettingsUser(id),
+    onMutate: async (id) => {
+      await client.cancelQueries({ queryKey: qk.settingsUsers() });
+      const previous = client.getQueryData<SettingsUsersResponse>(qk.settingsUsers());
+      client.setQueryData<SettingsUsersResponse>(qk.settingsUsers(), (old) =>
+        patchUsersAfterDelete(old, id),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.previous) client.setQueryData(qk.settingsUsers(), ctx.previous);
+      toast.error('Could not delete user', { description: err.message });
+    },
     onSuccess: () => {
       toast.success('User deleted');
+    },
+    onSettled: () => {
       void client.invalidateQueries({ queryKey: qk.settingsAll() });
     },
-    onError: (err: Error) => {
-      toast.error('Could not delete user', { description: err.message });
+  });
+}
+
+// ---- /v1/dash/settings/users/:id/permissions ---------------------------- //
+//
+// Row-level per-action grants (see server/src/rp_server/permissions.py).
+// The grant mutation accepts the current admin's email so the UI can
+// already render "granted by you" before the server roundtrip completes.
+
+const _nowIso = (): string => new Date().toISOString();
+
+export function patchPermissionsAfterGrant(
+  old: UserPermissionsResponse | undefined,
+  userId: string,
+  input: GrantPermissionInput,
+  actorEmail: string,
+): UserPermissionsResponse {
+  const placeholder: UserPermission = {
+    id: `optimistic-${input.action}-${input.scope}-${Date.now()}`,
+    user_id: userId,
+    action: input.action,
+    scope: input.scope,
+    granted_by: actorEmail,
+    granted_at: _nowIso(),
+  };
+  return {
+    permissions: [placeholder, ...(old?.permissions ?? [])],
+    allowed_actions: old?.allowed_actions ?? [],
+  };
+}
+
+export function patchPermissionsAfterRevoke(
+  old: UserPermissionsResponse | undefined,
+  permissionId: string,
+): UserPermissionsResponse {
+  return {
+    permissions: (old?.permissions ?? []).filter((p) => p.id !== permissionId),
+    allowed_actions: old?.allowed_actions ?? [],
+  };
+}
+
+export function createUserPermissionsQuery(userId: Readable<string>) {
+  return createQuery<UserPermissionsResponse>(
+    derived(userId, (id) => ({
+      queryKey: qk.settingsUserPermissions(id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        listUserPermissions(id, undefined, signal),
+      enabled: id.length > 0,
+      staleTime: 10_000,
+    })),
+  );
+}
+
+export function createGrantPermissionMutation(actorEmail: string) {
+  const client = useQueryClient();
+  return createMutation<
+    UserPermission,
+    Error,
+    { userId: string; input: GrantPermissionInput },
+    { previous: UserPermissionsResponse | undefined; userId: string }
+  >({
+    mutationFn: ({ userId, input }) => grantUserPermission(userId, input),
+    onMutate: async ({ userId, input }) => {
+      const key = qk.settingsUserPermissions(userId);
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<UserPermissionsResponse>(key);
+      client.setQueryData<UserPermissionsResponse>(key, (old) =>
+        patchPermissionsAfterGrant(old, userId, input, actorEmail),
+      );
+      return { previous, userId };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx) {
+        client.setQueryData(qk.settingsUserPermissions(ctx.userId), ctx.previous);
+      }
+      toast.error('Could not grant permission', { description: err.message });
+    },
+    onSuccess: () => {
+      toast.success('Permission granted');
+    },
+    onSettled: (_data, _err, vars) => {
+      void client.invalidateQueries({
+        queryKey: qk.settingsUserPermissions(vars.userId),
+      });
+    },
+  });
+}
+
+export function createRevokePermissionMutation() {
+  const client = useQueryClient();
+  return createMutation<
+    void,
+    Error,
+    { userId: string; permissionId: string },
+    { previous: UserPermissionsResponse | undefined; userId: string }
+  >({
+    mutationFn: ({ userId, permissionId }) => revokeUserPermission(userId, permissionId),
+    onMutate: async ({ userId, permissionId }) => {
+      const key = qk.settingsUserPermissions(userId);
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<UserPermissionsResponse>(key);
+      client.setQueryData<UserPermissionsResponse>(key, (old) =>
+        patchPermissionsAfterRevoke(old, permissionId),
+      );
+      return { previous, userId };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx) {
+        client.setQueryData(qk.settingsUserPermissions(ctx.userId), ctx.previous);
+      }
+      toast.error('Could not revoke permission', { description: err.message });
+    },
+    onSuccess: () => {
+      toast.success('Permission revoked');
+    },
+    onSettled: (_data, _err, vars) => {
+      void client.invalidateQueries({
+        queryKey: qk.settingsUserPermissions(vars.userId),
+      });
     },
   });
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    Key,
     Loader2,
     Plus,
     Trash2,
@@ -7,6 +8,7 @@
     FolderKanban,
     ShieldCheck,
   } from '@lucide/svelte';
+  import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -131,6 +133,15 @@
     const ok = window.confirm(`Delete user "${u.email}"? They will lose dashboard access.`);
     if (ok) $deleteUser.mutate(u.id);
   }
+
+  // ---- Permissions modal ----
+  let permsOpen = $state(false);
+  let permsTarget = $state<SettingsUser | null>(null);
+
+  function openPermissions(u: SettingsUser): void {
+    permsTarget = u;
+    permsOpen = true;
+  }
 </script>
 
 <svelte:head>
@@ -142,8 +153,8 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
       <p class="text-sm text-muted">
-        Manage groups and dashboard users. Admin only — row-level ACL and audit trail of changes
-        ship in a follow-up phase.
+        Manage groups, dashboard users, and row-level permissions. Admin only — changes are
+        captured in the audit trail.
       </p>
     </div>
     <Badge variant="default" class="self-start sm:self-end">
@@ -330,6 +341,15 @@
                         <Button
                           variant="ghost"
                           size="sm"
+                          onclick={() => openPermissions(u)}
+                          title="Manage row-level permissions"
+                          data-testid="perms-btn"
+                        >
+                          <Key class="size-4" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onclick={() => confirmDeleteUser(u)}
                           disabled={$deleteUser.isPending}
                           title="Delete user"
@@ -381,6 +401,14 @@
     </form>
   </DialogContent>
 </Dialog>
+
+<!-- ====================== Dialog: Permissions ====================== -->
+<PermissionsDialog
+  bind:open={permsOpen}
+  onOpenChange={(o) => (permsOpen = o)}
+  user={permsTarget}
+  groups={groupNames}
+/>
 
 <!-- ====================== Dialog: New user ====================== -->
 <Dialog bind:open={newUserOpen} onOpenChange={(o) => (newUserOpen = o)}>
