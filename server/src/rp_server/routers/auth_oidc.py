@@ -192,7 +192,29 @@ async def logout(request: Request):
 
 @router.get("/me")
 async def me(request: Request):
-    """Debug whoami: returns whatever is in the session."""
+    """Debug whoami: returns whatever is in the session.
+
+    Honors the same Lighthouse CI bypass as ``current_user``: if the env
+    var ``RP_LIGHTHOUSE_BYPASS_TOKEN`` is set AND the request carries
+    ``X-RP-Test-Auth: <that token>``, return a synthetic authenticated
+    payload so the SvelteKit shell skips the redirect-to-login boot path
+    and Lighthouse can audit the real authed pages. TEST/CI only — the
+    env-gate makes a stray header in prod a no-op. See
+    ``rp_server.deps._maybe_lighthouse_bypass_user``.
+    """
+    from rp_server.deps import _LIGHTHOUSE_SYNTH_USER_ID, _maybe_lighthouse_bypass_user
+
+    lh_user = _maybe_lighthouse_bypass_user(request.headers.get("X-RP-Test-Auth"))
+    if lh_user is not None:
+        return JSONResponse(
+            {
+                "user_id": str(_LIGHTHOUSE_SYNTH_USER_ID),
+                "user_email": lh_user.email,
+                "user_role": lh_user.role,
+                "authenticated": True,
+            }
+        )
+
     return JSONResponse(
         {
             "user_id": request.session.get("user_id"),

@@ -2,6 +2,8 @@
 
 import hmac
 import logging
+import os
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -18,6 +20,55 @@ logger = logging.getLogger(__name__)
 def _safe_str_compare(a: str, b: str) -> bool:
     """Constant-time string comparison to avoid timing oracle on bearer tokens."""
     return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
+# Stable UUID for the synthetic Lighthouse user. Tests / Lighthouse runs see
+# the same id across requests but it's NEVER persisted to the DB.
+_LIGHTHOUSE_SYNTH_USER_ID = uuid.UUID("00000000-0000-0000-0000-00000000000a")
+
+
+def _maybe_lighthouse_bypass_user(x_rp_test_auth: str | None):
+    """Return a synthetic admin User if the lighthouse bypass is active.
+
+    TEST / CI ONLY — NEVER set ``RP_LIGHTHOUSE_BYPASS_TOKEN`` in production.
+
+    Gated on TWO conditions:
+        1. Env var ``RP_LIGHTHOUSE_BYPASS_TOKEN`` is set (server-side opt-in).
+        2. Request carries ``X-RP-Test-Auth: <that token>``.
+
+    Both must hold. A stray header in prod is harmless because (1) is not
+    satisfied. The token is checked with ``hmac.compare_digest`` to avoid
+    timing oracles.
+
+    Returns a transient (non-persisted) ``User`` instance with role=admin and
+    ``accessible_groups=["*"]`` so Lighthouse can render any route without
+    talking to Postgres or PocketID. The User is never added to the session,
+    so any code that mutates and commits it will fail loudly (intentional —
+    bypass is read-only).
+    """
+    if not x_rp_test_auth:
+        return None
+    expected = os.environ.get("RP_LIGHTHOUSE_BYPASS_TOKEN")
+    if not expected:
+        return None
+    if not _safe_str_compare(x_rp_test_auth, expected):
+        return None
+
+    from rp_server.models import User
+
+    user = User(
+        id=_LIGHTHOUSE_SYNTH_USER_ID,
+        pocketid_sub="lighthouse-synthetic",
+        email="lighthouse@test",
+        name="Lighthouse Test User",
+        role="admin",
+        accessible_groups=["*"],
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        last_login_at=datetime.now(timezone.utc),
+    )
+    logger.info("Lighthouse bypass auth accepted (TEST/CI only)")
+    return user
 
 
 class TailscaleIdentity(BaseModel):
@@ -110,6 +161,7 @@ async def current_user(
     x_forwarded_email: Annotated[str | None, Header()] = None,
     x_forwarded_preferred_username: Annotated[str | None, Header()] = None,
     authorization: Annotated[str | None, Header()] = None,
+    x_rp_test_auth: Annotated[str | None, Header()] = None,
 ):
     """Resolve authenticated user from Caddy forward_auth PocketID headers.
 
@@ -129,9 +181,22 @@ async def current_user(
     source (same gate as above), we resolve to the admin identified by
     `emergency_admin_email`. This is break-glass auth when PocketID is down.
 
+    Lighthouse bypass (CI ONLY): if env ``RP_LIGHTHOUSE_BYPASS_TOKEN`` is set
+    AND the request carries ``X-RP-Test-Auth: <that token>``, we resolve to
+    a synthetic admin user without touching the DB. The env-gate ensures a
+    stray header in prod requests is harmless. See
+    ``_maybe_lighthouse_bypass_user`` docstring for the security model.
+
     On first login, creates user record with default viewer role.
     """
     from rp_server.models import User
+
+    # --- Lighthouse bypass (CI only, env-gated) ---
+    # Checked first so test/CI runs are independent of the trusted-proxy
+    # logic below (Lighthouse runs from arbitrary IPs on GH runners).
+    lh_user = _maybe_lighthouse_bypass_user(x_rp_test_auth)
+    if lh_user is not None:
+        return lh_user
 
     # --- Trusted-proxy gate (anti-spoofing) ---
     client_host = request.client.host if request.client else None
@@ -276,6 +341,7 @@ async def current_user_optional(
     x_forwarded_email: Annotated[str | None, Header()] = None,
     x_forwarded_preferred_username: Annotated[str | None, Header()] = None,
     authorization: Annotated[str | None, Header()] = None,
+    x_rp_test_auth: Annotated[str | None, Header()] = None,
 ):
     """Optional current_user: returns User or None.
 
@@ -291,6 +357,7 @@ async def current_user_optional(
             x_forwarded_email=x_forwarded_email,
             x_forwarded_preferred_username=x_forwarded_preferred_username,
             authorization=authorization,
+            x_rp_test_auth=x_rp_test_auth,
         )
     except HTTPException as e:
         if e.status_code == status.HTTP_401_UNAUTHORIZED:
