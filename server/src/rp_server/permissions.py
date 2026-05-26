@@ -25,10 +25,19 @@ Design notes
 
 Wired enforcement
 -----------------
-Today only ``POST /v1/admin/commands`` consults this module (see
-``routers/commands.py``). The other privileged endpoints still rely on
-``role`` + ``accessible_groups`` — they will migrate to ``require_permission``
-as the rest of ADR-0009 lands.
+The following endpoints consult this module:
+
+- ``POST /v1/admin/commands`` -> ``command.issue`` (see
+  ``routers/commands.py``).
+- ``POST /v1/dash/approvals/{id}/approve`` and
+  ``POST /v1/dash/approvals/{id}/reject`` -> ``command.approve`` (see
+  ``routers/dash_commands.py``).
+- ``POST /v1/dash/enroll/links`` -> ``enroll.create`` (see
+  ``routers/dash_enroll.py``).
+
+``host.delete`` is reserved in :data:`ALLOWED_ACTIONS` but no HTTP
+endpoint surfaces it today. The slot exists so the Settings UI can grant
+it ahead of the eventual ``DELETE /v1/dash/hosts/{id}`` landing.
 """
 
 from __future__ import annotations

@@ -1,16 +1,24 @@
 """Tests for row-level user_permissions (ADR-0009 Settings polish).
 
 Covers the new ``/v1/dash/settings/users/{id}/permissions`` endpoints and
-the enforcement they unlock on ``POST /v1/admin/commands``:
+the enforcement they unlock on the privileged endpoints:
 
 - admin grant / list / revoke happy paths
 - non-admin gets 403 on every endpoint
 - duplicate grant -> 409
 - unknown action -> 422 (Pydantic enum guard)
-- ``command.issue`` gate:
+- ``command.issue`` gate (POST /v1/admin/commands):
     - admin always passes
     - operator without permission -> 403
     - operator with permission scoped to host's group -> 201
+- ``command.approve`` gate (POST /v1/dash/approvals/{id}/approve|reject):
+    - admin always passes
+    - operator without permission -> 403
+    - wildcard / scoped grants behave consistently with the resolver
+- ``enroll.create`` gate (POST /v1/dash/enroll/links):
+    - admin always passes
+    - operator without permission -> 403
+    - wildcard / scoped grants behave consistently with the resolver
 
 We reuse the same dependency-override pattern as ``test_dash_settings.py``:
 the ``current_user`` dep is swapped at app level which propagates through
@@ -20,7 +28,7 @@ the ``current_user`` dep is swapped at app level which propagates through
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -28,9 +36,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rp_server.config import settings as _settings
 from rp_server.deps import current_user
 from rp_server.main import app
-from rp_server.models import Group, Host, User, UserPermission
+from rp_server.models import Command, Group, Host, User, UserPermission
 from rp_server.permissions import (
     ALLOWED_ACTIONS,
     is_action_allowed,
@@ -444,6 +453,294 @@ async def test_operator_with_wrong_scope_blocked(
         r = await client.post(
             "/v1/admin/commands",
             json=await _issue_command_payload(host.id),
+        )
+        assert r.status_code == 403, r.text
+    finally:
+        _clear_user_override()
+
+
+# --------------------------------------------------------------------------- #
+# Enforcement on POST /v1/dash/approvals/{id}/approve|reject
+#
+# ``approval_id`` is the command id (see dash_commands._resolve_approval). We
+# seed a Command in "pending approval" state (approval_token set,
+# human_approved=False, rejected_reason=None) and exercise both decisions.
+# --------------------------------------------------------------------------- #
+
+
+async def _make_pending_command(
+    db: AsyncSession,
+    *,
+    host: Host,
+    issued_by: str = "admin@test.local",
+) -> Command:
+    """Insert a Command in the 'awaiting approval' state for the given host."""
+    now = datetime.now(timezone.utc)
+    cmd = Command(
+        host_id=host.id,
+        issued_by=issued_by,
+        command_type="exec_shell",
+        command_payload={"cmd": "uptime"},
+        server_signature="sig-stub",  # not validated by the approve endpoint
+        human_approved=False,
+        approval_token=uuid.uuid4(),
+        approval_requested_at=now,
+    )
+    db.add(cmd)
+    await db.commit()
+    await db.refresh(cmd)
+    return cmd
+
+
+@pytest.mark.asyncio
+async def test_admin_can_approve_without_grant(
+    client: AsyncClient, test_db: AsyncSession
+) -> None:
+    admin = await _make_user(test_db, role="admin")
+    await _make_group(test_db, "prod")
+    host = await _make_host(test_db, hostname="h-approve-admin", group="prod")
+    cmd = await _make_pending_command(test_db, host=host)
+
+    _override_user(admin)
+    try:
+        r = await client.post(
+            f"/v1/dash/approvals/{cmd.id}/approve",
+            json={"reason": "lgtm"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved"
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_without_approve_permission_blocked(
+    client: AsyncClient, test_db: AsyncSession
+) -> None:
+    # ``accessible_groups`` includes the host's group so the 404 visibility
+    # guard in _load_command_for_user does not short-circuit the test; the
+    # only thing standing between the operator and a 200 is the new ACL.
+    op = await _make_user(test_db, role="operator", groups=["prod"])
+    await _make_group(test_db, "prod")
+    host = await _make_host(test_db, hostname="h-approve-op-deny", group="prod")
+    cmd = await _make_pending_command(test_db, host=host)
+
+    _override_user(op)
+    try:
+        r = await client.post(
+            f"/v1/dash/approvals/{cmd.id}/approve",
+            json={"reason": "lgtm"},
+        )
+        assert r.status_code == 403, r.text
+        assert "command.approve" in r.json()["detail"]
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_with_wildcard_can_approve(
+    client: AsyncClient, test_db: AsyncSession
+) -> None:
+    op = await _make_user(test_db, role="operator", groups=["prod"])
+    await _make_group(test_db, "prod")
+    host = await _make_host(test_db, hostname="h-approve-wild", group="prod")
+    cmd = await _make_pending_command(test_db, host=host)
+    test_db.add(
+        UserPermission(
+            user_id=op.id,
+            action="command.approve",
+            scope="*",
+            granted_by="admin@test.local",
+        )
+    )
+    await test_db.commit()
+
+    _override_user(op)
+    try:
+        r = await client.post(
+            f"/v1/dash/approvals/{cmd.id}/approve",
+            json={"reason": "lgtm"},
+        )
+        assert r.status_code == 200, r.text
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_with_scoped_grant_can_reject(
+    client: AsyncClient, test_db: AsyncSession
+) -> None:
+    # Use the reject endpoint to exercise the second wrapper too; both must
+    # share the same ``command.approve`` permission.
+    op = await _make_user(test_db, role="operator", groups=["prod"])
+    await _make_group(test_db, "prod")
+    host = await _make_host(test_db, hostname="h-reject-scoped", group="prod")
+    cmd = await _make_pending_command(test_db, host=host)
+    test_db.add(
+        UserPermission(
+            user_id=op.id,
+            action="command.approve",
+            scope="prod",
+            granted_by="admin@test.local",
+        )
+    )
+    await test_db.commit()
+
+    _override_user(op)
+    try:
+        r = await client.post(
+            f"/v1/dash/approvals/{cmd.id}/reject",
+            json={"reason": "no thanks"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "rejected"
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_with_wrong_scope_blocked_from_approve(
+    client: AsyncClient, test_db: AsyncSession
+) -> None:
+    op = await _make_user(test_db, role="operator", groups=["prod", "stage"])
+    await _make_group(test_db, "prod")
+    await _make_group(test_db, "stage")
+    host = await _make_host(test_db, hostname="h-approve-wrong", group="prod")
+    cmd = await _make_pending_command(test_db, host=host)
+    # Grant scoped to stage only — host lives in prod, so resolution must fail.
+    test_db.add(
+        UserPermission(
+            user_id=op.id,
+            action="command.approve",
+            scope="stage",
+            granted_by="admin@test.local",
+        )
+    )
+    await test_db.commit()
+
+    _override_user(op)
+    try:
+        r = await client.post(
+            f"/v1/dash/approvals/{cmd.id}/approve",
+            json={"reason": "lgtm"},
+        )
+        assert r.status_code == 403, r.text
+    finally:
+        _clear_user_override()
+
+
+# --------------------------------------------------------------------------- #
+# Enforcement on POST /v1/dash/enroll/links
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def _allowlisted_server_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force ``server_url`` into the dash_enroll install allowlist."""
+    monkeypatch.setattr(_settings, "server_url", "https://rp.monxas.casa")
+
+
+@pytest.mark.asyncio
+async def test_admin_can_create_enroll_link_without_grant(
+    client: AsyncClient,
+    test_db: AsyncSession,
+    _allowlisted_server_url: None,
+) -> None:
+    admin = await _make_user(test_db, role="admin")
+    _override_user(admin)
+    try:
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "family", "ttl_hours": 6, "max_uses": 1},
+        )
+        assert r.status_code == 201, r.text
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_without_enroll_permission_blocked(
+    client: AsyncClient,
+    test_db: AsyncSession,
+    _allowlisted_server_url: None,
+) -> None:
+    op = await _make_user(test_db, role="operator", groups=["family"])
+    _override_user(op)
+    try:
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "family", "ttl_hours": 6, "max_uses": 1},
+        )
+        assert r.status_code == 403, r.text
+        assert "enroll.create" in r.json()["detail"]
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_with_wildcard_can_create_enroll_link(
+    client: AsyncClient,
+    test_db: AsyncSession,
+    _allowlisted_server_url: None,
+) -> None:
+    op = await _make_user(test_db, role="operator", groups=["family"])
+    test_db.add(
+        UserPermission(
+            user_id=op.id,
+            action="enroll.create",
+            scope="*",
+            granted_by="admin@test.local",
+        )
+    )
+    await test_db.commit()
+
+    _override_user(op)
+    try:
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "family", "ttl_hours": 6, "max_uses": 1},
+        )
+        assert r.status_code == 201, r.text
+        # Wildcard also works for a different group
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "rfrobredo", "ttl_hours": 6, "max_uses": 1},
+        )
+        assert r.status_code == 201, r.text
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_operator_with_scoped_grant_can_create_for_that_group_only(
+    client: AsyncClient,
+    test_db: AsyncSession,
+    _allowlisted_server_url: None,
+) -> None:
+    op = await _make_user(test_db, role="operator", groups=["family", "prod"])
+    test_db.add(
+        UserPermission(
+            user_id=op.id,
+            action="enroll.create",
+            scope="family",
+            granted_by="admin@test.local",
+        )
+    )
+    await test_db.commit()
+
+    _override_user(op)
+    try:
+        # Matching scope -> 201
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "family", "ttl_hours": 6, "max_uses": 1},
+        )
+        assert r.status_code == 201, r.text
+
+        # Non-matching scope -> 403
+        r = await client.post(
+            "/v1/dash/enroll/links",
+            json={"group_name": "prod", "ttl_hours": 6, "max_uses": 1},
         )
         assert r.status_code == 403, r.text
     finally:
