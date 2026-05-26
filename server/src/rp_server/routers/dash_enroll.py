@@ -297,9 +297,16 @@ async def revoke_enroll_link(
     token_jti: str,
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
-    _admin: Annotated[User, Depends(require_admin)] = None,
 ) -> Response:
     """Soft-revoke an enrollment link.
+
+    Row-level ACL: admins bypass, everyone else needs the
+    ``enroll.revoke`` permission scoped to the *enrollment's*
+    ``group_name`` (or ``*``). ``enroll.create`` and ``enroll.revoke``
+    are separate actions on purpose — an operator may issue links
+    without being trusted to revoke them, or vice versa. 404 wins over
+    403: we resolve the row first so an operator can't probe for
+    arbitrary jtis via the permission check.
 
     Sets ``expires_at = now()`` and bumps ``used_count`` to ``max_uses`` so
     the row stays around for audit but the agent-side validator refuses to
@@ -311,6 +318,25 @@ async def revoke_enroll_link(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Enrollment link {token_jti!r} not found",
+        )
+
+    if not await user_has_permission(
+        db, user, "enroll.revoke", enrollment.group_name
+    ):
+        logger.warning(
+            "enroll.revoke denied by row-level ACL: user=%s role=%s "
+            "token_jti=%s group=%s",
+            user.email,
+            user.role,
+            token_jti,
+            enrollment.group_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Missing 'enroll.revoke' permission for this link's group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
         )
 
     enrollment.expires_at = datetime.now(timezone.utc)

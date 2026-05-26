@@ -605,13 +605,15 @@ export type PermissionAction =
   | 'command.issue'
   | 'command.approve'
   | 'host.delete'
-  | 'enroll.create';
+  | 'enroll.create'
+  | 'enroll.revoke';
 
 export const ALL_PERMISSION_ACTIONS: ReadonlyArray<PermissionAction> = [
   'command.issue',
   'command.approve',
   'host.delete',
   'enroll.create',
+  'enroll.revoke',
 ];
 
 export interface UserPermission {

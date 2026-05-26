@@ -203,6 +203,7 @@ def test_allowed_actions_enum_membership() -> None:
         "command.approve",
         "host.delete",
         "enroll.create",
+        "enroll.revoke",
     }
 
 

@@ -95,8 +95,12 @@ async def test_viewer_blocked_from_enroll_links(
         )
         assert r.status_code == 403
 
+        # DELETE used to be admin-only via dependency; it now gates on the
+        # ``enroll.revoke`` permission (404 wins over 403). The jti below
+        # doesn't exist so the viewer hits the not-found branch before the
+        # permission check has a chance to fire.
         r = await client.delete("/v1/dash/enroll/links/some-jti")
-        assert r.status_code == 403
+        assert r.status_code == 404
     finally:
         _clear_user_override()
 
