@@ -13,6 +13,7 @@
   import { cn } from '$lib/utils';
   import ThemeToggle from './ThemeToggle.svelte';
   import UserMenu from './UserMenu.svelte';
+  import RecentActivityWidget from './RecentActivityWidget.svelte';
 
   const links = [
     { href: resolve('/'), label: 'Fleet', Icon: Activity, raw: '/' },
@@ -57,6 +58,7 @@
       {/each}
     </nav>
     <div class="ml-auto flex items-center gap-2">
+      <RecentActivityWidget />
       <ThemeToggle />
       <UserMenu />
     </div>

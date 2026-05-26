@@ -5,6 +5,7 @@
   import { QueryClientProvider } from '@tanstack/svelte-query';
   import NavBar from '$lib/components/app/NavBar.svelte';
   import CommandPalette from '$lib/components/app/CommandPalette.svelte';
+  import LiveToasts from '$lib/components/app/LiveToasts.svelte';
   import { Toaster } from '$lib/components/ui/sonner';
   import { queryClient } from '$lib/queries/client';
   import { useLiveStream } from '$lib/queries/sse.svelte';
@@ -34,5 +35,6 @@
     </footer>
   </div>
   <CommandPalette />
+  <LiveToasts />
 </QueryClientProvider>
 <Toaster />
