@@ -11,6 +11,7 @@
     open: 'Live',
     reconnecting: 'Reconnecting…',
     disabled: 'Polling',
+    failed: 'Offline',
   };
 
   const dot: Record<SseState, string> = {
@@ -19,6 +20,7 @@
     open: 'bg-success animate-pulse',
     reconnecting: 'bg-warn animate-pulse',
     disabled: 'bg-muted',
+    failed: 'bg-danger',
   };
 
   const tone: Record<SseState, string> = {
@@ -27,6 +29,7 @@
     open: 'text-success-text',
     reconnecting: 'text-warn-text',
     disabled: 'text-muted',
+    failed: 'text-danger-text',
   };
 </script>
 
