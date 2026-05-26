@@ -5,13 +5,33 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class EnrollRequest(BaseModel):
-    """Agent enrollment request payload."""
+    """Agent enrollment request payload.
 
-    token: str = Field(description="JWT enrollment token")
+    Exactly one of ``token`` (legacy JWT) or ``code`` (short enrollment code)
+    must be supplied — agents installed against newer servers use ``code``,
+    older agents and the deprecated install path keep using ``token``.
+    """
+
+    token: str | None = Field(
+        default=None,
+        description=(
+            "DEPRECATED — legacy JWT enrollment token. Provide either this "
+            "or ``code`` (not both). Removed in a future major version."
+        ),
+    )
+    code: str | None = Field(
+        default=None,
+        description=(
+            "Short enrollment code, accepted with or without dash and case-"
+            "insensitive (e.g. ``K7M-X3F``, ``k7mx3f``, ``K7MX3F``). "
+            "Mutually exclusive with ``token``."
+        ),
+        max_length=32,
+    )
     hostname: str = Field(min_length=1, max_length=255)
     group: str = Field(default="default", max_length=100)
     host_fingerprint: str = Field(
@@ -23,6 +43,36 @@ class EnrollRequest(BaseModel):
     arch: str = Field(examples=["x86_64", "arm64"])
     distro: str | None = Field(default=None, examples=["debian-12", "macos-14", "win-11"])
     agent_version: str
+
+    @field_validator("code")
+    @classmethod
+    def _strip_code(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        # Empty string after the user typed a dashed form is meaningless —
+        # surface as "absent" so the cross-field validator below complains
+        # consistently.
+        v = v.strip()
+        return v or None
+
+    @model_validator(mode="after")
+    def _one_credential(self) -> "EnrollRequest":
+        # XOR: exactly one of token / code must be provided. We deliberately
+        # raise ``ValueError`` so FastAPI turns it into a 422 with a clean
+        # ``detail`` path — the same UX as any other field validation error.
+        has_token = bool(self.token)
+        has_code = bool(self.code)
+        if has_token and has_code:
+            raise ValueError(
+                "Provide exactly one of 'token' (legacy JWT) or 'code' "
+                "(short enrollment code), not both."
+            )
+        if not has_token and not has_code:
+            raise ValueError(
+                "Missing enrollment credential: provide 'code' (preferred) "
+                "or legacy 'token'."
+            )
+        return self
 
 
 class AgentConfig(BaseModel):

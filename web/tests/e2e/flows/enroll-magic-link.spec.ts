@@ -49,16 +49,25 @@ test.describe('flow: issue + revoke enroll magic-link', () => {
     );
 
     const issuedAt = '2026-05-26T00:00:00Z';
-    const expiresAt = new Date(Date.now() + 6 * 3_600_000).toISOString();
+    // Default TTL is now 5 minutes; the test selects "30 min" via the
+    // preset dropdown to mirror a realistic operator flow.
+    const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
     const issuedLink = {
-      url: 'https://rp.example/install/abc',
-      install_url_windows: 'https://rp.example/install/abc.ps1',
+      // New short-code fields (preferred surface).
+      code: 'K7M-X3F',
+      install_url: 'curl https://rp.example/install | sh -s -- --code=K7M-X3F',
+      install_url_windows_short:
+        "$env:RP_CODE='K7M-X3F'; iwr -useb https://rp.example/install.ps1 | iex",
+      // Legacy fields kept for back-compat (still emitted by server).
+      url: 'https://rp.example/install?token=eyJfake.jwt.payload',
+      install_url_windows: 'https://rp.example/install.ps1?token=eyJfake.jwt.payload',
       token: 'eyJfake.jwt.payload',
       token_jti: 'jti-new-1',
       group_name: 'family',
       issued_by: 'admin@test.local',
       expires_at: expiresAt,
-      expires_in_hours: 6,
+      expires_in_seconds: 1800,
+      expires_in_hours: 0,
       max_uses: 1,
       used_count: 0,
       label: 'Mac mini test',
@@ -84,6 +93,8 @@ test.describe('flow: issue + revoke enroll magic-link', () => {
         activeLinks = [
           {
             token_jti: issuedLink.token_jti,
+            code: issuedLink.code,
+            install_url_short: issuedLink.install_url,
             group_name: issuedLink.group_name,
             issued_by: issuedLink.issued_by,
             expires_at: issuedLink.expires_at,
@@ -111,31 +122,41 @@ test.describe('flow: issue + revoke enroll magic-link', () => {
     await page.goto('enroll');
     await expect(page.getByTestId('enroll-page')).toBeVisible();
 
-    // Fill form: pick `family`, leave TTL/max-uses defaults, add a label.
+    // Fill form: pick `family`, choose the "30 min" preset, add a label.
     await page.getByTestId('enroll-group').selectOption('family');
-    await page.getByTestId('enroll-ttl').fill('6');
+    // TTL is now a <select> of presets (5/30/120/1440 min). Pick 30 min.
+    await page.getByTestId('enroll-ttl').selectOption('30');
     await page.getByTestId('enroll-max-uses').fill('1');
     await page.getByTestId('enroll-label').fill('Mac mini test');
 
-    await page.getByRole('button', { name: /Generate magic-link/i }).click();
+    await page.getByRole('button', { name: /Generate code/i }).click();
 
-    // POST fired, result card shows the URL + a Copy button.
+    // POST fired, result card shows the hero short code + the install command.
     await expect.poll(() => createCount).toBe(1);
     await expect(page.getByTestId('enroll-result-card')).toBeVisible();
-    await expect(page.getByTestId('enroll-url')).toContainText(issuedLink.url);
-    // Restored to data-testid now that Button spreads `...rest`.
-    await expect(page.getByTestId('enroll-copy-unix')).toBeVisible();
+    await expect(page.getByTestId('enroll-code-hero')).toContainText(issuedLink.code);
+    await expect(page.getByTestId('enroll-install-cmd')).toContainText(
+      '--code=K7M-X3F',
+    );
+    await expect(page.getByTestId('enroll-copy-install')).toBeVisible();
+    // Live countdown should render in m / m:ss form (e.g. "29m 59s" or "29m").
+    await expect(page.getByTestId('enroll-countdown')).toContainText(/\d+m/);
 
-    // The active-links table now has exactly one row.
+    // The active-links table now has exactly one row with the code surfaced.
     await expect(page.getByTestId('enroll-link-row')).toHaveCount(1);
+    await expect(page.getByTestId('enroll-row-code')).toContainText('K7M-X3F');
     await expect(page.getByTestId('enroll-link-row').getByText('family')).toBeVisible();
+
+    // Legacy JWT URL is still reachable inside the collapsible "Advanced" section.
+    await page.getByTestId('enroll-legacy-details').click();
+    await expect(page.getByTestId('enroll-url')).toContainText(issuedLink.url);
 
     // Revoke it — the page calls `window.confirm()` which we auto-accept.
     await page.getByTestId('enroll-revoke-btn').click();
     await expect.poll(() => revokeCount).toBe(1);
     await expect(page.getByTestId('enroll-link-row')).toHaveCount(0);
     await expect(
-      page.getByText('No active magic-links. Generate one above to enroll a new agent.'),
+      page.getByText('No active codes. Generate one above to enroll a new agent.'),
     ).toBeVisible();
   });
 });

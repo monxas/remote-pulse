@@ -8,7 +8,11 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from rp_server.auth import decode_enrollment_token, validate_token_claims
+from rp_server.auth import (
+    decode_enrollment_token,
+    normalize_short_code,
+    validate_token_claims,
+)
 from rp_server.config import settings
 from rp_server.database import DbSession
 from rp_server.integrations.tailscale_api import (
@@ -50,46 +54,80 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
     F1: Returns basic config without Tailscale authkey.
     F2 TODO: Generate and return ephemeral Tailscale authkey.
     """
-    # Decode and validate JWT
-    try:
-        payload = decode_enrollment_token(request.token)
-        validate_token_claims(payload)
-    except JWTError as e:
-        from rp_server.metrics_exporter import record_enroll_failure
+    # Resolve enrollment row by either credential. The pydantic model
+    # already enforced XOR (exactly one of token / code), so we can rely
+    # on that here.
+    enrollment: Enrollment | None
+    token_group: str
+    jti: str
 
-        record_enroll_failure("unknown", "invalid_token")
-        logger.warning("Invalid enrollment token", exc_info=e)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired enrollment token",
-        )
-    except ValueError as e:
-        from rp_server.metrics_exporter import record_enroll_failure
+    if request.code is not None:
+        # Short-code path: normalise to canonical form (uppercase, no dash)
+        # then look up. We do NOT decode a JWT — the row itself is the
+        # credential, and the partial unique index guarantees at most one
+        # active row per canonical code.
+        canonical = normalize_short_code(request.code)
+        stmt = select(Enrollment).where(Enrollment.short_code == canonical)
+        result = await db.execute(stmt)
+        enrollment = result.scalar_one_or_none()
 
-        record_enroll_failure("unknown", "missing_claims")
-        logger.warning("Token missing required claims", exc_info=e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+        if not enrollment:
+            from rp_server.metrics_exporter import record_enroll_failure
 
-    jti = payload["jti"]
-    token_group = payload["group_name"]
+            record_enroll_failure("unknown", "invalid_code")
+            logger.warning("Invalid enrollment code", extra={"code_len": len(canonical)})
+            # Match the JWT path's status code so install scripts can
+            # report a single "Invalid or expired enrollment credential"
+            # error regardless of which path the user took.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or expired enrollment code",
+            )
+        token_group = enrollment.group_name
+        jti = enrollment.token_jti
+    else:
+        # Legacy JWT path. ``request.token`` is guaranteed non-None by the
+        # XOR validator on EnrollRequest.
+        assert request.token is not None  # narrow for type checker
+        try:
+            payload = decode_enrollment_token(request.token)
+            validate_token_claims(payload)
+        except JWTError as e:
+            from rp_server.metrics_exporter import record_enroll_failure
 
-    # Check enrollment record exists and is valid
-    # (max_uses lives in DB row, not trusted from token claims)
-    stmt = select(Enrollment).where(Enrollment.token_jti == jti)
-    result = await db.execute(stmt)
-    enrollment = result.scalar_one_or_none()
+            record_enroll_failure("unknown", "invalid_token")
+            logger.warning("Invalid enrollment token", exc_info=e)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired enrollment token",
+            )
+        except ValueError as e:
+            from rp_server.metrics_exporter import record_enroll_failure
 
-    if not enrollment:
-        from rp_server.metrics_exporter import record_enroll_failure
+            record_enroll_failure("unknown", "missing_claims")
+            logger.warning("Token missing required claims", exc_info=e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
 
-        record_enroll_failure(token_group, "token_not_found")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enrollment token not found in database",
-        )
+        jti = payload["jti"]
+        token_group = payload["group_name"]
+
+        # Check enrollment record exists and is valid
+        # (max_uses lives in DB row, not trusted from token claims)
+        stmt = select(Enrollment).where(Enrollment.token_jti == jti)
+        result = await db.execute(stmt)
+        enrollment = result.scalar_one_or_none()
+
+        if not enrollment:
+            from rp_server.metrics_exporter import record_enroll_failure
+
+            record_enroll_failure(token_group, "token_not_found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Enrollment token not found in database",
+            )
 
     if enrollment.used_count >= enrollment.max_uses:
         from rp_server.metrics_exporter import record_enroll_failure
