@@ -27,6 +27,10 @@ import {
 import { toast } from 'svelte-sonner';
 import {
   approveDashCommand,
+  createSettingsGroup,
+  createSettingsUser,
+  deleteSettingsGroup,
+  deleteSettingsUser,
   getDashAudit,
   getDashCommand,
   getDashCommands,
@@ -34,22 +38,30 @@ import {
   getDashOverview,
   getDashPendingApprovals,
   getDashTimeseries,
+  getSettingsGroups,
+  getSettingsUsers,
   IN_FLIGHT_STATUSES,
   issueDashCommand,
   rejectDashCommand,
   retryDashCommand,
+  updateSettingsUser,
   type AuditListPage,
   type AuditQueryParams,
   type CommandRecord,
   type CommandsListPage,
   type CommandsQueryParams,
+  type CreateGroupInput,
+  type CreateUserInput,
   type DashOverview,
   type HostStatus,
   type HostsList,
   type HostSummary,
   type IssueCommandInput,
   type PendingApprovalsResponse,
+  type SettingsGroupsResponse,
+  type SettingsUsersResponse,
   type TimeseriesPayload,
+  type UpdateUserInput,
 } from '$lib/api';
 
 // ---- query keys ----
@@ -66,6 +78,9 @@ export const qk = {
   approvalsAll: () => ['approvals'] as const,
   auditList: (params: AuditQueryParams = {}) => ['audit', 'list', params] as const,
   auditAll: () => ['audit'] as const,
+  settingsGroups: () => ['settings', 'groups'] as const,
+  settingsUsers: () => ['settings', 'users'] as const,
+  settingsAll: () => ['settings'] as const,
 } as const;
 
 export interface HostsParams {
@@ -278,6 +293,95 @@ export function createRejectMutation() {
     },
     onError: (err: Error) => {
       toast.error('Reject failed', { description: err.message });
+    },
+  });
+}
+
+// ---- /v1/dash/settings/* (ADR-0009 Phase 4) ----
+
+export function createSettingsGroupsQuery() {
+  return createQuery<SettingsGroupsResponse>({
+    queryKey: qk.settingsGroups(),
+    queryFn: ({ signal }) => getSettingsGroups(undefined, signal),
+    staleTime: 30_000,
+  });
+}
+
+export function createSettingsUsersQuery() {
+  return createQuery<SettingsUsersResponse>({
+    queryKey: qk.settingsUsers(),
+    queryFn: ({ signal }) => getSettingsUsers(undefined, signal),
+    staleTime: 30_000,
+  });
+}
+
+export function createCreateGroupMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (input: CreateGroupInput) => createSettingsGroup(input),
+    onSuccess: () => {
+      toast.success('Group created');
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not create group', { description: err.message });
+    },
+  });
+}
+
+export function createDeleteGroupMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (name: string) => deleteSettingsGroup(name),
+    onSuccess: () => {
+      toast.success('Group deleted');
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not delete group', { description: err.message });
+    },
+  });
+}
+
+export function createCreateUserMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (input: CreateUserInput) => createSettingsUser(input),
+    onSuccess: () => {
+      toast.success('User invited');
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not invite user', { description: err.message });
+    },
+  });
+}
+
+export function createUpdateUserMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) =>
+      updateSettingsUser(id, input),
+    onSuccess: () => {
+      toast.success('User updated');
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not update user', { description: err.message });
+    },
+  });
+}
+
+export function createDeleteUserMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (id: string) => deleteSettingsUser(id),
+    onSuccess: () => {
+      toast.success('User deleted');
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not delete user', { description: err.message });
     },
   });
 }
