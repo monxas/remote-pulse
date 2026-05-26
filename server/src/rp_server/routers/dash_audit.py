@@ -28,12 +28,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import csv
+import io
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import (
     String,
@@ -41,6 +43,7 @@ from sqlalchemy import (
     case,
     cast,
     column,
+    func,
     literal,
     literal_column,
     or_,
@@ -49,7 +52,7 @@ from sqlalchemy import (
 )
 
 from rp_server.database import DbSession
-from rp_server.deps import current_user
+from rp_server.deps import current_user, require_admin
 from rp_server.models import AuditEvent as AuditEventRow
 from rp_server.models import Command, Enrollment, Host, User
 
@@ -59,6 +62,7 @@ router = APIRouter(prefix="/v1/dash", tags=["dash"])
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
+MAX_EXPORT_LIMIT = 100_000
 
 AuditAction = Literal[
     "command.issued",
@@ -100,7 +104,15 @@ class AuditEvent(BaseModel):
 
 class AuditResponse(BaseModel):
     events: list[AuditEvent]
-    next_cursor: str | None
+    next_cursor: str | None = None
+    # Offset-mode pagination metadata. Always populated; ``total`` reflects the
+    # full count of events matching the filters (independent of limit/offset).
+    # ``offset`` is the value the caller supplied (0 when cursor-mode or
+    # unspecified). ``has_more`` is true when ``offset + len(events) < total``.
+    total: int = 0
+    limit: int = DEFAULT_LIMIT
+    offset: int = 0
+    has_more: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -387,57 +399,71 @@ _TARGET_TYPE_BY_ACTION: dict[str, str] = {
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/audit", response_model=AuditResponse)
-async def list_audit_events(
-    db: DbSession,
-    user: Annotated[User, Depends(current_user)],
-    actor: str | None = Query(default=None, max_length=255),
-    action: str | None = Query(default=None, max_length=64),
-    target_type: str | None = Query(default=None, max_length=32),
-    since: datetime | None = Query(default=None),
-    until: datetime | None = Query(default=None),
-    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-    cursor: str | None = Query(default=None),
-) -> AuditResponse:
-    """Unified audit timeline. Single UNION ALL query, cursor paginated."""
+def _resolve_actions(
+    actions: list[str] | None,
+    action_prefix: str | None,
+    target_type: str | None,
+) -> list[str]:
+    """Compute the subset of source actions to UNION based on filter params.
 
-    # Decide which source sub-queries to include.
-    selected_actions: list[str] = list(_ALL_SOURCES.keys())
-    if action:
-        if action not in _ALL_SOURCES:
+    ``actions`` is the repeated ``?action=x&action=y`` query param (a
+    single-item list when caller passed one ``?action=x``). ``action_prefix``
+    is the alternative prefix filter (e.g. ``settings.``) and is mutually
+    exclusive with ``actions`` (returns 422 if both supplied).
+
+    Raises ``HTTPException`` with 400 on unknown explicit actions (kept at
+    400 for backward compat with existing clients/tests).
+    """
+    if actions and action_prefix:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="action and action_prefix are mutually exclusive",
+        )
+
+    selected: list[str] = list(_ALL_SOURCES.keys())
+
+    if actions:
+        unknown = [a for a in actions if a not in _ALL_SOURCES]
+        if unknown:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown action '{action}'",
+                detail=f"Unknown action '{unknown[0]}'",
             )
-        selected_actions = [action]
+        selected = list(actions)
+
+    # Prefix filter — matches all known actions starting with ``action_prefix``.
+    if action_prefix:
+        selected = [a for a in selected if a.startswith(action_prefix)]
+
     if target_type:
         if target_type not in {"command", "host", "enrollment", "user", "group"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unknown target_type '{target_type}'",
             )
-        selected_actions = [
-            a for a in selected_actions if _TARGET_TYPE_BY_ACTION.get(a) == target_type
+        selected = [
+            a for a in selected if _TARGET_TYPE_BY_ACTION.get(a) == target_type
         ]
-    if not selected_actions:
-        return AuditResponse(events=[], next_cursor=None)
 
-    # Cursor decode
-    cursor_ts: datetime | None = None
-    cursor_src: str | None = None
-    cursor_pk: str | None = None
-    if cursor:
-        cursor_ts, cursor_src, cursor_pk = _decode_cursor(cursor)
+    return selected
 
-    # Build each source SELECT, then apply the common filters in the outer
-    # query so we don't repeat them N times. We keep WHERE clauses that
-    # reference source-specific columns (group_name on Host vs Enrollment)
-    # inside the source SELECT factories themselves — but actor/since/until
-    # all live on the shared output columns so we wrap with a subquery.
+
+def _build_filtered_outer(
+    selected_actions: list[str],
+    user: User,
+    actor: str | None,
+    since: datetime | None,
+    until: datetime | None,
+):
+    """Build the outer SELECT against the UNION ALL of the selected sources.
+
+    Returns ``(outer_select, union_subquery)`` so the caller can either
+    paginate it (list endpoint) or wrap it in ``COUNT(*)`` / drain it
+    (export endpoint).
+    """
     subqueries = [_ALL_SOURCES[a]() for a in selected_actions]
     union_q = union_all(*subqueries).subquery("audit_union")
 
-    # Reference the union's columns by name.
     ts_c = union_q.c.ts
     src_c = union_q.c.src
     action_c = union_q.c.action
@@ -452,50 +478,36 @@ async def list_audit_events(
         ts_c, src_c, action_c, target_type_c, target_id_c, actor_c, group_c, label_c, pk_c
     )
 
-    # Apply common filters
+    # Case-insensitive actor filter. ``func.lower`` works on both Postgres
+    # and SQLite, dropping ``ILIKE`` keeps us SQLite-friendly for tests.
     if actor:
-        outer = outer.where(actor_c == actor)
+        outer = outer.where(func.lower(actor_c) == actor.lower())
     if since:
         outer = outer.where(ts_c >= since)
     if until:
-        outer = outer.where(ts_c <= until)
+        outer = outer.where(ts_c < until)
 
     # Group ACL
     if user.role != "admin":
         if not user.accessible_groups:
-            return AuditResponse(events=[], next_cursor=None)
-        # Drop non-host-scoped events (e.g. enrollment.token_issued) for
-        # non-admins to prevent cross-tenant leaks. They survive only if
-        # their group_name matches the caller's accessible groups.
-        outer = outer.where(group_c.in_(user.accessible_groups))
+            # Caller is a group-scoped user with no accessible groups —
+            # short-circuit by selecting zero rows.
+            outer = outer.where(literal(False))
+        else:
+            outer = outer.where(group_c.in_(user.accessible_groups))
 
-    # Cursor: strictly past (ts DESC, src ASC, pk ASC).
-    if cursor_ts is not None:
-        outer = outer.where(
-            or_(
-                ts_c < cursor_ts,
-                and_(ts_c == cursor_ts, src_c > cursor_src),
-                and_(ts_c == cursor_ts, src_c == cursor_src, pk_c > cursor_pk),
-            )
-        )
+    return outer, union_q
 
-    outer = outer.order_by(ts_c.desc(), src_c.asc(), pk_c.asc()).limit(limit + 1)
 
-    rows = (await db.execute(outer)).all()
-    has_more = len(rows) > limit
-    rows = rows[:limit]
-
-    # For settings.* events the rich payload lives on ``audit_events.payload``
-    # — fetch them in a single round-trip keyed by the source row's audit_id
-    # (which equals ``pk`` for the settings sub-sources).
+async def _materialise_events(db, rows: list[Any]) -> list[AuditEvent]:
+    """Turn raw union rows into ``AuditEvent`` models, joining settings.*
+    payloads in a single round-trip."""
     settings_srcs = {
         "set_g_new", "set_g_del", "set_u_new", "set_u_upd", "set_u_del",
     }
     settings_pks = [r.pk for r in rows if r.src in settings_srcs]
     payloads_by_id: dict[str, dict[str, Any]] = {}
     if settings_pks:
-        # ``pk`` is the cast(audit_events.id, String); compare via cast both
-        # sides to stay dialect-agnostic (SQLite stores UUIDs as VARCHAR).
         payload_rows = (
             await db.execute(
                 select(
@@ -525,13 +537,264 @@ async def list_audit_events(
                 metadata=metadata,
             )
         )
+    return events
+
+
+@router.get("/audit", response_model=AuditResponse)
+async def list_audit_events(
+    db: DbSession,
+    user: Annotated[User, Depends(current_user)],
+    actor: str | None = Query(default=None, max_length=255),
+    action: list[str] | None = Query(default=None, max_length=64),
+    action_prefix: str | None = Query(default=None, max_length=64),
+    target_type: str | None = Query(default=None, max_length=32),
+    resource_type: str | None = Query(default=None, max_length=32),
+    since: datetime | None = Query(default=None),
+    from_ts: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    to_ts: datetime | None = Query(default=None),
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = Query(default=None),
+    offset: int | None = Query(default=None, ge=0),
+) -> AuditResponse:
+    """Unified audit timeline. UNION ALL query with cursor or offset paging.
+
+    Filters
+    -------
+    - ``actor``: case-insensitive exact match on the actor column.
+    - ``action``: repeatable; exact match on one or more known actions.
+      Aliased so ``?action=x`` and ``?action=x&action=y`` both work.
+    - ``action_prefix``: prefix match (e.g. ``settings.`` → all settings.*).
+      Mutually exclusive with ``action``.
+    - ``target_type`` / ``resource_type``: alias pair (latter for parity with
+      the audit_events table column naming).
+    - ``since`` / ``from_ts``: inclusive lower-bound on event ts. Alias pair.
+    - ``until`` / ``to_ts``: exclusive upper-bound on event ts. Alias pair.
+    - ``limit``: 1-200, default 50.
+    - ``cursor``: opaque cursor from a previous response's ``next_cursor``.
+    - ``offset``: when provided, switches to offset-pagination mode and the
+      response will include ``total`` / ``has_more``. Mutually exclusive with
+      ``cursor`` (422 if both).
+    """
+    # Resolve filter aliases (canonical: target_type, since, until).
+    eff_target_type = target_type or resource_type
+    eff_since = since or from_ts
+    eff_until = until or to_ts
+
+    # Validate combinations.
+    if cursor is not None and offset is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="cursor and offset are mutually exclusive",
+        )
+    if eff_since and eff_until and eff_since >= eff_until:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="from_ts must be strictly less than to_ts",
+        )
+
+    selected_actions = _resolve_actions(action, action_prefix, eff_target_type)
+    eff_offset = offset if offset is not None else 0
+
+    if not selected_actions:
+        return AuditResponse(
+            events=[],
+            next_cursor=None,
+            total=0,
+            limit=limit,
+            offset=eff_offset,
+            has_more=False,
+        )
+
+    # Cursor decode
+    cursor_ts: datetime | None = None
+    cursor_src: str | None = None
+    cursor_pk: str | None = None
+    if cursor:
+        cursor_ts, cursor_src, cursor_pk = _decode_cursor(cursor)
+
+    outer, _union = _build_filtered_outer(
+        selected_actions, user, actor, eff_since, eff_until
+    )
+
+    # ``total`` is computed against the *filter* set (ignoring cursor/offset).
+    # Wrap the filtered SELECT in COUNT(*).
+    total_q = select(func.count()).select_from(outer.subquery("audit_filtered"))
+    total = int((await db.execute(total_q)).scalar_one())
+
+    # Cursor: strictly past (ts DESC, src ASC, pk ASC).
+    if cursor_ts is not None:
+        # Re-derive the bound column references — outer is a Select with
+        # exported labels matching the union subquery.
+        outer_cols = {c.name: c for c in outer.selected_columns}
+        ts_c = outer_cols["ts"]
+        src_c = outer_cols["src"]
+        pk_c = outer_cols["pk"]
+        outer = outer.where(
+            or_(
+                ts_c < cursor_ts,
+                and_(ts_c == cursor_ts, src_c > cursor_src),
+                and_(ts_c == cursor_ts, src_c == cursor_src, pk_c > cursor_pk),
+            )
+        )
+
+    # Ordering + paging window.
+    outer_cols = {c.name: c for c in outer.selected_columns}
+    outer = outer.order_by(
+        outer_cols["ts"].desc(), outer_cols["src"].asc(), outer_cols["pk"].asc()
+    )
+    if offset is not None:
+        outer = outer.offset(offset).limit(limit + 1)
+    else:
+        outer = outer.limit(limit + 1)
+
+    rows = (await db.execute(outer)).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    events = await _materialise_events(db, list(rows))
 
     next_cursor: str | None = None
-    if has_more and rows:
-        last = rows[-1]
-        next_cursor = _encode_cursor(last.ts, last.src, last.pk)
+    if cursor is not None or offset is None:
+        # Cursor mode (explicit cursor or default mode) — emit next_cursor.
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = _encode_cursor(last.ts, last.src, last.pk)
 
-    return AuditResponse(events=events, next_cursor=next_cursor)
+    return AuditResponse(
+        events=events,
+        next_cursor=next_cursor,
+        total=total,
+        limit=limit,
+        offset=eff_offset,
+        has_more=has_more,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# /v1/dash/audit/export — CSV / JSON dump for compliance + debug ops.
+# Admin-only. Same filters as /audit but no cursor / offset, just a hard cap.
+# --------------------------------------------------------------------------- #
+
+
+def _export_filename(fmt: str) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"audit-export-{ts}.{fmt}"
+
+
+@router.get("/audit/export")
+async def export_audit_events(
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_admin)],
+    actor: str | None = Query(default=None, max_length=255),
+    action: list[str] | None = Query(default=None, max_length=64),
+    action_prefix: str | None = Query(default=None, max_length=64),
+    target_type: str | None = Query(default=None, max_length=32),
+    resource_type: str | None = Query(default=None, max_length=32),
+    since: datetime | None = Query(default=None),
+    from_ts: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    to_ts: datetime | None = Query(default=None),
+    fmt: str = Query(default="csv", alias="format"),
+    limit: int = Query(default=MAX_EXPORT_LIMIT, ge=1, le=MAX_EXPORT_LIMIT),
+) -> Response:
+    """Dump audit events as CSV or JSON for compliance / debug-ops.
+
+    Admin-only. Honours the same filters as ``/audit`` (no pagination — a
+    hard cap of ``MAX_EXPORT_LIMIT`` rows is applied to bound memory). The
+    response is downloadable via ``Content-Disposition: attachment``.
+    """
+    if fmt not in {"csv", "json"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="format must be 'csv' or 'json'",
+        )
+
+    eff_target_type = target_type or resource_type
+    eff_since = since or from_ts
+    eff_until = until or to_ts
+
+    if eff_since and eff_until and eff_since >= eff_until:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="from_ts must be strictly less than to_ts",
+        )
+
+    selected_actions = _resolve_actions(action, action_prefix, eff_target_type)
+
+    # Use the admin user (already resolved by require_admin); ACL is wide-open.
+    if not selected_actions:
+        events: list[AuditEvent] = []
+    else:
+        outer, _union = _build_filtered_outer(
+            selected_actions, _admin, actor, eff_since, eff_until
+        )
+        outer_cols = {c.name: c for c in outer.selected_columns}
+        outer = outer.order_by(
+            outer_cols["ts"].desc(),
+            outer_cols["src"].asc(),
+            outer_cols["pk"].asc(),
+        ).limit(limit)
+        rows = (await db.execute(outer)).all()
+        events = await _materialise_events(db, list(rows))
+
+    filename = _export_filename(fmt)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+    if fmt == "json":
+        body = json.dumps(
+            [
+                {
+                    "id": e.id,
+                    "ts": e.ts.isoformat(),
+                    "actor": e.actor,
+                    "action": e.action,
+                    "target_type": e.target_type,
+                    "target_id": e.target_id,
+                    "target_label": e.target_label,
+                    "metadata": e.metadata,
+                }
+                for e in events
+            ],
+            separators=(",", ":"),
+        )
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers=headers,
+        )
+
+    # CSV
+    buf = io.StringIO()
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+    writer.writerow(
+        [
+            "timestamp",
+            "actor",
+            "action",
+            "resource_type",
+            "resource_id",
+            "target_label",
+            "payload",
+        ]
+    )
+    for e in events:
+        writer.writerow(
+            [
+                e.ts.isoformat(),
+                e.actor,
+                e.action,
+                e.target_type,
+                e.target_id,
+                e.target_label,
+                json.dumps(e.metadata, separators=(",", ":")),
+            ]
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
 
 
 # Silence "imported but unused" for symbols kept here for readability in
