@@ -74,6 +74,14 @@ class Enrollment(Base):
         server_default=text("gen_random_uuid()"),
     )
     token_jti: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    # Short, memorable enrollment code (e.g. ``K7MX3F``) — alphabet without
+    # visually-confusable characters, see ``rp_server.auth.SHORT_CODE_ALPHABET``.
+    # NULL on rows created before the alembic 011 migration; new rows always
+    # populate it. Uniqueness is enforced via a partial unique index defined
+    # in 011 (only active rows participate, so once a code expires or hits
+    # ``max_uses`` it could theoretically be reused — see migration docstring
+    # for the trade-off).
+    short_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     issued_by: Mapped[str] = mapped_column(Text, nullable=False)
     group_name: Mapped[str] = mapped_column(Text, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
