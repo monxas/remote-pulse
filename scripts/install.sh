@@ -260,9 +260,28 @@ if [ "$INSTALL_OK" != "1" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 3.5. Resolve actual installed agent semver
+# ---------------------------------------------------------------------------
+# IMPORTANT: $RP_VERSION is a git ref (branch/tag like "main", "v1.0.1",
+# "latest") — NOT a semver. Reporting it as agent_version pollutes the
+# fleet dashboard (all hosts show "main" instead of "1.0.1"). Resolve the
+# real semver by querying `rp --version`, which prints
+# "rp, version X.Y.Z" via click.version_option(__version__). Fall back to
+# the git ref only if that fails, so installs never break on enroll.
+RESOLVED_AGENT_VERSION=""
+if command -v rp >/dev/null 2>&1; then
+    RESOLVED_AGENT_VERSION="$(rp --version 2>/dev/null \
+        | awk '/version/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+/) {print $i; exit}}')"
+fi
+if [ -z "$RESOLVED_AGENT_VERSION" ]; then
+    warn "Could not resolve installed agent semver; falling back to git ref '$RP_VERSION'."
+    RESOLVED_AGENT_VERSION="$RP_VERSION"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Enroll with server
 # ---------------------------------------------------------------------------
-log "Enrolling with $RP_SERVER..."
+log "Enrolling with $RP_SERVER (agent_version=$RESOLVED_AGENT_VERSION)..."
 
 # Stable per-host fingerprint (Linux: /etc/machine-id; macOS: IOPlatformUUID)
 HOST_FINGERPRINT=""
@@ -279,7 +298,7 @@ if [ -z "$HOST_FINGERPRINT" ]; then
 fi
 
 ENROLL_PAYLOAD="$(printf '{"token":"%s","hostname":"%s","group":"%s","host_fingerprint":"%s","os":"%s","arch":"%s","agent_version":"%s"}' \
-    "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "${RP_VERSION:-main}")"
+    "$RP_TOKEN" "$RP_HOSTNAME" "$RP_GROUP" "$HOST_FINGERPRINT" "$OS" "$ARCH" "$RESOLVED_AGENT_VERSION")"
 
 ENROLL_RESP="$(curl -fsSL -X POST "$RP_SERVER/v1/enroll" \
     -H "Content-Type: application/json" \
