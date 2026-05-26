@@ -30,7 +30,6 @@ import base64
 import binascii
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
@@ -51,6 +50,7 @@ from sqlalchemy import (
 
 from rp_server.database import DbSession
 from rp_server.deps import current_user
+from rp_server.models import AuditEvent as AuditEventRow
 from rp_server.models import Command, Enrollment, Host, User
 
 logger = logging.getLogger(__name__)
@@ -68,9 +68,14 @@ AuditAction = Literal[
     "command.failed",
     "host.enrolled",
     "enrollment.token_issued",
+    "settings.group.create",
+    "settings.group.delete",
+    "settings.user.create",
+    "settings.user.update",
+    "settings.user.delete",
 ]
 
-AuditTargetType = Literal["command", "host", "enrollment", "user"]
+AuditTargetType = Literal["command", "host", "enrollment", "user", "group"]
 
 
 # --------------------------------------------------------------------------- #
@@ -84,7 +89,11 @@ class AuditEvent(BaseModel):
     actor: str
     action: AuditAction
     target_type: AuditTargetType
-    target_id: uuid.UUID
+    # ``str`` rather than ``uuid.UUID``: group resource ids are names
+    # (groups.name is the PK and may contain dots/dashes), so we widen the
+    # field. UUID-valued targets are still serialised as UUID strings, which
+    # the SvelteKit client already treats as opaque strings.
+    target_id: str
     target_label: str
     metadata: dict[str, Any]
 
@@ -290,6 +299,56 @@ def _enrollment_tokens_select():
     )
 
 
+# --------------------------------------------------------------------------- #
+# Real audit_events rows — one source SELECT per action. We split by action
+# (rather than one generic select) so the dispatcher's ``selected_actions``
+# filter Just Works without a second WHERE on action against the union.
+# --------------------------------------------------------------------------- #
+
+
+def _audit_events_source(action: str, target_type: str, src: str):
+    """Build a 9-column SELECT over ``audit_events`` filtered to a single action.
+
+    Resource ids are already stored as TEXT, so no cast. ``group_name`` is
+    NULL — settings events aren't ACL-scoped today (admins only), but we
+    surface the resource_id in ``label`` so the timeline reads cleanly.
+    """
+    return (
+        select(
+            AuditEventRow.ts.label("ts"),
+            literal(src).label("src"),
+            literal(action).label("action"),
+            literal(target_type).label("target_type"),
+            AuditEventRow.resource_id.label("target_id"),
+            AuditEventRow.actor.label("actor"),
+            literal(None, type_=String).label("group_name"),
+            (literal(f"{action} ") + AuditEventRow.resource_id).label("label"),
+            cast(AuditEventRow.id, String).label("pk"),
+        )
+        .where(AuditEventRow.action == action)
+    )
+
+
+def _settings_group_create_select():
+    return _audit_events_source("settings.group.create", "group", "set_g_new")
+
+
+def _settings_group_delete_select():
+    return _audit_events_source("settings.group.delete", "group", "set_g_del")
+
+
+def _settings_user_create_select():
+    return _audit_events_source("settings.user.create", "user", "set_u_new")
+
+
+def _settings_user_update_select():
+    return _audit_events_source("settings.user.update", "user", "set_u_upd")
+
+
+def _settings_user_delete_select():
+    return _audit_events_source("settings.user.delete", "user", "set_u_del")
+
+
 _ALL_SOURCES = {
     "command.issued":            _commands_issued_select,
     "command.approved":          _commands_approved_select,
@@ -298,6 +357,11 @@ _ALL_SOURCES = {
     "command.failed":            _commands_failed_select,
     "host.enrolled":             _hosts_enrolled_select,
     "enrollment.token_issued":   _enrollment_tokens_select,
+    "settings.group.create":     _settings_group_create_select,
+    "settings.group.delete":     _settings_group_delete_select,
+    "settings.user.create":      _settings_user_create_select,
+    "settings.user.update":      _settings_user_update_select,
+    "settings.user.delete":      _settings_user_delete_select,
 }
 
 # Map action → target_type so we can short-circuit when target_type filter is
@@ -310,6 +374,11 @@ _TARGET_TYPE_BY_ACTION: dict[str, str] = {
     "command.failed": "command",
     "host.enrolled": "host",
     "enrollment.token_issued": "enrollment",
+    "settings.group.create": "group",
+    "settings.group.delete": "group",
+    "settings.user.create": "user",
+    "settings.user.update": "user",
+    "settings.user.delete": "user",
 }
 
 
@@ -342,7 +411,7 @@ async def list_audit_events(
             )
         selected_actions = [action]
     if target_type:
-        if target_type not in {"command", "host", "enrollment", "user"}:
+        if target_type not in {"command", "host", "enrollment", "user", "group"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unknown target_type '{target_type}'",
@@ -416,8 +485,34 @@ async def list_audit_events(
     has_more = len(rows) > limit
     rows = rows[:limit]
 
+    # For settings.* events the rich payload lives on ``audit_events.payload``
+    # — fetch them in a single round-trip keyed by the source row's audit_id
+    # (which equals ``pk`` for the settings sub-sources).
+    settings_srcs = {
+        "set_g_new", "set_g_del", "set_u_new", "set_u_upd", "set_u_del",
+    }
+    settings_pks = [r.pk for r in rows if r.src in settings_srcs]
+    payloads_by_id: dict[str, dict[str, Any]] = {}
+    if settings_pks:
+        # ``pk`` is the cast(audit_events.id, String); compare via cast both
+        # sides to stay dialect-agnostic (SQLite stores UUIDs as VARCHAR).
+        payload_rows = (
+            await db.execute(
+                select(
+                    cast(AuditEventRow.id, String).label("id"),
+                    AuditEventRow.payload,
+                ).where(cast(AuditEventRow.id, String).in_(settings_pks))
+            )
+        ).all()
+        payloads_by_id = {row.id: (row.payload or {}) for row in payload_rows}
+
     events: list[AuditEvent] = []
     for r in rows:
+        if r.src in settings_srcs:
+            metadata: dict[str, Any] = dict(payloads_by_id.get(r.pk, {}))
+        else:
+            metadata = {"group_name": r.group_name} if r.group_name else {}
+
         events.append(
             AuditEvent(
                 id=f"{r.src}:{r.pk}",
@@ -425,9 +520,9 @@ async def list_audit_events(
                 actor=r.actor or "system",
                 action=r.action,  # type: ignore[arg-type]
                 target_type=r.target_type,  # type: ignore[arg-type]
-                target_id=uuid.UUID(r.target_id),
+                target_id=r.target_id,
                 target_label=r.label,
-                metadata={"group_name": r.group_name} if r.group_name else {},
+                metadata=metadata,
             )
         )
 

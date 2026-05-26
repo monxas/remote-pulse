@@ -86,7 +86,7 @@ describe('catalogue constants', () => {
   it('exposes nine command statuses', () => {
     expect(ALL_COMMAND_STATUSES.length).toBe(9);
   });
-  it('exposes seven audit actions', () => {
-    expect(ALL_AUDIT_ACTIONS.length).toBe(7);
+  it('exposes twelve audit actions', () => {
+    expect(ALL_AUDIT_ACTIONS.length).toBe(12);
   });
 });

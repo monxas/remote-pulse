@@ -11,6 +11,11 @@
     'command.failed': 'danger',
     'host.enrolled': 'accent',
     'enrollment.token_issued': 'warn',
+    'settings.group.create': 'accent',
+    'settings.group.delete': 'danger',
+    'settings.user.create': 'accent',
+    'settings.user.update': 'warn',
+    'settings.user.delete': 'danger',
   };
 
   const ACTION_LABEL: Record<AuditAction, string> = {
@@ -21,6 +26,11 @@
     'command.failed': 'command failed',
     'host.enrolled': 'enrolled host',
     'enrollment.token_issued': 'issued enrollment token',
+    'settings.group.create': 'created group',
+    'settings.group.delete': 'deleted group',
+    'settings.user.create': 'created user',
+    'settings.user.update': 'updated user',
+    'settings.user.delete': 'deleted user',
   };
 
   export { ACTION_LABEL, ACTION_TONE };

@@ -35,7 +35,7 @@ from sqlalchemy import delete, func, select
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin
-from rp_server.models import Group, Host, User
+from rp_server.models import AuditEvent, Group, Host, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/dash/settings", tags=["dash-settings"])
@@ -231,6 +231,32 @@ async def _user_count_by_group(db: DbSession) -> dict[str, int]:
     return counts
 
 
+def _emit_audit(
+    db: DbSession,
+    *,
+    actor: str,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    payload: dict[str, object] | None = None,
+) -> None:
+    """Insert an ``audit_events`` row into the current session.
+
+    Caller is responsible for the surrounding ``db.commit()`` — by deferring
+    the commit we guarantee the audit row lands atomically with the mutation
+    it describes (or rolls back together on error).
+    """
+    db.add(
+        AuditEvent(
+            actor=actor,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            payload=payload or {},
+        )
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Groups endpoints
 # --------------------------------------------------------------------------- #
@@ -285,6 +311,14 @@ async def create_group(
         auto_distribute_keys=True,
     )
     db.add(group)
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.group.create",
+        resource_type="group",
+        resource_id=payload.name,
+        payload={"name": payload.name, "description": payload.description},
+    )
     await db.commit()
     await db.refresh(group)
 
@@ -345,6 +379,14 @@ async def delete_group(
         )
 
     await db.execute(delete(Group).where(Group.name == name))
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.group.delete",
+        resource_type="group",
+        resource_id=name,
+        payload={"name": name},
+    )
     await db.commit()
 
     logger.info(
@@ -425,6 +467,20 @@ async def create_user(
         is_active=True,
     )
     db.add(user)
+    # Flush to allocate the PK before we reference it in the audit row.
+    await db.flush()
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.user.create",
+        resource_type="user",
+        resource_id=str(user.id),
+        payload={
+            "email": user.email,
+            "role": user.role,
+            "groups": list(user.accessible_groups or []),
+        },
+    )
     await db.commit()
     await db.refresh(user)
 
@@ -452,6 +508,10 @@ async def update_user(
             detail=f"User {user_id} not found",
         )
 
+    # Capture before-state for the audit diff. We snapshot to plain values
+    # so subsequent SQLAlchemy attribute mutations don't alias the dict.
+    changes: dict[str, dict[str, object]] = {}
+
     if payload.role is not None:
         # Guard against the last admin demoting themselves into a lockout.
         if user.id == admin.id and payload.role != "admin":
@@ -459,11 +519,19 @@ async def update_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="You cannot demote your own admin role.",
             )
-        user.role = payload.role
+        if user.role != payload.role:
+            changes["role"] = {"before": user.role, "after": payload.role}
+            user.role = payload.role
 
     if payload.groups is not None:
         await _validate_group_refs(db, payload.groups)
-        user.accessible_groups = list(payload.groups)
+        before_groups = list(user.accessible_groups or [])
+        if before_groups != list(payload.groups):
+            changes["groups"] = {
+                "before": before_groups,
+                "after": list(payload.groups),
+            }
+            user.accessible_groups = list(payload.groups)
 
     if payload.is_active is not None:
         if user.id == admin.id and payload.is_active is False:
@@ -471,7 +539,25 @@ async def update_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="You cannot deactivate your own account.",
             )
-        user.is_active = payload.is_active
+        if user.is_active != payload.is_active:
+            changes["is_active"] = {
+                "before": user.is_active,
+                "after": payload.is_active,
+            }
+            user.is_active = payload.is_active
+
+    # Only emit an audit row if anything actually changed, otherwise the
+    # PATCH is a no-op (e.g. set role to what it already was) and there's
+    # nothing to record.
+    if changes:
+        _emit_audit(
+            db,
+            actor=admin.email,
+            action="settings.user.update",
+            resource_type="user",
+            resource_id=str(user.id),
+            payload={"email": user.email, "changes": changes},
+        )
 
     await db.commit()
     await db.refresh(user)
@@ -518,7 +604,18 @@ async def delete_user(
             detail=f"User {user_id} not found",
         )
 
+    # Stash the email before the delete so the audit payload still carries
+    # the human-readable identifier after the row is gone.
+    deleted_email = user.email
     await db.execute(delete(User).where(User.id == user_id))
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="settings.user.delete",
+        resource_type="user",
+        resource_id=str(user_id),
+        payload={"email": deleted_email},
+    )
     await db.commit()
 
     logger.info(

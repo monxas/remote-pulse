@@ -371,7 +371,12 @@ export type AuditAction =
   | 'command.completed'
   | 'command.failed'
   | 'host.enrolled'
-  | 'enrollment.token_issued';
+  | 'enrollment.token_issued'
+  | 'settings.group.create'
+  | 'settings.group.delete'
+  | 'settings.user.create'
+  | 'settings.user.update'
+  | 'settings.user.delete';
 
 export const ALL_AUDIT_ACTIONS: ReadonlyArray<AuditAction> = [
   'command.issued',
@@ -381,9 +386,14 @@ export const ALL_AUDIT_ACTIONS: ReadonlyArray<AuditAction> = [
   'command.failed',
   'host.enrolled',
   'enrollment.token_issued',
+  'settings.group.create',
+  'settings.group.delete',
+  'settings.user.create',
+  'settings.user.update',
+  'settings.user.delete',
 ];
 
-export type AuditTargetType = 'command' | 'host' | 'enrollment' | 'user';
+export type AuditTargetType = 'command' | 'host' | 'enrollment' | 'user' | 'group';
 
 export interface AuditEvent {
   id: string;

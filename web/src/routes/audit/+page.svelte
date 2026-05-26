@@ -110,6 +110,7 @@
     { value: 'host', label: 'Host' },
     { value: 'enrollment', label: 'Enrollment' },
     { value: 'user', label: 'User' },
+    { value: 'group', label: 'Group' },
   ];
 
   function clearFilters(): void {
