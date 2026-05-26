@@ -1,6 +1,6 @@
 [project]
 name = "rp-server"
-version = "1.0.3"
+version = "1.0.4"
 description = "Remote-Pulse monitoring server"
 requires-python = ">=3.12"
 dependencies = [
