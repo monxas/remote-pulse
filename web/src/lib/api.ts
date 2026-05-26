@@ -448,11 +448,22 @@ export interface AuditEvent {
 export interface AuditListPage {
   events: AuditEvent[];
   next_cursor: string | null;
+  /**
+   * Total events matching the filters, independent of pagination. The
+   * fields below are populated on every response from the v1.0.11+
+   * backend but are kept optional so older fixtures + mocks remain
+   * type-compatible.
+   */
+  total?: number;
+  limit?: number;
+  offset?: number;
+  has_more?: boolean;
 }
 
 export interface AuditQueryParams {
   actor?: string;
   action?: AuditAction[];
+  action_prefix?: string;
   target_type?: AuditTargetType;
   since?: string;
   until?: string;
@@ -466,6 +477,7 @@ function buildAuditQuery(params: AuditQueryParams): string {
   if (params.action && params.action.length > 0) {
     for (const a of params.action) usp.append('action', a);
   }
+  if (params.action_prefix) usp.set('action_prefix', params.action_prefix);
   if (params.target_type) usp.set('target_type', params.target_type);
   if (params.since) usp.set('since', params.since);
   if (params.until) usp.set('until', params.until);
@@ -485,6 +497,26 @@ export async function getDashAudit(
     { method: 'GET' },
     { fetch: f, signal },
   );
+}
+
+/**
+ * Build the URL for the admin-only audit export endpoint with the current
+ * filter params applied. ``format`` selects CSV (default) or JSON. Returned
+ * as a relative URL so the caller can either ``fetch()`` it (to surface
+ * 403s) or wire it up as an anchor ``href`` for native download.
+ */
+export function buildAuditExportUrl(
+  params: AuditQueryParams = {},
+  format: 'csv' | 'json' = 'csv',
+): string {
+  // Strip the cursor + limit — export ignores both. ``buildAuditQuery``
+  // already handles repeatable ``action``.
+  const { cursor: _cursor, limit: _limit, ...rest } = params;
+  void _cursor;
+  void _limit;
+  const qs = buildAuditQuery(rest);
+  const sep = qs ? '&' : '?';
+  return `/v1/dash/audit/export${qs}${sep}format=${format}`;
 }
 
 // ---------- /v1/dash/settings/* (ADR-0009 Phase 4) ----------
