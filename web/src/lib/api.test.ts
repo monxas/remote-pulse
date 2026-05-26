@@ -86,7 +86,9 @@ describe('catalogue constants', () => {
   it('exposes nine command statuses', () => {
     expect(ALL_COMMAND_STATUSES.length).toBe(9);
   });
-  it('exposes twelve audit actions', () => {
-    expect(ALL_AUDIT_ACTIONS.length).toBe(12);
+  it('exposes fourteen audit actions', () => {
+    // 12 baseline (commands x5, host.enrolled, enrollment.token_issued,
+    // settings.{group,user}.*) + 2 new permission grants (grant/revoke).
+    expect(ALL_AUDIT_ACTIONS.length).toBe(14);
   });
 });

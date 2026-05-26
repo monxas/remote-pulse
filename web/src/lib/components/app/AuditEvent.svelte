@@ -16,6 +16,8 @@
     'settings.user.create': 'accent',
     'settings.user.update': 'warn',
     'settings.user.delete': 'danger',
+    'settings.permission.grant': 'accent',
+    'settings.permission.revoke': 'warn',
   };
 
   const ACTION_LABEL: Record<AuditAction, string> = {
@@ -31,6 +33,8 @@
     'settings.user.create': 'created user',
     'settings.user.update': 'updated user',
     'settings.user.delete': 'deleted user',
+    'settings.permission.grant': 'granted permission to',
+    'settings.permission.revoke': 'revoked permission from',
   };
 
   export { ACTION_LABEL, ACTION_TONE };
