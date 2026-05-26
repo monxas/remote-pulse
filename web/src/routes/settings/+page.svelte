@@ -9,8 +9,16 @@
     ShieldCheck,
   } from '@lucide/svelte';
   import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
+  import BulkUserActionBar from '$lib/components/app/BulkUserActionBar.svelte';
+  import BulkUserDialogs, { type BulkMode } from '$lib/components/app/BulkUserDialogs.svelte';
+  import BulkGroupActionBar from '$lib/components/app/BulkGroupActionBar.svelte';
   import SortableHeader from '$lib/components/app/SortableHeader.svelte';
   import TableSearch from '$lib/components/app/TableSearch.svelte';
+  import { createSelection } from '$lib/components/app/selection.svelte';
+  import { bulkDeleteGroups } from '$lib/settings/bulk-group-ops';
+  import { toast } from 'svelte-sonner';
+  import { useQueryClient } from '@tanstack/svelte-query';
+  import { userStore } from '$lib/stores/user.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -32,6 +40,7 @@
     createCreateUserMutation,
     createUpdateUserMutation,
     createDeleteUserMutation,
+    qk,
   } from '$lib/queries';
   import type { SettingsGroup, SettingsUser, UserRole } from '$lib/api';
   import { createTableState } from '$lib/components/app/table-state.svelte';
@@ -70,12 +79,8 @@
     },
   });
 
-  const groupsTableDirty = $derived(
-    Boolean(groupsTable.query) || groupsTable.sortKey !== null,
-  );
-  const usersTableDirty = $derived(
-    Boolean(usersTable.query) || usersTable.sortKey !== null,
-  );
+  const groupsTableDirty = $derived(Boolean(groupsTable.query) || groupsTable.sortKey !== null);
+  const usersTableDirty = $derived(Boolean(usersTable.query) || usersTable.sortKey !== null);
 
   // ---- New group dialog ----
   let newGroupOpen = $state(false);
@@ -174,6 +179,99 @@
     permsTarget = u;
     permsOpen = true;
   }
+
+  // ====================================================================
+  // Bulk operations: Users + Groups multi-select
+  // ====================================================================
+  //
+  // Two independent selections so the user can keep state across tab
+  // switches. Both use the generic `createSelection<string>()` primitive
+  // promoted out of host-selection.svelte.ts.
+
+  const userSelection = createSelection<string>();
+  const groupSelection = createSelection<string>();
+
+  const client = useQueryClient();
+  const currentUserId = $derived(userStore.value?.user_id ?? null);
+
+  // Visible IDs in current sorted+filtered view (header tri-state).
+  const visibleUserIds = $derived(usersTable.view.map((u) => u.id));
+  const visibleGroupNames = $derived(groupsTable.view.map((g) => g.name));
+
+  const userAllState = $derived(userSelection.selectAllState(visibleUserIds));
+  const groupAllState = $derived(groupSelection.selectAllState(visibleGroupNames));
+
+  // Materialise selected rows so the dialog renders the email + role even
+  // if the user navigates / filters during the action.
+  const selectedUsers = $derived<SettingsUser[]>(users.filter((u) => userSelection.has(u.id)));
+  const userPreviewLabels = $derived(selectedUsers.slice(0, 4).map((u) => u.email));
+
+  const selectedGroups = $derived<SettingsGroup[]>(
+    groups.filter((g) => groupSelection.has(g.name)),
+  );
+  const groupPreviewLabels = $derived(selectedGroups.slice(0, 4).map((g) => g.name));
+  const blockedGroupNames = $derived(
+    selectedGroups.filter((g) => g.host_count > 0).map((g) => g.name),
+  );
+  const groupsAllDeletable = $derived(selectedGroups.length > 0 && blockedGroupNames.length === 0);
+
+  // Bulk user dialog state ------------------------------------------------
+  let bulkUserMode = $state<BulkMode>(null);
+  let bulkUserOpen = $state(false);
+
+  function openBulkUser(mode: NonNullable<BulkMode>): void {
+    bulkUserMode = mode;
+    bulkUserOpen = true;
+  }
+
+  function onBulkUserSettled(): void {
+    userSelection.clear();
+  }
+
+  // Indeterminate-checkbox action (mirrors HostTable's helper).
+  function indeterminate(node: HTMLInputElement, value: boolean) {
+    node.indeterminate = value;
+    return {
+      update(next: boolean) {
+        node.indeterminate = next;
+      },
+    };
+  }
+
+  // ---- Bulk group delete ------------------------------------------------
+  let bulkGroupDeleteOpen = $state(false);
+  let bulkGroupDeleteConfirm = $state('');
+  let bulkGroupDeleteInFlight = $state(false);
+  const BULK_GROUP_PHRASE = 'DELETE';
+
+  function openBulkGroupDelete(): void {
+    if (!groupsAllDeletable) return;
+    bulkGroupDeleteConfirm = '';
+    bulkGroupDeleteOpen = true;
+  }
+
+  async function submitBulkGroupDelete(): Promise<void> {
+    if (bulkGroupDeleteInFlight) return;
+    if (bulkGroupDeleteConfirm !== BULK_GROUP_PHRASE) {
+      toast.error(`Type ${BULK_GROUP_PHRASE} to confirm.`);
+      return;
+    }
+    bulkGroupDeleteInFlight = true;
+    try {
+      const { okCount, errorCount } = await bulkDeleteGroups(
+        selectedGroups.map((g) => ({ name: g.name })),
+        () => {},
+      );
+      if (errorCount === 0) toast.success(`${okCount} group${okCount === 1 ? '' : 's'} deleted`);
+      else if (okCount === 0) toast.error(`${errorCount} failed`);
+      else toast.warning(`${okCount} deleted, ${errorCount} failed`);
+      void client.invalidateQueries({ queryKey: qk.settingsAll() });
+      groupSelection.clear();
+      bulkGroupDeleteOpen = false;
+    } finally {
+      bulkGroupDeleteInFlight = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -185,8 +283,8 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
       <p class="text-sm text-muted">
-        Manage groups, dashboard users, and row-level permissions. Admin only — changes are
-        captured in the audit trail.
+        Manage groups, dashboard users, and row-level permissions. Admin only — changes are captured
+        in the audit trail.
       </p>
     </div>
     <Badge variant="default" class="self-start sm:self-end">
@@ -255,6 +353,19 @@
               <table class="w-full text-sm" data-testid="groups-table">
                 <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
                   <tr>
+                    <th class="w-10 px-3 py-2 text-left" scope="col">
+                      <input
+                        type="checkbox"
+                        class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                        checked={groupAllState === 'all'}
+                        use:indeterminate={groupAllState === 'some'}
+                        onchange={() => groupSelection.toggleAllVisible(visibleGroupNames)}
+                        aria-label={groupAllState === 'all'
+                          ? 'Deselect all visible groups'
+                          : 'Select all visible groups'}
+                        data-testid="select-all-groups"
+                      />
+                    </th>
                     <SortableHeader
                       columnKey="name"
                       activeKey={groupsTable.sortKey}
@@ -295,13 +406,23 @@
                 <tbody>
                   {#if groupsTable.view.length === 0}
                     <tr>
-                      <td colspan="5" class="px-4 py-6 text-center text-sm text-muted">
+                      <td colspan="6" class="px-4 py-6 text-center text-sm text-muted">
                         No groups match “{groupsTable.query}”.
                       </td>
                     </tr>
                   {:else}
                     {#each groupsTable.view as g (g.name)}
                       <tr class="border-b border-border-subtle last:border-b-0">
+                        <td class="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                            checked={groupSelection.has(g.name)}
+                            onchange={() => groupSelection.toggle(g.name)}
+                            aria-label={`Select group ${g.name}`}
+                            data-testid={`select-group-${g.name}`}
+                          />
+                        </td>
                         <td class="px-4 py-2 font-mono text-default">{g.name}</td>
                         <td class="px-4 py-2 text-muted">{g.description ?? '—'}</td>
                         <td class="px-4 py-2 text-right tabular-nums">{g.host_count}</td>
@@ -374,6 +495,19 @@
               <table class="w-full text-sm" data-testid="users-table">
                 <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
                   <tr>
+                    <th class="w-10 px-3 py-2 text-left" scope="col">
+                      <input
+                        type="checkbox"
+                        class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                        checked={userAllState === 'all'}
+                        use:indeterminate={userAllState === 'some'}
+                        onchange={() => userSelection.toggleAllVisible(visibleUserIds)}
+                        aria-label={userAllState === 'all'
+                          ? 'Deselect all visible users'
+                          : 'Select all visible users'}
+                        data-testid="select-all-users"
+                      />
+                    </th>
                     <SortableHeader
                       columnKey="email"
                       activeKey={usersTable.sortKey}
@@ -404,80 +538,93 @@
                 <tbody>
                   {#if usersTable.view.length === 0}
                     <tr>
-                      <td colspan="4" class="px-4 py-6 text-center text-sm text-muted">
+                      <td colspan="5" class="px-4 py-6 text-center text-sm text-muted">
                         No users match “{usersTable.query}”.
                       </td>
                     </tr>
                   {:else}
                     {#each usersTable.view as u (u.id)}
-                    <tr class="border-b border-border-subtle last:border-b-0">
-                      <td class="px-4 py-2">
-                        <div class="font-medium text-default">{u.email}</div>
-                        {#if u.name}
-                          <div class="text-xs text-muted">{u.name}</div>
-                        {/if}
-                        {#if !u.is_active}
-                          <Badge variant="muted" class="mt-1">disabled</Badge>
-                        {/if}
-                      </td>
-                      <td class="px-4 py-2">
-                        <select
-                          class="rounded border border-border-default bg-base px-2 py-1 text-xs"
-                          value={u.role}
-                          onchange={(e) =>
-                            changeRole(u, (e.currentTarget as HTMLSelectElement).value as UserRole)}
-                          disabled={$updateUser.isPending}
-                          aria-label={`Role for ${u.email}`}
-                        >
-                          <option value="admin">admin</option>
-                          <option value="operator">operator</option>
-                          <option value="viewer">viewer</option>
-                        </select>
-                      </td>
-                      <td class="px-4 py-2">
-                        <div class="flex flex-wrap gap-1">
-                          {#if groupNames.length === 0}
-                            <span class="text-xs text-muted">No groups available</span>
-                          {:else}
-                            {#each groupNames as g (g)}
-                              {@const on = u.groups.includes(g)}
-                              <button
-                                type="button"
-                                class={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                                  on
-                                    ? 'border-accent bg-accent/10 text-accent'
-                                    : 'border-border-default text-muted hover:bg-subtle'
-                                }`}
-                                onclick={() => toggleUserGroup(u, g)}
-                                disabled={$updateUser.isPending}
-                              >
-                                {g}
-                              </button>
-                            {/each}
+                      <tr class="border-b border-border-subtle last:border-b-0">
+                        <td class="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            class="size-4 cursor-pointer accent-[var(--accent-solid)]"
+                            checked={userSelection.has(u.id)}
+                            onchange={() => userSelection.toggle(u.id)}
+                            aria-label={`Select user ${u.email}`}
+                            data-testid={`select-user-${u.email}`}
+                          />
+                        </td>
+                        <td class="px-4 py-2">
+                          <div class="font-medium text-default">{u.email}</div>
+                          {#if u.name}
+                            <div class="text-xs text-muted">{u.name}</div>
                           {/if}
-                        </div>
-                      </td>
-                      <td class="px-4 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onclick={() => openPermissions(u)}
-                          title="Manage row-level permissions"
-                          data-testid="perms-btn"
-                        >
-                          <Key class="size-4" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onclick={() => confirmDeleteUser(u)}
-                          disabled={$deleteUser.isPending}
-                          title="Delete user"
-                        >
-                          <Trash2 class="size-4" aria-hidden="true" />
-                        </Button>
-                      </td>
-                    </tr>
+                          {#if !u.is_active}
+                            <Badge variant="muted" class="mt-1">disabled</Badge>
+                          {/if}
+                        </td>
+                        <td class="px-4 py-2">
+                          <select
+                            class="rounded border border-border-default bg-base px-2 py-1 text-xs"
+                            value={u.role}
+                            onchange={(e) =>
+                              changeRole(
+                                u,
+                                (e.currentTarget as HTMLSelectElement).value as UserRole,
+                              )}
+                            disabled={$updateUser.isPending}
+                            aria-label={`Role for ${u.email}`}
+                          >
+                            <option value="admin">admin</option>
+                            <option value="operator">operator</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        </td>
+                        <td class="px-4 py-2">
+                          <div class="flex flex-wrap gap-1">
+                            {#if groupNames.length === 0}
+                              <span class="text-xs text-muted">No groups available</span>
+                            {:else}
+                              {#each groupNames as g (g)}
+                                {@const on = u.groups.includes(g)}
+                                <button
+                                  type="button"
+                                  class={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                                    on
+                                      ? 'border-accent bg-accent/10 text-accent'
+                                      : 'border-border-default text-muted hover:bg-subtle'
+                                  }`}
+                                  onclick={() => toggleUserGroup(u, g)}
+                                  disabled={$updateUser.isPending}
+                                >
+                                  {g}
+                                </button>
+                              {/each}
+                            {/if}
+                          </div>
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onclick={() => openPermissions(u)}
+                            title="Manage row-level permissions"
+                            data-testid="perms-btn"
+                          >
+                            <Key class="size-4" aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onclick={() => confirmDeleteUser(u)}
+                            disabled={$deleteUser.isPending}
+                            title="Delete user"
+                          >
+                            <Trash2 class="size-4" aria-hidden="true" />
+                          </Button>
+                        </td>
+                      </tr>
                     {/each}
                   {/if}
                 </tbody>
@@ -596,5 +743,93 @@
         </Button>
       </DialogFooter>
     </form>
+  </DialogContent>
+</Dialog>
+
+<!-- ====================== Bulk-user action bar + dialogs ===================== -->
+<BulkUserActionBar
+  count={userSelection.count}
+  previewLabels={userPreviewLabels}
+  totalLabels={selectedUsers.length}
+  onChangeRole={() => openBulkUser('role')}
+  onAddGroup={() => openBulkUser('add-group')}
+  onRemoveGroup={() => openBulkUser('remove-group')}
+  onGrant={() => openBulkUser('grant')}
+  onDelete={() => openBulkUser('delete')}
+  onClear={() => userSelection.clear()}
+/>
+
+<BulkUserDialogs
+  mode={bulkUserMode}
+  open={bulkUserOpen}
+  onOpenChange={(o) => (bulkUserOpen = o)}
+  users={selectedUsers}
+  groups={groupNames}
+  {currentUserId}
+  onSettled={onBulkUserSettled}
+/>
+
+<!-- ====================== Bulk-group action bar + delete dialog ============= -->
+<BulkGroupActionBar
+  count={groupSelection.count}
+  previewLabels={groupPreviewLabels}
+  totalLabels={selectedGroups.length}
+  deletable={groupsAllDeletable}
+  blockedNames={blockedGroupNames}
+  onDelete={openBulkGroupDelete}
+  onClear={() => groupSelection.clear()}
+/>
+
+<Dialog bind:open={bulkGroupDeleteOpen} onOpenChange={(o) => (bulkGroupDeleteOpen = o)}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle
+        >Delete {selectedGroups.length} group{selectedGroups.length === 1 ? '' : 's'}</DialogTitle
+      >
+      <DialogDescription>
+        This cannot be undone. The selected groups are empty (no hosts) so each delete is safe.
+      </DialogDescription>
+    </DialogHeader>
+    <ul
+      class="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-subtle p-2 text-xs"
+      data-testid="bulk-group-targets"
+    >
+      {#each selectedGroups as g (g.name)}
+        <li class="font-mono">{g.name}</li>
+      {/each}
+    </ul>
+    <label class="block text-sm">
+      <span class="mb-1 block font-medium">
+        Type <code>{BULK_GROUP_PHRASE}</code> to confirm
+      </span>
+      <Input
+        bind:value={bulkGroupDeleteConfirm}
+        placeholder={BULK_GROUP_PHRASE}
+        data-testid="bulk-group-delete-confirm"
+        autocomplete="off"
+      />
+    </label>
+    <DialogFooter>
+      <Button
+        type="button"
+        variant="ghost"
+        onclick={() => (bulkGroupDeleteOpen = false)}
+        disabled={bulkGroupDeleteInFlight}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        variant="danger"
+        onclick={submitBulkGroupDelete}
+        disabled={bulkGroupDeleteInFlight || bulkGroupDeleteConfirm !== BULK_GROUP_PHRASE}
+        data-testid="bulk-group-delete-submit"
+      >
+        {#if bulkGroupDeleteInFlight}
+          <Loader2 class="mr-1 size-4 animate-spin" aria-hidden="true" />
+        {/if}
+        Delete
+      </Button>
+    </DialogFooter>
   </DialogContent>
 </Dialog>
