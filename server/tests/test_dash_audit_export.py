@@ -15,7 +15,7 @@ from rp_server.main import app
 from rp_server.routers import commands as commands_router
 from rp_server.routers import dash_commands as dash_commands_router
 
-from tests.test_dash_phase2 import (
+from test_dash_phase2 import (
     _clear_user_override,
     _make_command,
     _make_host,
