@@ -29,11 +29,18 @@ The following endpoints consult this module:
 
 - ``POST /v1/admin/commands`` -> ``command.issue`` (see
   ``routers/commands.py``).
+- ``POST /v1/dash/commands`` and
+  ``POST /v1/dash/commands/{id}/retry`` -> ``command.issue`` (see
+  ``routers/dash_commands.py``).
 - ``POST /v1/dash/approvals/{id}/approve`` and
   ``POST /v1/dash/approvals/{id}/reject`` -> ``command.approve`` (see
   ``routers/dash_commands.py``).
 - ``POST /v1/dash/enroll/links`` -> ``enroll.create`` (see
   ``routers/dash_enroll.py``).
+- ``DELETE /v1/dash/enroll/links/{jti}`` -> ``enroll.revoke`` (see
+  ``routers/dash_enroll.py``). ``enroll.create`` and ``enroll.revoke``
+  are deliberately separate so an operator may hold one without the
+  other (issuer vs. revoker).
 
 ``host.delete`` is reserved in :data:`ALLOWED_ACTIONS` but no HTTP
 endpoint surfaces it today. The slot exists so the Settings UI can grant
@@ -59,6 +66,7 @@ ALLOWED_ACTIONS: Final[frozenset[str]] = frozenset(
         "command.approve",
         "host.delete",
         "enroll.create",
+        "enroll.revoke",
     }
 )
 
