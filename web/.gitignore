@@ -9,3 +9,10 @@ vite.config.*.timestamp-*
 playwright-report/
 test-results/
 .vitest-cache/
+
+# Phase 5: axe-core baseline JSON + Lighthouse CI output are uploaded as
+# CI artifacts, not committed (timestamps in the payloads would churn the
+# diff on every run). Regenerate locally with `npm run test:a11y` /
+# `npm run lighthouse` — see web/README.md.
+tests/a11y-baseline/
+.lighthouseci/

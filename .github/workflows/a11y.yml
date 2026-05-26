@@ -1,0 +1,63 @@
+name: A11y baseline
+
+# ADR-0009 Phase 5 — axe-core accessibility baseline gate.
+#
+# Runs `npm run test:a11y` against every main dashboard route and uploads
+# the generated baseline JSON as an artifact. The spec runs in BASELINE
+# MODE (does not fail on violations); CI captures violation counts in the
+# logs so regressions surface in PR diffs.
+#
+# TODO: once the baseline is reviewed and obvious violations are fixed,
+# the spec switches to fail-on-regression and this job becomes a hard
+# gate.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/a11y.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  a11y:
+    name: axe-core baseline (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22']
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install deps (npm ci)
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run axe-core baseline
+        run: npm run test:a11y -- --reporter=list
+
+      - name: Upload baseline JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-baseline-node-${{ matrix.node }}
+          path: web/tests/a11y-baseline/
+          retention-days: 30
+          if-no-files-found: warn

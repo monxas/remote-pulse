@@ -18,10 +18,14 @@
     "format": "prettier --write .",
     "test": "npm run test:unit -- --run",
     "test:unit": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:a11y": "playwright test tests/e2e/a11y.spec.ts",
+    "lighthouse": "lhci autorun --config=./lighthouserc.json"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@eslint/js": "9.39.4",
+    "@lhci/cli": "0.14.0",
     "@playwright/test": "1.60.0",
     "@sveltejs/adapter-static": "3.0.10",
     "@sveltejs/kit": "2.61.1",
