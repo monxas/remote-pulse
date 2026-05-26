@@ -1,23 +1,27 @@
 {
-  "//": "Phase 5 (ADR-0009) Lighthouse CI config — a11y enforced, perf/SEO/best-practices still warn-only.",
-  "//target": "Production target: performance >= 0.9, accessibility >= 0.9, best-practices >= 0.9 (per ADR-0009 §7 Phase 5). Accessibility is now 'error' (v1.0.5: axe-core baseline went green); performance / best-practices / seo stay 'warn' until each page meets the budget.",
-  "//auth": "The SPA's main pages require an OIDC cookie. Lighthouse runs unauthenticated against `vite preview` (no FastAPI in this workflow), which means most routes will land on the SPA shell + auth-redirect logic. That still measures the shell perf/a11y baseline; full authed runs require an integration job with the FastAPI server which is deferred until the score budgets are taken seriously.",
+  "//": "Phase 5 (ADR-0009) Lighthouse CI config — a11y enforced, perf/SEO/best-practices still warn-only (flip pending in a follow-up commit).",
+  "//target": "Production target per ADR-0009 §7 Phase 5: performance >= 0.9, accessibility >= 0.9, best-practices >= 0.9, seo >= 0.9. Once each page meets the budget the gate flips from warn to error.",
+  "//auth": "Authed pages are reached via a build-time bypass: when `VITE_LH_BYPASS=1` is set during `npm run build`, the SvelteKit shell honours `?_lh=1` in the URL and synthesizes an admin AuthMe, skipping the redirect-to-FastAPI flow. The bypass is dead-code-eliminated from regular release builds. See `src/routes/+layout.ts`.",
+  "//extraHeaders": "X-RP-Test-Auth is sent on every request so that if a FastAPI-integrated Lighthouse job is ever added, the server-side bypass (rp_server.deps._maybe_lighthouse_bypass_user) will also activate. Against `vite preview` the header is harmless — vite ignores unknown headers.",
   "ci": {
     "collect": {
       "startServerCommand": "npm run preview -- --host 127.0.0.1 --port 4173",
       "startServerReadyPattern": "Local:",
       "startServerReadyTimeout": 60000,
       "url": [
-        "http://127.0.0.1:4173/dash-next/",
-        "http://127.0.0.1:4173/dash-next/hosts",
-        "http://127.0.0.1:4173/dash-next/audit",
-        "http://127.0.0.1:4173/dash-next/settings"
+        "http://127.0.0.1:4173/dash-next/?_lh=1",
+        "http://127.0.0.1:4173/dash-next/hosts?_lh=1",
+        "http://127.0.0.1:4173/dash-next/audit?_lh=1",
+        "http://127.0.0.1:4173/dash-next/settings?_lh=1"
       ],
       "numberOfRuns": 1,
       "settings": {
         "preset": "desktop",
         "chromeFlags": "--no-sandbox --headless=new",
-        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"]
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
+        "extraHeaders": {
+          "X-RP-Test-Auth": "lighthouse-ci-placeholder-token"
+        }
       }
     },
     "assert": {
@@ -25,7 +29,7 @@
         "categories:performance": ["warn", { "minScore": 0.9 }],
         "categories:accessibility": ["error", { "minScore": 0.9 }],
         "categories:best-practices": ["warn", { "minScore": 0.9 }],
-        "categories:seo": ["warn", { "minScore": 0.8 }]
+        "categories:seo": ["warn", { "minScore": 0.9 }]
       }
     },
     "upload": {

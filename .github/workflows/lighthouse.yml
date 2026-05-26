@@ -1,17 +1,19 @@
 name: Lighthouse CI
 
-# ADR-0009 Phase 5 — Lighthouse CI gate (warn-only baseline).
+# ADR-0009 Phase 5 — Lighthouse CI hard gate.
 #
-# Builds the SvelteKit SPA, serves it with `vite preview`, and runs
-# Lighthouse against the main dashboard URLs. Assertions are warn-only
-# until the baseline is reviewed and the >=90 perf/a11y/best-practices
-# budget is enforced. See `web/lighthouserc.json`.
+# Builds the SvelteKit SPA with the `VITE_LH_BYPASS=1` opt-in flag so the
+# `?_lh=1` query string short-circuits the OIDC redirect. The SPA shell
+# paints the real authed dashboards against `vite preview` and Lighthouse
+# audits each route end-to-end.
 #
-# NOTE: most authenticated routes will redirect to the FastAPI /auth/login
-# flow when run unauthenticated, which isn't reachable from `vite preview`.
-# Lighthouse still measures the shell, but full-page authed scores require
-# a richer integration job (FastAPI + OIDC stub) deferred until budgets
-# become hard gates.
+# Assertions are HARD ERRORS at >=0.9 for performance, accessibility,
+# best-practices, and seo. See `web/lighthouserc.json`.
+#
+# Security note: the bypass build is throwaway. The compiled artifact is
+# never published or deployed — it lives only in the GH Actions runner.
+# Production release builds (`web-ci.yml`, `release.yml`) build without
+# the flag so the bypass branch is dead-code-eliminated.
 
 on:
   pull_request:
@@ -49,8 +51,50 @@ jobs:
       - name: Install deps (npm ci)
         run: npm ci --no-audit --no-fund
 
-      - name: Build SPA
+      # ----------------------------------------------------------------
+      # Generate a per-run bypass token. NEVER commit a token, NEVER
+      # surface it outside this job. The token is consumed in two
+      # places below:
+      #   1. The SPA build sees `VITE_LH_BYPASS=1` and enables the
+      #      `?_lh=1` short-circuit. The token itself is NOT compiled
+      #      into the bundle — the build flag is binary.
+      #   2. The LHCI extraHeaders override (set via env-substitution
+      #      in a generated config) sends `X-RP-Test-Auth: <token>`.
+      #      This only matters if a FastAPI-integrated Lighthouse job
+      #      is added later; against `vite preview` the header is
+      #      ignored. The matching server-side env
+      #      (RP_LIGHTHOUSE_BYPASS_TOKEN) must NEVER be set in prod.
+      # ----------------------------------------------------------------
+      - name: Generate one-shot bypass token
+        id: bypass
+        run: |
+          TOKEN=$(openssl rand -hex 32)
+          # Mark sensitive so it never appears in logs.
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Build SPA (with Lighthouse bypass flag)
+        env:
+          VITE_LH_BYPASS: '1'
         run: npm run build
+
+      - name: Patch lighthouserc with one-shot token
+        env:
+          LH_BYPASS_TOKEN: ${{ steps.bypass.outputs.token }}
+        run: |
+          # Replace the placeholder header value with the per-run token
+          # so a future FastAPI-integrated job (server-side bypass) would
+          # be wired up automatically. `vite preview` ignores unknown
+          # headers so the substitution is a no-op for this run.
+          python3 - <<'PY'
+          import json, os, sys, pathlib
+          p = pathlib.Path('lighthouserc.json')
+          cfg = json.loads(p.read_text())
+          settings = cfg['ci']['collect'].setdefault('settings', {})
+          extra = settings.setdefault('extraHeaders', {})
+          extra['X-RP-Test-Auth'] = os.environ['LH_BYPASS_TOKEN']
+          p.write_text(json.dumps(cfg, indent=2) + '\n')
+          PY
 
       - name: Run Lighthouse CI
         run: npx --no-install lhci autorun --config=./lighthouserc.json
