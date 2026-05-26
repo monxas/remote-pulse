@@ -30,6 +30,7 @@ import {
   createEnrollLink,
   createSettingsGroup,
   createSettingsUser,
+  deleteHost,
   deleteSettingsGroup,
   deleteSettingsUser,
   getDashAudit,
@@ -447,12 +448,7 @@ export function createCreateGroupMutation() {
 
 export function createDeleteGroupMutation() {
   const client = useQueryClient();
-  return createMutation<
-    void,
-    Error,
-    string,
-    { previous: SettingsGroupsResponse | undefined }
-  >({
+  return createMutation<void, Error, string, { previous: SettingsGroupsResponse | undefined }>({
     mutationFn: (name) => deleteSettingsGroup(name),
     onMutate: async (name) => {
       await client.cancelQueries({ queryKey: qk.settingsGroups() });
@@ -537,12 +533,7 @@ export function createUpdateUserMutation() {
 
 export function createDeleteUserMutation() {
   const client = useQueryClient();
-  return createMutation<
-    void,
-    Error,
-    string,
-    { previous: SettingsUsersResponse | undefined }
-  >({
+  return createMutation<void, Error, string, { previous: SettingsUsersResponse | undefined }>({
     mutationFn: (id) => deleteSettingsUser(id),
     onMutate: async (id) => {
       await client.cancelQueries({ queryKey: qk.settingsUsers() });
@@ -607,8 +598,7 @@ export function createUserPermissionsQuery(userId: Readable<string>) {
   return createQuery<UserPermissionsResponse>(
     derived(userId, (id) => ({
       queryKey: qk.settingsUserPermissions(id),
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        listUserPermissions(id, undefined, signal),
+      queryFn: ({ signal }: { signal: AbortSignal }) => listUserPermissions(id, undefined, signal),
       enabled: id.length > 0,
       staleTime: 10_000,
     })),
@@ -719,6 +709,71 @@ export function createRevokeEnrollLinkMutation() {
     },
     onError: (err: Error) => {
       toast.error('Could not revoke magic-link', { description: err.message });
+    },
+  });
+}
+
+// ---- /v1/dash/hosts/:id (DELETE) ---------------------------------------- //
+//
+// Optimistic remove from any cached fleet listing while the DELETE flies.
+// The `hostsAll()` family key sweeps every parameter combination that has
+// been seeded into the cache, so users on Hosts/Fleet with different
+// filters all see the row vanish in lock-step.
+
+export function patchHostsAfterDelete(old: HostsList | undefined, hostId: string): HostsList {
+  return {
+    hosts: (old?.hosts ?? []).filter((h) => h.id !== hostId),
+    groups: old?.groups ?? [],
+  };
+}
+
+interface DeleteHostContext {
+  snapshots: Array<[readonly unknown[], HostsList | undefined]>;
+}
+
+export function createDeleteHostMutation() {
+  const client = useQueryClient();
+  return createMutation<void, Error, string, DeleteHostContext>({
+    mutationFn: (id) => deleteHost(id),
+    onMutate: async (id) => {
+      // Cancel any in-flight refetches so they don't stomp the optimistic
+      // patch before the DELETE resolves.
+      await client.cancelQueries({ queryKey: qk.hostsAll() });
+      await client.cancelQueries({ queryKey: qk.host(id) });
+
+      // Snapshot every cached hosts list (HostsParams varies per page) so
+      // we can roll back the whole family on failure.
+      const snapshots = client
+        .getQueriesData<HostsList>({ queryKey: qk.hostsAll() })
+        .map(([key, data]) => [key, data] as [readonly unknown[], HostsList | undefined]);
+
+      for (const [key] of snapshots) {
+        client.setQueryData<HostsList>(key, (old) => patchHostsAfterDelete(old, id));
+      }
+      // The single-host cache becomes meaningless once the row is gone.
+      client.removeQueries({ queryKey: qk.host(id) });
+
+      return { snapshots };
+    },
+    onError: (err, _id, ctx) => {
+      if (ctx) {
+        for (const [key, data] of ctx.snapshots) {
+          client.setQueryData(key, data);
+        }
+      }
+      toast.error('Could not delete host', { description: err.message });
+    },
+    onSuccess: () => {
+      toast.success('Host deleted');
+    },
+    onSettled: (_data, _err, id) => {
+      // Re-fetch fleet, hosts list, overview (host counts), audit (delete
+      // event), and the now-defunct single-host detail (so consumers get
+      // a 404 instead of stale data).
+      void client.invalidateQueries({ queryKey: qk.hostsAll() });
+      void client.invalidateQueries({ queryKey: qk.overview() });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+      void client.invalidateQueries({ queryKey: qk.host(id) });
     },
   });
 }

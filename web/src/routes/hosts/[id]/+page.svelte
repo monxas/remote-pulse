@@ -14,6 +14,7 @@
   import RelativeTime from '$lib/components/app/RelativeTime.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
+  import DeleteHostDialog from '$lib/components/app/DeleteHostDialog.svelte';
   import {
     createHostDetailQuery,
     createTimeseriesQuery,
@@ -22,6 +23,7 @@
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
   import { formatUptime } from '$lib/utils/relative-time';
+  import { userStore } from '$lib/stores/user.svelte';
 
   type Data = { hostId: string };
   const { data }: { data: Data } = $props();
@@ -56,6 +58,15 @@
 
   let activeTab = $state<'metrics' | 'commands' | 'logs' | 'keys'>('metrics');
   let issueOpen = $state(false);
+  let deleteOpen = $state(false);
+
+  // Show the "Danger zone" only to admins. Non-admins with a row-level
+  // `host.delete` grant are gated client-side here for UX clarity; the
+  // server is the source of truth and answers 403 if a stale grant has
+  // already been revoked. Granting non-admins visibility would require
+  // an extra `/v1/dash/settings/users/{me}/permissions` round-trip per
+  // host page — not worth the latency for a marginal UX win.
+  const canDeleteHost = $derived(userStore.value?.user_role === 'admin');
 
   function updateWindow(next: string): void {
     const sp = new SvelteURLSearchParams($page.url.searchParams);
@@ -102,11 +113,7 @@
           <HostStatusBadge status={host.status} lastSeenSecondsAgo={host.last_seen_seconds_ago} />
         </div>
         <div class="flex items-center gap-2">
-          <Button
-            size="sm"
-            data-testid="host-issue-command-btn"
-            onclick={() => (issueOpen = true)}
-          >
+          <Button size="sm" data-testid="host-issue-command-btn" onclick={() => (issueOpen = true)}>
             Issue command
           </Button>
           {#if live}
@@ -334,6 +341,47 @@
         </Card>
       </TabsContent>
     </Tabs>
+
+    {#if canDeleteHost}
+      <section
+        class="mt-6 rounded-lg border border-danger/40 bg-elevated p-4 sm:p-6"
+        aria-labelledby="danger-zone-heading"
+      >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h2 id="danger-zone-heading" class="text-sm font-semibold text-danger">Danger zone</h2>
+            <p class="text-xs text-muted">
+              Permanently delete <span class="font-mono">{host.hostname}</span> and all its history (heartbeats,
+              commands, SSH keys). This cannot be undone.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            size="sm"
+            data-testid="host-delete-btn"
+            onclick={() => (deleteOpen = true)}
+          >
+            Delete host
+          </Button>
+        </div>
+      </section>
+
+      <DeleteHostDialog
+        bind:open={deleteOpen}
+        onOpenChange={(v) => (deleteOpen = v)}
+        hostId={host.id}
+        hostname={host.hostname}
+        onDeleted={() => {
+          // Send the user back to the fleet overview — the host row will
+          // already be gone thanks to the optimistic patch. The base
+          // prefix is the SPA mount-point; this is intentionally a
+          // template literal so eslint-plugin-svelte sees `goto(base + '/')`
+          // rather than a magic string it can't resolve.
+          // eslint-disable-next-line svelte/no-navigation-without-resolve
+          void goto(`${base}/`);
+        }}
+      />
+    {/if}
 
     <IssueCommandDialog
       bind:open={issueOpen}
