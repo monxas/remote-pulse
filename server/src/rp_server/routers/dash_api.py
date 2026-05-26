@@ -810,15 +810,64 @@ async def stream(
     - ``host.status_change`` — online ↔ stale ↔ offline transitions
     - ``command.status_change`` — command lifecycle (terminal states)
     - ``approval.created`` — new Telegram approval request
+    - ``gap`` — synthetic catch-up after a reconnect (see below)
+
+    Every event carries a monotonic integer id in its ``id:`` SSE field.
+    When a client reconnects, EventSource automatically sets the
+    ``Last-Event-ID`` request header; we use that to replay any events
+    the client missed (best-effort, capped by the publisher's in-memory
+    ring buffer in :mod:`rp_server.events`). Replayed events are wrapped
+    in a single ``gap`` event so the client can distinguish them from
+    live traffic.
 
     The endpoint stays open until the client disconnects. Sends ``:keepalive``
     comments every 20s via ``ping=20`` so reverse proxies don't buffer.
 
     Phase 1 fan-out is per-process (see ``rp_server.events`` docstring).
     """
+    # Parse the Last-Event-ID header (EventSource sets it automatically on
+    # reconnect). Non-numeric or missing values fall back to "no replay".
+    last_event_id_header = request.headers.get("last-event-id")
+    last_event_id = 0
+    if last_event_id_header is not None:
+        try:
+            last_event_id = int(last_event_id_header)
+        except ValueError:
+            last_event_id = 0
 
     async def event_generator() -> Any:
-        async for event_type, payload in event_bus.subscribe():
+        # Phase 1 of the connection: replay any buffered events the
+        # client missed while disconnected. The whole catch-up window
+        # is shipped as a single `gap` event so the client can process
+        # it as a batch (and we don't blow up its activity history).
+        if last_event_id > 0:
+            replay = event_bus.replay_since(last_event_id)
+            visible = [
+                {
+                    "type": event_type,
+                    "data": payload,
+                    "id": str(event_id),
+                }
+                for event_id, event_type, payload in replay
+                if _event_visible_to_user(user, payload)
+            ]
+            if visible:
+                latest_id = visible[-1]["id"]
+                assert isinstance(latest_id, str)  # mypy
+                yield {
+                    "event": "gap",
+                    "id": latest_id,
+                    "data": json.dumps({"events": visible}, default=str),
+                }
+            else:
+                # Tell the client we tried but had nothing to replay so
+                # it can stop showing a "reconnecting…" indicator.
+                yield {
+                    "event": "gap",
+                    "data": json.dumps({"events": []}, default=str),
+                }
+
+        async for event_id, event_type, payload in event_bus.subscribe_with_id():
             # Client gone? Stop early so we release the queue slot.
             if await request.is_disconnected():
                 break
@@ -826,6 +875,7 @@ async def stream(
                 continue
             yield {
                 "event": event_type,
+                "id": str(event_id),
                 "data": json.dumps(payload, default=str),
             }
 
