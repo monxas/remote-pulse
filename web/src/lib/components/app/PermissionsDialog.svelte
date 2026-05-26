@@ -129,7 +129,7 @@
             Loading permissions…
           </div>
         {:else if $permsQuery.isError}
-          <div class="p-4 text-sm text-danger">
+          <div class="p-4 text-sm text-danger-text">
             Failed to load: {$permsQuery.error?.message ?? 'unknown error'}
           </div>
         {:else if ($permsQuery.data?.permissions ?? []).length === 0}

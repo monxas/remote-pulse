@@ -9,6 +9,8 @@
     ShieldCheck,
   } from '@lucide/svelte';
   import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
+  import SortableHeader from '$lib/components/app/SortableHeader.svelte';
+  import TableSearch from '$lib/components/app/TableSearch.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -32,6 +34,7 @@
     createDeleteUserMutation,
   } from '$lib/queries';
   import type { SettingsGroup, SettingsUser, UserRole } from '$lib/api';
+  import { createTableState } from '$lib/components/app/table-state.svelte';
 
   const groupsQuery = createSettingsGroupsQuery();
   const usersQuery = createSettingsUsersQuery();
@@ -44,6 +47,35 @@
   const groups = $derived<SettingsGroup[]>($groupsQuery.data?.groups ?? []);
   const users = $derived<SettingsUser[]>($usersQuery.data?.users ?? []);
   const groupNames = $derived(groups.map((g) => g.name));
+
+  // ---- Sort + search state for the two tables ----
+  // Prefixes ('g_' for groups, 'u_' for users) namespace the URL params so
+  // both tables can persist their state independently on the same route.
+  const groupsTable = createTableState<SettingsGroup>(() => groups, {
+    prefix: 'g_',
+    searchable: ['name', 'description'],
+    getSortValue: (row, key) => {
+      if (key === 'host_count') return row.host_count;
+      if (key === 'user_count') return row.user_count;
+      return (row as unknown as Record<string, unknown>)[key];
+    },
+  });
+
+  const usersTable = createTableState<SettingsUser>(() => users, {
+    prefix: 'u_',
+    searchable: ['email', 'name', 'role'],
+    getSortValue: (row, key) => {
+      if (key === 'groups') return row.groups.join(',');
+      return (row as unknown as Record<string, unknown>)[key];
+    },
+  });
+
+  const groupsTableDirty = $derived(
+    Boolean(groupsTable.query) || groupsTable.sortKey !== null,
+  );
+  const usersTableDirty = $derived(
+    Boolean(usersTable.query) || usersTable.sortKey !== null,
+  );
 
   // ---- New group dialog ----
   let newGroupOpen = $state(false);
@@ -198,7 +230,7 @@
             </div>
           {:else if $groupsQuery.isError}
             <div class="space-y-2 px-4 py-6 text-sm">
-              <p class="text-danger">
+              <p class="text-danger-text">
                 Failed to load groups: {$groupsQuery.error?.message ?? 'unknown error'}
               </p>
               <Button size="sm" onclick={() => void $groupsQuery.refetch()}>Retry</Button>
@@ -208,39 +240,88 @@
               No groups yet. Create one to organise hosts and grant access.
             </div>
           {:else}
+            <div class="border-b border-border-subtle px-4 py-3">
+              <TableSearch
+                value={groupsTable.query}
+                onChange={(q) => groupsTable.setQuery(q)}
+                onReset={() => groupsTable.reset()}
+                showReset={groupsTableDirty}
+                placeholder="Search by name or description…"
+                label="Search groups"
+                testId="groups-search"
+              />
+            </div>
             <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" data-testid="groups-table">
                 <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
                   <tr>
-                    <th class="px-4 py-2 text-left font-medium">Name</th>
-                    <th class="px-4 py-2 text-left font-medium">Description</th>
-                    <th class="px-4 py-2 text-right font-medium">Hosts</th>
-                    <th class="px-4 py-2 text-right font-medium">Users</th>
-                    <th class="px-4 py-2 text-right font-medium">Actions</th>
+                    <SortableHeader
+                      columnKey="name"
+                      activeKey={groupsTable.sortKey}
+                      activeDir={groupsTable.sortDir}
+                      onToggle={(k) => groupsTable.toggleSort(k)}
+                    >
+                      Name
+                    </SortableHeader>
+                    <SortableHeader
+                      columnKey="description"
+                      activeKey={groupsTable.sortKey}
+                      activeDir={groupsTable.sortDir}
+                      onToggle={(k) => groupsTable.toggleSort(k)}
+                    >
+                      Description
+                    </SortableHeader>
+                    <SortableHeader
+                      columnKey="host_count"
+                      activeKey={groupsTable.sortKey}
+                      activeDir={groupsTable.sortDir}
+                      onToggle={(k) => groupsTable.toggleSort(k)}
+                      align="right"
+                    >
+                      Hosts
+                    </SortableHeader>
+                    <SortableHeader
+                      columnKey="user_count"
+                      activeKey={groupsTable.sortKey}
+                      activeDir={groupsTable.sortDir}
+                      onToggle={(k) => groupsTable.toggleSort(k)}
+                      align="right"
+                    >
+                      Users
+                    </SortableHeader>
+                    <th scope="col" class="px-4 py-2 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each groups as g (g.name)}
-                    <tr class="border-b border-border-subtle last:border-b-0">
-                      <td class="px-4 py-2 font-mono text-default">{g.name}</td>
-                      <td class="px-4 py-2 text-muted">{g.description ?? '—'}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{g.host_count}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{g.user_count}</td>
-                      <td class="px-4 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={g.host_count > 0 || $deleteGroup.isPending}
-                          title={g.host_count > 0
-                            ? 'Reassign hosts before deleting'
-                            : 'Delete group'}
-                          onclick={() => confirmDeleteGroup(g)}
-                        >
-                          <Trash2 class="size-4" aria-hidden="true" />
-                        </Button>
+                  {#if groupsTable.view.length === 0}
+                    <tr>
+                      <td colspan="5" class="px-4 py-6 text-center text-sm text-muted">
+                        No groups match “{groupsTable.query}”.
                       </td>
                     </tr>
-                  {/each}
+                  {:else}
+                    {#each groupsTable.view as g (g.name)}
+                      <tr class="border-b border-border-subtle last:border-b-0">
+                        <td class="px-4 py-2 font-mono text-default">{g.name}</td>
+                        <td class="px-4 py-2 text-muted">{g.description ?? '—'}</td>
+                        <td class="px-4 py-2 text-right tabular-nums">{g.host_count}</td>
+                        <td class="px-4 py-2 text-right tabular-nums">{g.user_count}</td>
+                        <td class="px-4 py-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={g.host_count > 0 || $deleteGroup.isPending}
+                            title={g.host_count > 0
+                              ? 'Reassign hosts before deleting'
+                              : 'Delete group'}
+                            onclick={() => confirmDeleteGroup(g)}
+                          >
+                            <Trash2 class="size-4" aria-hidden="true" />
+                          </Button>
+                        </td>
+                      </tr>
+                    {/each}
+                  {/if}
                 </tbody>
               </table>
             </div>
@@ -270,7 +351,7 @@
             </div>
           {:else if $usersQuery.isError}
             <div class="space-y-2 px-4 py-6 text-sm">
-              <p class="text-danger">
+              <p class="text-danger-text">
                 Failed to load users: {$usersQuery.error?.message ?? 'unknown error'}
               </p>
               <Button size="sm" onclick={() => void $usersQuery.refetch()}>Retry</Button>
@@ -278,18 +359,57 @@
           {:else if users.length === 0}
             <div class="px-4 py-8 text-center text-sm text-muted">No users yet.</div>
           {:else}
+            <div class="border-b border-border-subtle px-4 py-3">
+              <TableSearch
+                value={usersTable.query}
+                onChange={(q) => usersTable.setQuery(q)}
+                onReset={() => usersTable.reset()}
+                showReset={usersTableDirty}
+                placeholder="Search by email, name or role…"
+                label="Search users"
+                testId="users-search"
+              />
+            </div>
             <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" data-testid="users-table">
                 <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
                   <tr>
-                    <th class="px-4 py-2 text-left font-medium">Email</th>
-                    <th class="px-4 py-2 text-left font-medium">Role</th>
-                    <th class="px-4 py-2 text-left font-medium">Groups</th>
-                    <th class="px-4 py-2 text-right font-medium">Actions</th>
+                    <SortableHeader
+                      columnKey="email"
+                      activeKey={usersTable.sortKey}
+                      activeDir={usersTable.sortDir}
+                      onToggle={(k) => usersTable.toggleSort(k)}
+                    >
+                      Email
+                    </SortableHeader>
+                    <SortableHeader
+                      columnKey="role"
+                      activeKey={usersTable.sortKey}
+                      activeDir={usersTable.sortDir}
+                      onToggle={(k) => usersTable.toggleSort(k)}
+                    >
+                      Role
+                    </SortableHeader>
+                    <SortableHeader
+                      columnKey="groups"
+                      activeKey={usersTable.sortKey}
+                      activeDir={usersTable.sortDir}
+                      onToggle={(k) => usersTable.toggleSort(k)}
+                    >
+                      Groups
+                    </SortableHeader>
+                    <th scope="col" class="px-4 py-2 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each users as u (u.id)}
+                  {#if usersTable.view.length === 0}
+                    <tr>
+                      <td colspan="4" class="px-4 py-6 text-center text-sm text-muted">
+                        No users match “{usersTable.query}”.
+                      </td>
+                    </tr>
+                  {:else}
+                    {#each usersTable.view as u (u.id)}
                     <tr class="border-b border-border-subtle last:border-b-0">
                       <td class="px-4 py-2">
                         <div class="font-medium text-default">{u.email}</div>
@@ -358,7 +478,8 @@
                         </Button>
                       </td>
                     </tr>
-                  {/each}
+                    {/each}
+                  {/if}
                 </tbody>
               </table>
             </div>
