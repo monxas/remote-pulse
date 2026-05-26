@@ -99,7 +99,9 @@
 -->
 <div class="hidden overflow-hidden rounded-lg border border-border-default sm:block">
   <table class="w-full border-collapse text-sm" data-testid="hosts-table">
-    <thead class="sticky top-14 z-10 bg-subtle/95 text-xs tracking-wide text-muted uppercase backdrop-blur">
+    <thead
+      class="sticky top-14 z-10 bg-subtle/95 text-xs tracking-wide text-muted uppercase backdrop-blur"
+    >
       <tr>
         {#if selection}
           <th class="w-12 px-3 py-2 text-left" scope="col">

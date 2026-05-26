@@ -118,11 +118,12 @@
 </script>
 
 <!--
-  svelte-ignore a11y_no_static_element_interactions
-  Touch handlers are global gesture hooks for the whole content
+  Touch handlers below are gesture hooks for the whole content
   region, not semantic actions. Every interactive child (rows,
-  buttons, links) keeps its native role + keyboard accessibility.
+  buttons, links) keeps its native role + keyboard accessibility,
+  so the wrapper has no role of its own.
 -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="relative"
   style:overscroll-behavior-y="contain"
