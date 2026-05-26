@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   patchGroupsAfterCreate,
   patchGroupsAfterDelete,
+  patchHostsAfterDelete,
   patchPermissionsAfterGrant,
   patchPermissionsAfterRevoke,
   patchUsersAfterCreate,
@@ -18,6 +19,7 @@ import {
   patchUsersAfterUpdate,
 } from './index';
 import type {
+  HostsList,
   SettingsGroupsResponse,
   SettingsUsersResponse,
   UserPermissionsResponse,
@@ -204,5 +206,50 @@ describe('patchPermissionsAfterRevoke', () => {
     };
     const next = patchPermissionsAfterRevoke(old, 'p-1');
     expect(next.permissions.map((p) => p.id)).toEqual(['p-2']);
+  });
+});
+
+describe('patchHostsAfterDelete', () => {
+  const sampleHost = (id: string, hostname: string): HostsList['hosts'][number] => ({
+    id,
+    hostname,
+    group_name: 'prod',
+    status: 'online',
+    last_seen_at: '2026-05-26T00:00:00Z',
+    last_seen_seconds_ago: 3,
+    os_family: 'linux',
+    agent_version: '1.0.8',
+    tailscale_ip: '100.64.0.10',
+    current: { cpu_pct: 10, mem_pct: 40, load_1m: 0.2, uptime_s: 3600 },
+    sparkline: { window_s: 60, bucket_s: 10, ts: [], cpu_pct: [], mem_pct: [] },
+  });
+
+  it('removes the host with the given id and keeps the rest', () => {
+    const old: HostsList = {
+      hosts: [
+        sampleHost('host-a', 'rp-a'),
+        sampleHost('host-b', 'rp-b'),
+        sampleHost('host-c', 'rp-c'),
+      ],
+      groups: ['prod'],
+    };
+    const next = patchHostsAfterDelete(old, 'host-b');
+    expect(next.hosts.map((h) => h.id)).toEqual(['host-a', 'host-c']);
+    expect(next.groups).toEqual(['prod']);
+  });
+
+  it('is a no-op when the host id is not in the list', () => {
+    const old: HostsList = {
+      hosts: [sampleHost('host-a', 'rp-a')],
+      groups: ['prod'],
+    };
+    const next = patchHostsAfterDelete(old, 'host-missing');
+    expect(next.hosts.map((h) => h.id)).toEqual(['host-a']);
+  });
+
+  it('handles an undefined cache as an empty list + empty groups', () => {
+    const next = patchHostsAfterDelete(undefined, 'host-a');
+    expect(next.hosts).toEqual([]);
+    expect(next.groups).toEqual([]);
   });
 });

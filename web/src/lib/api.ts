@@ -37,7 +37,13 @@ async function request<T>(path: string, init: RequestInit, opts: ApiOptions = {}
 
   const ctype = res.headers.get('content-type') ?? '';
   const isJson = ctype.includes('application/json');
-  const body: unknown = isJson ? await res.json().catch(() => null) : await res.text();
+  // 204 No Content has no body — callers must declare `Promise<void>`.
+  const isNoContent = res.status === 204;
+  const body: unknown = isNoContent
+    ? null
+    : isJson
+      ? await res.json().catch(() => null)
+      : await res.text();
 
   if (!res.ok) {
     const msg =
@@ -45,6 +51,10 @@ async function request<T>(path: string, init: RequestInit, opts: ApiOptions = {}
         ? String((body as { detail: unknown }).detail)
         : `HTTP ${res.status}`;
     throw new ApiError(res.status, msg, body);
+  }
+
+  if (isNoContent) {
+    return undefined as T;
   }
 
   // Guard against non-JSON 200s: some dev/preview proxies (e.g. `vite
@@ -178,6 +188,22 @@ export async function getDashTimeseries(
     `/v1/dash/hosts/${encodeURIComponent(hostId)}/timeseries?${usp.toString()}`,
     { method: 'GET' },
     { fetch: f, signal },
+  );
+}
+
+// ---------- /v1/dash/hosts/:id (DELETE) ----------
+//
+// Permanently deletes a host and cascades its dependent rows (heartbeats,
+// metrics, commands, ssh_keys, agent_versions). Server returns 204 No
+// Content on success; the wrapper resolves with `undefined`. Errors:
+//  - 403 if caller lacks `host.delete` for the host's group
+//  - 404 if host id is unknown / outside caller's accessible_groups
+//  - 409 if host is the canary of an in-flight deploy
+export async function deleteHost(hostId: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/hosts/${encodeURIComponent(hostId)}`,
+    { method: 'DELETE' },
+    { fetch: f },
   );
 }
 
