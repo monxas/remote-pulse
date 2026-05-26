@@ -26,6 +26,7 @@ from rp_server.routers import (
     dash_api,
     dash_audit,
     dash_commands,
+    dash_settings,
     enroll,
     enrollment_links,
     heartbeat,
@@ -177,6 +178,7 @@ app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)
 app.include_router(dash_api.router)
 app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
 app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
+app.include_router(dash_settings.router)  # Phase 4: groups + users management
 app.include_router(web.router)  # F5: Web dashboard (legacy Jinja UI)
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
