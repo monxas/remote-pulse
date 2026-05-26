@@ -13,6 +13,7 @@
   import WindowSelector from '$lib/components/app/WindowSelector.svelte';
   import RelativeTime from '$lib/components/app/RelativeTime.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
+  import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
   import {
     createHostDetailQuery,
     createTimeseriesQuery,
@@ -54,6 +55,7 @@
   );
 
   let activeTab = $state<'metrics' | 'commands' | 'logs' | 'keys'>('metrics');
+  let issueOpen = $state(false);
 
   function updateWindow(next: string): void {
     const sp = new SvelteURLSearchParams($page.url.searchParams);
@@ -99,9 +101,18 @@
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{host.hostname}</h1>
           <HostStatusBadge status={host.status} lastSeenSecondsAgo={host.last_seen_seconds_ago} />
         </div>
-        {#if live}
-          <LiveBadge state={live.state} />
-        {/if}
+        <div class="flex items-center gap-2">
+          <Button
+            size="sm"
+            data-testid="host-issue-command-btn"
+            onclick={() => (issueOpen = true)}
+          >
+            Issue command
+          </Button>
+          {#if live}
+            <LiveBadge state={live.state} />
+          {/if}
+        </div>
       </div>
       <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3 lg:grid-cols-6">
         <div>
@@ -323,6 +334,12 @@
         </Card>
       </TabsContent>
     </Tabs>
+
+    <IssueCommandDialog
+      bind:open={issueOpen}
+      onOpenChange={(v) => (issueOpen = v)}
+      initialHostId={data.hostId}
+    />
   {:else if $hostQuery.isError}
     <Card>
       <CardHeader>

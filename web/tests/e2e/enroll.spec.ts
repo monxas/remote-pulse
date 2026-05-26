@@ -82,8 +82,8 @@ test('enroll page renders form and active links when authed as admin', async ({ 
   await expect(page.getByTestId('enroll-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Enroll an agent' })).toBeVisible();
   await expect(page.getByTestId('enroll-form-card')).toBeVisible();
-  // <Button> doesn't forward `data-testid`; select by accessible name.
-  await expect(page.getByRole('button', { name: /Generate magic-link/i })).toBeVisible();
+  // Restored to data-testid now that Button spreads `...rest`.
+  await expect(page.getByTestId('enroll-submit')).toBeVisible();
 
   // Group dropdown is populated from the settings endpoint.
   const groupSelect = page.getByTestId('enroll-group');
@@ -94,7 +94,6 @@ test('enroll page renders form and active links when authed as admin', async ({ 
   // Existing link renders in the table.
   await expect(page.getByTestId('enroll-link-row')).toHaveCount(1);
   await expect(page.getByText('admin@test.local')).toBeVisible();
-  // The shared <Button> drops `data-testid` and `aria-label`, so select
-  // by visible text. There is exactly one Revoke button (one fixture row).
-  await expect(page.getByRole('button', { name: 'Revoke' })).toBeVisible();
+  // Restored to data-testid now that Button spreads `...rest`.
+  await expect(page.getByTestId('enroll-revoke-btn')).toBeVisible();
 });

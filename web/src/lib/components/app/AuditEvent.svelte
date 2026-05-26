@@ -70,7 +70,7 @@
   );
 </script>
 
-<li class="relative flex gap-3 pl-1">
+<li class="relative flex gap-3 pl-1" data-testid="audit-event" data-action={event.action}>
   <div class="relative flex w-6 shrink-0 flex-col items-center">
     <span
       class={cn('mt-1.5 size-2.5 shrink-0 rounded-full ring-4 ring-base', dotClass[tone])}

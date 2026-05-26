@@ -123,17 +123,15 @@ test.describe('flow: issue + revoke enroll magic-link', () => {
     await expect.poll(() => createCount).toBe(1);
     await expect(page.getByTestId('enroll-result-card')).toBeVisible();
     await expect(page.getByTestId('enroll-url')).toContainText(issuedLink.url);
-    // <Button> drops `data-testid`, so we identify Copy by visible text.
-    // (There may be more than one Copy button once the Windows details
-    // block is expanded, so use `.first()`.)
-    await expect(page.getByRole('button', { name: 'Copy' }).first()).toBeVisible();
+    // Restored to data-testid now that Button spreads `...rest`.
+    await expect(page.getByTestId('enroll-copy-unix')).toBeVisible();
 
     // The active-links table now has exactly one row.
     await expect(page.getByTestId('enroll-link-row')).toHaveCount(1);
     await expect(page.getByTestId('enroll-link-row').getByText('family')).toBeVisible();
 
     // Revoke it — the page calls `window.confirm()` which we auto-accept.
-    await page.getByRole('button', { name: 'Revoke' }).click();
+    await page.getByTestId('enroll-revoke-btn').click();
     await expect.poll(() => revokeCount).toBe(1);
     await expect(page.getByTestId('enroll-link-row')).toHaveCount(0);
     await expect(

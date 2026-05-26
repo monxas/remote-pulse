@@ -43,9 +43,10 @@
   const isInFlight = $derived(IN_FLIGHT_STATUSES.has(command.status));
 </script>
 
-<li class="rounded-lg border border-border-default bg-elevated">
+<li class="rounded-lg border border-border-default bg-elevated" data-testid="command-row" data-command-id={command.id}>
   <button
     type="button"
+    data-testid="command-row-toggle"
     class="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
     onclick={() => (open = !open)}
     aria-expanded={open}
@@ -136,7 +137,12 @@
           Open details
         </Button>
         {#if canRetry}
-          <Button size="sm" onclick={() => $retry.mutate(command.id)} disabled={$retry.isPending}>
+          <Button
+            size="sm"
+            data-testid="command-retry-btn"
+            onclick={() => $retry.mutate(command.id)}
+            disabled={$retry.isPending}
+          >
             <RotateCw
               class={cn('size-3.5', $retry.isPending && 'animate-spin')}
               aria-hidden="true"
