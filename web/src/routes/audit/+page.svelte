@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Loader2, ListTree } from '@lucide/svelte';
+  import { Loader2, ListTree, Download, ChevronDown } from '@lucide/svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -15,44 +15,23 @@
   import { getLiveStream } from '$lib/queries/live-context';
   import {
     ALL_AUDIT_ACTIONS,
+    buildAuditExportUrl,
     type AuditAction,
     type AuditQueryParams,
     type AuditTargetType,
   } from '$lib/api';
+  import { CLEAR_FILTERS_PATCH, RANGES, paramsFromSearch, type Range } from './audit-filters';
 
   const live = getLiveStream();
 
-  type Range = '24h' | '7d' | '30d' | 'custom';
-
-  function sinceFor(range: Range): string | undefined {
-    if (range === 'custom') return undefined;
-    const now = Date.now();
-    const offset = range === '24h' ? 86_400_000 : range === '7d' ? 604_800_000 : 2_592_000_000;
-    return new Date(now - offset).toISOString();
-  }
-
-  const params: AuditQueryParams = $derived.by(() => {
-    const sp = $page.url.searchParams;
-    const actor = sp.get('actor') ?? undefined;
-    const actionList = sp
-      .getAll('action')
-      .filter((a): a is AuditAction => (ALL_AUDIT_ACTIONS as ReadonlyArray<string>).includes(a));
-    const targetType = (sp.get('target_type') as AuditTargetType | null) ?? undefined;
-    const rangeRaw = (sp.get('range') ?? '7d') as Range;
-    const since = rangeRaw === 'custom' ? (sp.get('since') ?? undefined) : sinceFor(rangeRaw);
-    const until = rangeRaw === 'custom' ? (sp.get('until') ?? undefined) : undefined;
-    return {
-      actor,
-      action: actionList.length > 0 ? actionList : undefined,
-      target_type: targetType,
-      since,
-      until,
-      limit: 100,
-    };
-  });
+  const params: AuditQueryParams = $derived(paramsFromSearch($page.url.searchParams));
 
   const audit = createAuditQuery(runeReadable(() => params));
   const events = $derived($audit.data?.pages.flatMap((p) => p.events) ?? []);
+  // ``total`` is consistent across pages (per server contract); use the
+  // first page's count so the displayed total doesn't bounce as the user
+  // pages.
+  const total = $derived($audit.data?.pages[0]?.total ?? 0);
 
   // Mirror the URL into local state so we can debounce typing; the two
   // directions are independent, hence not a writable-derived candidate.
@@ -97,12 +76,23 @@
   const since = $derived($page.url.searchParams.get('since') ?? '');
   const until = $derived($page.url.searchParams.get('until') ?? '');
 
-  const ranges: ReadonlyArray<{ value: Range; label: string }> = [
-    { value: '24h', label: '24h' },
-    { value: '7d', label: '7d' },
-    { value: '30d', label: '30d' },
-    { value: 'custom', label: 'Custom' },
-  ];
+  // Mirror action_prefix into local state so we can debounce typing.
+  // eslint-disable-next-line svelte/prefer-writable-derived
+  let actionPrefixLocal = $state('');
+  $effect(() => {
+    actionPrefixLocal = $page.url.searchParams.get('action_prefix') ?? '';
+  });
+  let actionPrefixTimer: ReturnType<typeof setTimeout> | null = null;
+  function onActionPrefixInput(e: Event): void {
+    actionPrefixLocal = (e.target as HTMLInputElement).value;
+    if (actionPrefixTimer !== null) clearTimeout(actionPrefixTimer);
+    actionPrefixTimer = setTimeout(
+      () => updateUrl({ action_prefix: actionPrefixLocal || null }),
+      250,
+    );
+  }
+
+  const ranges = RANGES;
 
   const targetTypes: ReadonlyArray<{ value: AuditTargetType | ''; label: string }> = [
     { value: '', label: 'Any target' },
@@ -115,14 +105,17 @@
 
   function clearFilters(): void {
     actorLocal = '';
-    updateUrl({
-      actor: null,
-      action: [],
-      target_type: null,
-      range: '7d',
-      since: null,
-      until: null,
-    });
+    actionPrefixLocal = '';
+    updateUrl(CLEAR_FILTERS_PATCH);
+  }
+
+  // Export dropdown — admin-only on the backend; non-admins will see 403 in
+  // the toast. We keep the UI uniform so admins on shared dashboards don't
+  // have to refresh after a role change.
+  let exportOpen = $state(false);
+
+  function exportHref(format: 'csv' | 'json'): string {
+    return buildAuditExportUrl(params, format);
   }
 </script>
 
@@ -136,13 +129,68 @@
       <h1 class="text-2xl font-bold tracking-tight">Audit log</h1>
       <p class="text-sm text-muted">Every state-changing event in the system, append-only.</p>
     </div>
-    {#if live}
-      <LiveBadge state={live.state} />
-    {/if}
+    <div class="flex items-center gap-2">
+      {#if live}
+        <LiveBadge state={live.state} />
+      {/if}
+      <div class="relative">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onclick={() => (exportOpen = !exportOpen)}
+          aria-haspopup="menu"
+          aria-expanded={exportOpen}
+          data-testid="audit-export-button"
+        >
+          <Download class="size-4" aria-hidden="true" />
+          Export
+          <ChevronDown class="size-3.5" aria-hidden="true" />
+        </Button>
+        {#if exportOpen}
+          <!-- Click-away handler closes the menu when interacting elsewhere. -->
+          <button
+            type="button"
+            class="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            tabindex="-1"
+            onclick={() => (exportOpen = false)}
+          ></button>
+          <div
+            role="menu"
+            class="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-md border border-border-default bg-elevated shadow-lg"
+          >
+            <!-- The href targets the backend export endpoint directly (out of SvelteKit's router). -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -->
+            <a
+              role="menuitem"
+              href={exportHref('csv')}
+              download
+              data-testid="audit-export-csv"
+              class="block px-3 py-2 text-sm hover:bg-subtle"
+              onclick={() => (exportOpen = false)}
+            >
+              Export as CSV
+            </a>
+            <a
+              role="menuitem"
+              href={exportHref('json')}
+              download
+              data-testid="audit-export-json"
+              class="block px-3 py-2 text-sm hover:bg-subtle"
+              onclick={() => (exportOpen = false)}
+            >
+              Export as JSON
+            </a>
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          </div>
+        {/if}
+      </div>
+    </div>
   </header>
 
   <div class="space-y-3 rounded-lg border border-border-default bg-elevated p-3">
-    <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <label class="block space-y-1">
         <span class="text-xs font-medium text-muted">Actor</span>
         <Input
@@ -150,6 +198,17 @@
           oninput={onActorInput}
           placeholder="alice@example.com"
           aria-label="Actor filter"
+          data-testid="audit-actor-filter"
+        />
+      </label>
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-muted">Action prefix</span>
+        <Input
+          value={actionPrefixLocal}
+          oninput={onActionPrefixInput}
+          placeholder="settings."
+          aria-label="Action prefix filter"
+          data-testid="audit-action-prefix-filter"
         />
       </label>
       <label class="block space-y-1">
@@ -228,7 +287,7 @@
       {/each}
     </div>
 
-    <div>
+    <div class="flex items-center justify-between">
       <button
         type="button"
         class="text-xs text-accent-text underline-offset-4 hover:underline"
@@ -236,6 +295,13 @@
       >
         Clear filters
       </button>
+      <span class="text-xs text-muted" data-testid="audit-count">
+        {#if $audit.isPending && !$audit.data}
+          Loading…
+        {:else}
+          Showing {events.length} of {total} events
+        {/if}
+      </span>
     </div>
   </div>
 
