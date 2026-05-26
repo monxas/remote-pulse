@@ -464,21 +464,21 @@ async def issue_command(
     - ``requires_approval`` not set → True if ``command_type`` is in
       ``REQUIRES_APPROVAL_BY_DEFAULT`` else False.
     - Operators (and admins) can override by setting it explicitly.
-    """
-    if user.role not in ("admin", "operator"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Operator+ role required (current role: {user.role})",
-        )
 
+    Row-level ACL: admins bypass, everyone else needs the
+    ``command.issue`` permission scoped to *every* host's ``group_name``
+    (or ``*``). The check runs after the 404-for-missing-hosts guard so
+    unknown / inaccessible hosts still yield 404, not 403 — but before
+    any side-effect (sign + insert + SSE).
+    """
     # ACL check + resolve hosts in one query
     host_ids = list(dict.fromkeys(body.host_ids))  # de-dup, preserve order
     stmt = select(Host).where(Host.id.in_(host_ids))
     if user.role != "admin":
         if not user.accessible_groups:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No accessible groups",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Host(s) not found or not accessible: {[str(h) for h in host_ids]}",
             )
         stmt = stmt.where(Host.group_name.in_(user.accessible_groups))
     hosts = (await db.execute(stmt)).scalars().all()
@@ -489,6 +489,29 @@ async def issue_command(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Host(s) not found or not accessible: {missing}",
         )
+
+    # Row-level permission check — must pass for every host before we
+    # mutate anything. Admins bypass via user_has_permission.
+    for hid in host_ids:
+        host = by_id[hid]
+        if not await user_has_permission(
+            db, user, "command.issue", host.group_name
+        ):
+            logger.warning(
+                "command.issue denied by row-level ACL: user=%s role=%s "
+                "host_id=%s host_group=%s",
+                user.email,
+                user.role,
+                host.id,
+                host.group_name,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Missing 'command.issue' permission for this host's group. "
+                    "Ask an admin to grant it via Settings → Users → Permissions."
+                ),
+            )
 
     requires_approval = (
         body.requires_approval
@@ -571,14 +594,34 @@ async def retry_command(
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
 ) -> CommandSummary:
-    """Reissue a command with the same type+payload against the same host."""
-    if user.role not in ("admin", "operator"):
+    """Reissue a command with the same type+payload against the same host.
+
+    Row-level ACL: admins bypass, everyone else needs the
+    ``command.issue`` permission scoped to the *original* command's host
+    group (or ``*``). 404-for-unseen-command wins over 403 — we load the
+    resource first so an operator who can't see a given command can't
+    probe for its existence via the permission check.
+    """
+    orig, host = await _load_command_for_user(db, user, command_id)
+
+    if not await user_has_permission(
+        db, user, "command.issue", host.group_name
+    ):
+        logger.warning(
+            "command.issue denied by row-level ACL on retry: user=%s role=%s "
+            "command_id=%s host_group=%s",
+            user.email,
+            user.role,
+            command_id,
+            host.group_name,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Operator+ role required (current role: {user.role})",
+            detail=(
+                "Missing 'command.issue' permission for this host's group. "
+                "Ask an admin to grant it via Settings → Users → Permissions."
+            ),
         )
-
-    orig, host = await _load_command_for_user(db, user, command_id)
 
     requires_approval = orig.command_type in REQUIRES_APPROVAL_BY_DEFAULT
 
