@@ -685,19 +685,30 @@ export async function revokeUserPermission(
 
 export interface EnrollLinkCreateInput {
   group_name: string;
-  ttl_hours: number;
+  // TTL: prefer `ttl_minutes` (default 5 min, max 1440). `ttl_hours` is
+  // retained for backwards compatibility with the legacy 24h form and the
+  // existing tests; the server's pydantic validator caps it at 24h now.
+  ttl_minutes?: number;
+  ttl_hours?: number;
   max_uses: number;
   label?: string | null;
 }
 
 export interface EnrollLinkOut {
+  // ---- New short-code surface (preferred) ----
+  code: string; // "XXX-XXX" display form
+  install_url: string; // curl ... | sh -s -- --code=XXX-XXX
+  install_url_windows_short: string;
+  // ---- Legacy (deprecated, kept for back-compat) ----
   url: string;
   install_url_windows: string;
   token: string;
+  // ---- Metadata ----
   token_jti: string;
   group_name: string;
   issued_by: string;
   expires_at: string;
+  expires_in_seconds: number;
   expires_in_hours: number;
   max_uses: number;
   used_count: number;
@@ -706,6 +717,8 @@ export interface EnrollLinkOut {
 
 export interface EnrollLinkSummary {
   token_jti: string;
+  code: string | null;
+  install_url_short: string | null;
   group_name: string;
   issued_by: string;
   expires_at: string;

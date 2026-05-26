@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from '@lucide/svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
@@ -22,39 +23,54 @@
   const links = $derived<EnrollLinkSummary[]>($linksQuery.data?.links ?? []);
 
   // ---- Form state ----
-  // The form intentionally falls back to the historical defaults already
-  // used by the CLI / Telegram path (24h, 1 use, group "default"), so the
-  // dashboard behaves identically to the existing tooling.
+  // Default to the new short-code defaults: 5 minutes TTL, single use.
+  // The form drives ``ttl_minutes`` directly; we no longer expose the
+  // legacy ``ttl_hours`` field in the UI (the API still accepts it).
+  // The four preset options below cover every operationally reasonable
+  // case — anything below 5 min is too tight for someone alt-tabbing
+  // into a terminal; anything past 24h is a credential-lifetime smell.
+  const TTL_PRESETS: ReadonlyArray<{ value: number; label: string }> = [
+    { value: 5, label: '5 min (recommended)' },
+    { value: 30, label: '30 min' },
+    { value: 120, label: '2 hours' },
+    { value: 1440, label: '24 hours (max)' },
+  ];
+
   let groupName = $state('default');
-  // Input is bound as string (HTML inputs always are); coerce on submit.
-  let ttlHours = $state('24');
+  // Selected preset value (minutes). Bound as string because <select>
+  // values are always strings; we coerce on submit.
+  let ttlMinutes = $state(String(TTL_PRESETS[0]!.value));
   let maxUses = $state('1');
   let label = $state('');
 
-  // Last successful creation — surfaced in a "result card" with copy +
-  // revocation. Cleared when the user submits again or revokes it.
+  // Last successful creation — surfaced in a "hero" result card.
   let lastIssued = $state<EnrollLinkOut | null>(null);
 
+  // Live countdown for the result card. Updated every second.
+  let now = $state(Date.now());
+  const tick = setInterval(() => {
+    now = Date.now();
+  }, 1000);
+  onDestroy(() => clearInterval(tick));
+
   // When the groups query finishes loading the very first time, prefer to
-  // pre-select a real group rather than the literal string "default" if it
-  // does not exist in the tenant.
+  // pre-select a real group rather than the literal string "default".
   $effect(() => {
     if (!groups.length) return;
     if (!groups.some((g) => g.name === groupName)) {
-      // groups.length > 0 already guards against undefined here.
       groupName = groups[0]!.name;
     }
   });
 
   function submit(e: Event): void {
     e.preventDefault();
-    const ttl = Number(ttlHours);
+    const ttl = Number(ttlMinutes);
     const uses = Number(maxUses);
     if (!groupName || !Number.isFinite(ttl) || !Number.isFinite(uses)) return;
     $createLink.mutate(
       {
         group_name: groupName,
-        ttl_hours: ttl,
+        ttl_minutes: ttl,
         max_uses: uses,
         label: label.trim() || null,
       },
@@ -71,13 +87,14 @@
       await navigator.clipboard.writeText(text);
     } catch {
       // Clipboard may be unavailable (insecure context, locked-down browser).
-      // We deliberately swallow — the URL is still visible inline.
+      // We deliberately swallow — the value is still visible inline.
     }
   }
 
   function confirmRevoke(link: EnrollLinkSummary): void {
+    const display = link.code ?? link.token_jti;
     const ok = window.confirm(
-      `Revoke magic-link for group "${link.group_name}"? Future installs using this URL will fail.`,
+      `Revoke enrollment ${display} (group "${link.group_name}")? Future installs using this code will fail.`,
     );
     if (!ok) return;
     $revokeLink.mutate(link.token_jti, {
@@ -97,18 +114,29 @@
     }
   }
 
-  function remainingHours(iso: string): string {
-    const ms = new Date(iso).getTime() - Date.now();
+  /**
+   * Compact "expires in" formatter — returns "4m 23s" / "12m" / "2h 5m"
+   * depending on magnitude. Driven by the ``now`` $state so it ticks live.
+   */
+  function expiresIn(iso: string, nowMs: number): string {
+    const ms = new Date(iso).getTime() - nowMs;
     if (!Number.isFinite(ms) || ms <= 0) return 'expired';
-    const h = Math.floor(ms / 3_600_000);
-    if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
-    if (h >= 1) return `${h}h`;
-    const m = Math.max(1, Math.floor(ms / 60_000));
-    return `${m}m`;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h >= 1) return `${h}h ${m}m`;
+    if (m >= 5) return `${m}m`;
+    return `${m}m ${s.toString().padStart(2, '0')}s`;
   }
 
   const isAdminOnlyError = $derived(
     $linksQuery.isError && $linksQuery.error?.message?.toLowerCase().includes('admin'),
+  );
+
+  // Drive the hero countdown off the $state tick.
+  const heroCountdown = $derived(
+    lastIssued ? expiresIn(lastIssued.expires_at, now) : '',
   );
 </script>
 
@@ -121,8 +149,9 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Enroll an agent</h1>
       <p class="text-sm text-muted">
-        Generate a single-use magic-link to bootstrap a new Remote-Pulse agent. The link embeds a
-        signed JWT and an install command for the target OS.
+        Generate a short, memorable enrollment code (e.g. <code class="font-mono">K7M-X3F</code>)
+        to bootstrap a new Remote-Pulse agent. The code is single-use by default and expires in
+        5 minutes.
       </p>
     </div>
     <Badge variant="default" class="self-start sm:self-end">
@@ -136,7 +165,7 @@
     <CardHeader>
       <CardTitle class="text-base">
         <KeyRound class="mr-1 inline size-4" aria-hidden="true" />
-        New magic-link
+        New enrollment code
       </CardTitle>
     </CardHeader>
     <CardContent>
@@ -160,15 +189,17 @@
         </label>
 
         <label class="space-y-1 text-sm">
-          <span class="font-medium">TTL (hours)</span>
-          <Input
-            type="number"
-            min="1"
-            max="720"
-            bind:value={ttlHours}
+          <span class="font-medium">Expiration</span>
+          <select
+            class="block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            bind:value={ttlMinutes}
             data-testid="enroll-ttl"
             disabled={$createLink.isPending}
-          />
+          >
+            {#each TTL_PRESETS as preset (preset.value)}
+              <option value={String(preset.value)}>{preset.label}</option>
+            {/each}
+          </select>
         </label>
 
         <label class="space-y-1 text-sm">
@@ -202,7 +233,7 @@
               Generating…
             {:else}
               <Plus class="mr-1 size-4" aria-hidden="true" />
-              Generate magic-link
+              Generate code
             {/if}
           </Button>
         </div>
@@ -210,47 +241,67 @@
     </CardContent>
   </Card>
 
-  <!-- ====================== ISSUED LINK ====================== -->
+  <!-- ====================== ISSUED CODE — HERO ====================== -->
   {#if lastIssued}
     <Card data-testid="enroll-result-card">
       <CardHeader>
-        <CardTitle class="text-base">Magic-link ready</CardTitle>
+        <CardTitle class="text-base">Enrollment code ready</CardTitle>
       </CardHeader>
-      <CardContent class="space-y-3 text-sm">
-        <p class="text-muted">
-          Hand this URL to whoever is installing the agent. It works for {lastIssued.max_uses}
-          {lastIssued.max_uses === 1 ? 'install' : 'installs'} and expires in
-          {lastIssued.expires_in_hours}h.
-        </p>
-
-        <div class="flex flex-wrap items-start gap-2">
-          <code
-            class="break-all rounded bg-muted/10 px-2 py-1 font-mono text-xs flex-1"
-            data-testid="enroll-url"
+      <CardContent class="space-y-4 text-sm">
+        <!-- HERO: big monospace code. Tapping it copies the canonical
+             display form (with dash). -->
+        <div class="flex flex-col items-center gap-2 rounded-lg bg-accent/5 px-4 py-6">
+          <button
+            type="button"
+            class="font-mono text-5xl font-bold tracking-widest tabular-nums hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-2"
+            onclick={() => void copy(lastIssued!.code)}
+            data-testid="enroll-code-hero"
+            aria-label="Copy enrollment code"
           >
-            {lastIssued.url}
-          </code>
-          <Button
-            size="sm"
-            variant="outline"
-            onclick={() => void copy(lastIssued!.url)}
-            data-testid="enroll-copy-unix"
-          >
-            <Copy class="mr-1 size-3.5" aria-hidden="true" />
-            Copy
-          </Button>
+            {lastIssued.code}
+          </button>
+          <p class="text-xs text-muted" data-testid="enroll-countdown">
+            Expires in <span class="font-mono">{heroCountdown}</span> · {lastIssued.max_uses}
+            {lastIssued.max_uses === 1 ? 'use' : 'uses'} · group
+            <span class="font-mono">{lastIssued.group_name}</span>
+          </p>
         </div>
 
-        <details class="text-xs text-muted">
-          <summary class="cursor-pointer">Windows install URL</summary>
-          <div class="mt-2 flex flex-wrap items-start gap-2">
-            <code class="break-all rounded bg-muted/10 px-2 py-1 font-mono flex-1">
-              {lastIssued.install_url_windows}
+        <!-- Install command (Linux/macOS) -->
+        <div>
+          <p class="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+            Linux / macOS install
+          </p>
+          <div class="flex flex-wrap items-start gap-2">
+            <code
+              class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono text-xs"
+              data-testid="enroll-install-cmd"
+            >
+              {lastIssued.install_url}
             </code>
             <Button
               size="sm"
               variant="outline"
-              onclick={() => void copy(lastIssued!.install_url_windows)}
+              onclick={() => void copy(lastIssued!.install_url)}
+              data-testid="enroll-copy-install"
+            >
+              <Copy class="mr-1 size-3.5" aria-hidden="true" />
+              Copy
+            </Button>
+          </div>
+        </div>
+
+        <!-- Install command (Windows) -->
+        <details class="text-xs text-muted">
+          <summary class="cursor-pointer">Windows install</summary>
+          <div class="mt-2 flex flex-wrap items-start gap-2">
+            <code class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono">
+              {lastIssued.install_url_windows_short}
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onclick={() => void copy(lastIssued!.install_url_windows_short)}
             >
               <Copy class="mr-1 size-3.5" aria-hidden="true" />
               Copy
@@ -258,11 +309,33 @@
           </div>
         </details>
 
-        <details class="text-xs text-muted">
-          <summary class="cursor-pointer">Raw JWT (advanced)</summary>
-          <code class="mt-2 block break-all rounded bg-muted/10 px-2 py-1 font-mono">
-            {lastIssued.token}
-          </code>
+        <!-- Legacy fallback — collapsed. JWT path still works against this
+             server for back-compat; surface it for operators on old agents. -->
+        <details class="text-xs text-muted" data-testid="enroll-legacy-details">
+          <summary class="cursor-pointer">Advanced — legacy JWT URL</summary>
+          <div class="mt-2 space-y-2">
+            <p>
+              The 250-char URL below is retained for backwards compatibility with pre-1.1 agents.
+              Avoid logging or sharing it over insecure channels.
+            </p>
+            <div class="flex flex-wrap items-start gap-2">
+              <code
+                class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono"
+                data-testid="enroll-url"
+              >
+                {lastIssued.url}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onclick={() => void copy(lastIssued!.url)}
+                data-testid="enroll-copy-unix"
+              >
+                <Copy class="mr-1 size-3.5" aria-hidden="true" />
+                Copy
+              </Button>
+            </div>
+          </div>
         </details>
       </CardContent>
     </Card>
@@ -271,21 +344,21 @@
   <!-- ====================== ACTIVE LINKS ====================== -->
   <Card>
     <CardHeader>
-      <CardTitle class="text-base">Active magic-links</CardTitle>
+      <CardTitle class="text-base">Active enrollment codes</CardTitle>
     </CardHeader>
     <CardContent class="p-0">
       {#if $linksQuery.isPending}
         <div class="flex items-center gap-2 px-4 py-8 text-sm text-muted">
           <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-          Loading links…
+          Loading codes…
         </div>
       {:else if $linksQuery.isError}
         <div class="space-y-2 px-4 py-6 text-sm">
           <p class="text-danger-text">
             {#if isAdminOnlyError}
-              You need the admin role to issue magic-links.
+              You need the admin role to issue enrollment codes.
             {:else}
-              Failed to load links: {$linksQuery.error?.message ?? 'unknown error'}
+              Failed to load codes: {$linksQuery.error?.message ?? 'unknown error'}
             {/if}
           </p>
           {#if !isAdminOnlyError}
@@ -294,13 +367,14 @@
         </div>
       {:else if links.length === 0}
         <div class="px-4 py-8 text-center text-sm text-muted">
-          No active magic-links. Generate one above to enroll a new agent.
+          No active codes. Generate one above to enroll a new agent.
         </div>
       {:else}
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="bg-muted/5 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
+                <th class="px-4 py-2">Code</th>
                 <th class="px-4 py-2">Group</th>
                 <th class="px-4 py-2">Issued by</th>
                 <th class="px-4 py-2">Expires</th>
@@ -311,10 +385,13 @@
             <tbody>
               {#each links as link (link.token_jti)}
                 <tr class="border-t border-border-default" data-testid="enroll-link-row">
-                  <td class="px-4 py-2 font-medium">{link.group_name}</td>
+                  <td class="px-4 py-2 font-mono font-medium" data-testid="enroll-row-code">
+                    {link.code ?? '—'}
+                  </td>
+                  <td class="px-4 py-2">{link.group_name}</td>
                   <td class="px-4 py-2 text-muted">{link.issued_by}</td>
                   <td class="px-4 py-2">
-                    <div>{remainingHours(link.expires_at)}</div>
+                    <div>{expiresIn(link.expires_at, now)}</div>
                     <div class="text-xs text-muted">{fmtDate(link.expires_at)}</div>
                   </td>
                   <td class="px-4 py-2 text-muted">
@@ -327,7 +404,7 @@
                       onclick={() => confirmRevoke(link)}
                       disabled={$revokeLink.isPending}
                       data-testid="enroll-revoke-btn"
-                      aria-label={`Revoke magic-link for ${link.group_name}`}
+                      aria-label={`Revoke enrollment code for ${link.group_name}`}
                     >
                       <Trash2 class="mr-1 size-3.5" aria-hidden="true" />
                       Revoke
