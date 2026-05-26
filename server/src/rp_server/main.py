@@ -185,8 +185,8 @@ app.include_router(dash_settings.router)  # Phase 4: groups + users management
 # mounted via ``web.router`` is now replaced by a thin redirect shim that
 # sends ``/dash/*`` to the SvelteKit SPA at ``/dash-next/*``. The one
 # preserved endpoint (``/dash/host/{id}/sparkline-data``) lives inside
-# this same router for backwards compat. The ``web`` module itself will
-# be deleted in a follow-up cleanup commit.
+# this same router for backwards compat. The ``web`` module has been
+# deleted (Phase 3 cleanup).
 app.include_router(dash_redirect.router)
 app.include_router(enrollment_links.router)  # F7-6: Magic-link enrollment
 
