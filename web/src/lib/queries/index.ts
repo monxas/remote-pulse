@@ -27,6 +27,7 @@ import {
 import { toast } from 'svelte-sonner';
 import {
   approveDashCommand,
+  createEnrollLink,
   createSettingsGroup,
   createSettingsUser,
   deleteSettingsGroup,
@@ -38,12 +39,14 @@ import {
   getDashOverview,
   getDashPendingApprovals,
   getDashTimeseries,
+  getEnrollLinks,
   getSettingsGroups,
   getSettingsUsers,
   IN_FLIGHT_STATUSES,
   issueDashCommand,
   rejectDashCommand,
   retryDashCommand,
+  revokeEnrollLink,
   updateSettingsUser,
   type AuditListPage,
   type AuditQueryParams,
@@ -53,6 +56,9 @@ import {
   type CreateGroupInput,
   type CreateUserInput,
   type DashOverview,
+  type EnrollLinkCreateInput,
+  type EnrollLinkListResponse,
+  type EnrollLinkOut,
   type HostStatus,
   type HostsList,
   type HostSummary,
@@ -81,6 +87,8 @@ export const qk = {
   settingsGroups: () => ['settings', 'groups'] as const,
   settingsUsers: () => ['settings', 'users'] as const,
   settingsAll: () => ['settings'] as const,
+  enrollLinks: () => ['enroll', 'links'] as const,
+  enrollAll: () => ['enroll'] as const,
 } as const;
 
 export interface HostsParams {
@@ -382,6 +390,44 @@ export function createDeleteUserMutation() {
     },
     onError: (err: Error) => {
       toast.error('Could not delete user', { description: err.message });
+    },
+  });
+}
+
+// ---- /v1/dash/enroll/* (magic-link issuance from the dashboard) ----
+
+export function createEnrollLinksQuery() {
+  return createQuery<EnrollLinkListResponse>({
+    queryKey: qk.enrollLinks(),
+    queryFn: ({ signal }) => getEnrollLinks(undefined, signal),
+    staleTime: 30_000,
+  });
+}
+
+export function createCreateEnrollLinkMutation() {
+  const client = useQueryClient();
+  return createMutation<EnrollLinkOut, Error, EnrollLinkCreateInput>({
+    mutationFn: (input: EnrollLinkCreateInput) => createEnrollLink(input),
+    onSuccess: () => {
+      toast.success('Magic-link generated');
+      void client.invalidateQueries({ queryKey: qk.enrollAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not generate magic-link', { description: err.message });
+    },
+  });
+}
+
+export function createRevokeEnrollLinkMutation() {
+  const client = useQueryClient();
+  return createMutation({
+    mutationFn: (token_jti: string) => revokeEnrollLink(token_jti),
+    onSuccess: () => {
+      toast.success('Magic-link revoked');
+      void client.invalidateQueries({ queryKey: qk.enrollAll() });
+    },
+    onError: (err: Error) => {
+      toast.error('Could not revoke magic-link', { description: err.message });
     },
   });
 }

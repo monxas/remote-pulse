@@ -571,6 +571,81 @@ export async function deleteSettingsUser(id: string, f?: FetchFn): Promise<void>
   );
 }
 
+// ---------- /v1/dash/enroll/* (magic-link issuance from the dashboard) ----------
+//
+// Mirrors `server/src/rp_server/routers/dash_enroll.py`. Admin-only on the
+// server side; the UI does not gate the calls itself — it lets the server
+// answer 403 and renders the error inline.
+
+export interface EnrollLinkCreateInput {
+  group_name: string;
+  ttl_hours: number;
+  max_uses: number;
+  label?: string | null;
+}
+
+export interface EnrollLinkOut {
+  url: string;
+  install_url_windows: string;
+  token: string;
+  token_jti: string;
+  group_name: string;
+  issued_by: string;
+  expires_at: string;
+  expires_in_hours: number;
+  max_uses: number;
+  used_count: number;
+  label: string | null;
+}
+
+export interface EnrollLinkSummary {
+  token_jti: string;
+  group_name: string;
+  issued_by: string;
+  expires_at: string;
+  max_uses: number;
+  used_count: number;
+  created_at: string;
+}
+
+export interface EnrollLinkListResponse {
+  links: EnrollLinkSummary[];
+}
+
+export async function getEnrollLinks(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<EnrollLinkListResponse> {
+  return request<EnrollLinkListResponse>(
+    '/v1/dash/enroll/links',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function createEnrollLink(
+  input: EnrollLinkCreateInput,
+  f?: FetchFn,
+): Promise<EnrollLinkOut> {
+  return request<EnrollLinkOut>(
+    '/v1/dash/enroll/links',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function revokeEnrollLink(token_jti: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/enroll/links/${encodeURIComponent(token_jti)}`,
+    { method: 'DELETE' },
+    { fetch: f },
+  );
+}
+
 // Exported for unit tests — keeps URL serialisation honest with the
 // backend contract (multi-value status / action, cursor-paged).
 export const __testing = {
