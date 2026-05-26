@@ -84,8 +84,15 @@ async def receive_heartbeat(
 
     db.add(heartbeat)
 
-    # Update host last_seen
-    stmt = update(Host).where(Host.id == request.host_id).values(last_seen_at=now)
+    # Update host last_seen + reconcile agent_version. The version reported
+    # at enroll time can drift (host upgraded in place, or initial enroll
+    # used a wrong value); heartbeats are the source of truth for what's
+    # actually running.
+    stmt = (
+        update(Host)
+        .where(Host.id == request.host_id)
+        .values(last_seen_at=now, agent_version=request.agent_version)
+    )
     await db.execute(stmt)
 
     # Update agent version tracking (F8-3 compat)

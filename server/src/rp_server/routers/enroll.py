@@ -101,7 +101,12 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
         )
 
     now = datetime.now(timezone.utc)
-    if enrollment.expires_at < now:
+    # SQLite (test fixture) returns naive datetimes for TIMESTAMP columns even
+    # when inserted as tz-aware; Postgres returns aware. Normalize both sides.
+    expires_at = enrollment.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now:
         from rp_server.metrics_exporter import record_enroll_failure
 
         record_enroll_failure(token_group, "token_expired")

@@ -106,3 +106,54 @@ async def test_heartbeat_validation(client: AsyncClient, enrollment_token: str) 
     )
 
     assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_reconciles_agent_version(
+    client: AsyncClient,
+    test_db: AsyncSession,
+    enrollment_token: str,
+) -> None:
+    """Heartbeat updates Host.agent_version, fixing drift from enroll time.
+
+    Regression for v1.0.2: hosts enrolled with a wrong/stale agent_version
+    (e.g. the install.sh ``main`` literal bug) should converge once they
+    start sending heartbeats with the resolved semver.
+    """
+    enroll_response = await client.post(
+        "/v1/enroll",
+        json={
+            "token": enrollment_token,
+            "hostname": "test-host",
+            "group": "test-group",
+            "host_fingerprint": "abc123",
+            "os": "linux",
+            "arch": "x86_64",
+            "agent_version": "main",
+        },
+    )
+    assert enroll_response.status_code == 201
+    host_id = enroll_response.json()["host_id"]
+
+    # Confirm initial DB state reflects the (buggy) enroll value
+    stmt = select(Host).where(Host.id == uuid.UUID(host_id))
+    host = (await test_db.execute(stmt)).scalar_one()
+    await test_db.refresh(host)
+    assert host.agent_version == "main"
+
+    # Heartbeat with corrected semver
+    response = await client.post(
+        "/v1/heartbeat",
+        json={
+            "host_id": host_id,
+            "cpu_pct": 10.0,
+            "mem_pct": 20.0,
+            "agent_version": "1.0.2",
+        },
+    )
+    assert response.status_code == 200
+
+    # Host row should now reflect the heartbeat's version
+    host = (await test_db.execute(stmt)).scalar_one()
+    await test_db.refresh(host)
+    assert host.agent_version == "1.0.2"
