@@ -1,6 +1,6 @@
 [project]
 name = "remote-pulse"
-version = "1.0.10"
+version = "1.0.11"
 description = "Remote-Pulse agent for fleet monitoring and management"
 authors = [
     {name = "Ramón Kamibayashi", email = "ramonkawa@gmail.com"}
