@@ -32,7 +32,7 @@
   }
 </script>
 
-<header class="sticky top-0 z-30 border-b border-border-subtle bg-base/80 backdrop-blur">
+<header class="sticky top-0 z-30 border-b border-border-subtle bg-base/80 backdrop-blur pt-safe">
   <div class="mx-auto flex h-14 w-full max-w-7xl items-center gap-4 px-4 sm:px-6">
     <a
       href={resolve('/')}
@@ -72,12 +72,12 @@
       <a
         href={link.href}
         class={cn(
-          'inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors',
+          'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-sm transition-colors',
           active ? 'bg-subtle text-default' : 'text-muted hover:bg-subtle hover:text-default',
         )}
         aria-current={active ? 'page' : undefined}
       >
-        <link.Icon class="size-3.5" aria-hidden="true" />
+        <link.Icon class="size-4" aria-hidden="true" />
         {link.label}
       </a>
     {/each}
