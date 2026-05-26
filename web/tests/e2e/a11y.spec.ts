@@ -5,17 +5,19 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Phase 5 (ADR-0009) — axe-core accessibility baseline.
+ * Phase 5 (ADR-0009) — axe-core accessibility gate.
  *
- * BASELINE MODE: this spec does NOT fail on violations. Instead, for every
- * main dashboard route it injects axe-core, runs against WCAG 2.0/2.1 A and
- * AA tags, and writes the raw violations JSON to
- * `web/tests/a11y-baseline/<page>.json`. The CI gate stays warn-only until
- * the baseline is reviewed and obvious violations are fixed.
+ * FAIL-ON-REGRESSION MODE: as of v1.0.5 every main dashboard route is
+ * scanned against WCAG 2.0/2.1 A + AA tags and the test fails if axe
+ * reports any violations. The raw axe payload is still written to
+ * `web/tests/a11y-baseline/<page>.json` for debugging context and to
+ * keep the report shape stable for future tooling, but it is no longer
+ * the source of truth — the assertion below is.
  *
- * TODO: once the baseline is reviewed and obvious violations fixed, switch
- * the assertion below to fail on regressions (e.g.
- * `expect(violations).toEqual([])` or compare against a committed baseline).
+ * If you legitimately need to introduce a violation (e.g. a third-party
+ * embed that ships its own a11y debt), prefer fixing it; otherwise scope
+ * an axe disable rule to the specific selector/page in this spec rather
+ * than weakening the global gate.
  *
  * AUTH: every page (except `/auth/login`) requires an authenticated OIDC
  * session. The dashboard's `+layout.ts` calls `GET /auth/me` on first paint
@@ -171,11 +173,20 @@ test.describe('axe-core a11y baseline (Phase 5)', () => {
       const outPath = resolve(BASELINE_DIR, `${pc.name}.json`);
       await writeFile(outPath, JSON.stringify(payload, null, 2), 'utf8');
 
-      // Baseline mode: never fail. Just log a one-line summary so CI logs
-      // surface progress.
+      // Fail-on-regression: a one-line summary for CI logs, then the
+      // hard assertion. We surface the offending rule IDs + selectors in
+      // the failure message so reviewers don't have to dig into the JSON
+      // payload to know what regressed.
       console.log(
-        `[a11y-baseline] ${pc.name}: ${results.violations.length} violations, ${results.incomplete.length} incomplete -> ${outPath}`,
+        `[a11y] ${pc.name}: ${results.violations.length} violations, ${results.incomplete.length} incomplete -> ${outPath}`,
       );
+      const summary = results.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact,
+        help: v.help,
+        nodes: v.nodes.map((n) => ({ target: n.target, html: n.html })),
+      }));
+      expect(summary, `axe violations on ${pc.name}`).toEqual([]);
     });
   }
 });
