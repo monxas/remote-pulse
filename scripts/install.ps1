@@ -377,9 +377,26 @@ function Install-AgentBinary {
 # ---------------------------------------------------------------------------
 # Enrollment (POST /v1/enroll)
 # ---------------------------------------------------------------------------
+function Resolve-AgentVersion {
+    # $Version is a git ref / release tag ('main', 'latest', 'v1.0.1') —
+    # NOT a semver. Query the installed rp.exe to get the real semver so
+    # the server records 'X.Y.Z' instead of a branch name. Falls back to
+    # $Version on any parse failure so installs never break.
+    $rpExe = Join-Path $Script:InstallDir 'rp.exe'
+    if (Test-Path $rpExe) {
+        try {
+            $out = & $rpExe --version 2>$null
+            if ($out -match '(\d+\.\d+\.\d+\S*)') { return $Matches[1] }
+        } catch { }
+    }
+    Write-Warn2 "Could not resolve installed agent semver; falling back to git ref '$Version'."
+    return $Version
+}
+
 function Invoke-Enroll {
     param([string]$Arch)
-    Write-Step "Enrolling with $Server/v1/enroll"
+    $resolvedVersion = Resolve-AgentVersion
+    Write-Step "Enrolling with $Server/v1/enroll (agent_version=$resolvedVersion)"
     $payload = @{
         token            = $Token
         hostname         = $HostnameTag
@@ -387,7 +404,7 @@ function Invoke-Enroll {
         os               = 'windows'
         arch             = $Arch
         host_fingerprint = (Get-HostFingerprint)
-        agent_version    = $Version
+        agent_version    = $resolvedVersion
     } | ConvertTo-Json -Compress
 
     try {
