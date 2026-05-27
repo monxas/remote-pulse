@@ -6,6 +6,7 @@
   import NavBar from '$lib/components/app/NavBar.svelte';
   import CommandPalette from '$lib/components/app/CommandPalette.svelte';
   import LiveToasts from '$lib/components/app/LiveToasts.svelte';
+  import LiveNotifications from '$lib/components/app/LiveNotifications.svelte';
   import { Toaster } from '$lib/components/ui/sonner';
   import { queryClient } from '$lib/queries/client';
   import { useLiveStream } from '$lib/queries/sse.svelte';
@@ -36,5 +37,6 @@
   </div>
   <CommandPalette />
   <LiveToasts />
+  <LiveNotifications />
 </QueryClientProvider>
 <Toaster />

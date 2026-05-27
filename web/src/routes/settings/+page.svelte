@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    Bell,
     Key,
     Loader2,
     Plus,
@@ -9,6 +10,7 @@
     ShieldCheck,
   } from '@lucide/svelte';
   import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
+  import NotificationsToggle from '$lib/components/app/NotificationsToggle.svelte';
   import BulkUserActionBar from '$lib/components/app/BulkUserActionBar.svelte';
   import BulkUserDialogs, { type BulkMode } from '$lib/components/app/BulkUserDialogs.svelte';
   import BulkGroupActionBar from '$lib/components/app/BulkGroupActionBar.svelte';
@@ -304,6 +306,10 @@
         <UsersIcon class="mr-1.5 size-4" aria-hidden="true" />
         Users
         <Badge variant="muted" class="ml-2">{users.length}</Badge>
+      </TabsTrigger>
+      <TabsTrigger value="notifications" data-testid="tab-notifications">
+        <Bell class="mr-1.5 size-4" aria-hidden="true" />
+        Notifications
       </TabsTrigger>
     </TabsList>
 
@@ -631,6 +637,18 @@
               </table>
             </div>
           {/if}
+        </CardContent>
+      </Card>
+    </TabsContent>
+
+    <!-- ====================== NOTIFICATIONS TAB ====================== -->
+    <TabsContent value="notifications" class="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">Browser notifications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <NotificationsToggle />
         </CardContent>
       </Card>
     </TabsContent>
