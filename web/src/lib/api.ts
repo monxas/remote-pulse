@@ -907,6 +907,139 @@ export async function revokeEnrollLink(token_jti: string, f?: FetchFn): Promise<
   );
 }
 
+// ---------- /v1/dash/webhooks/* (outbound webhook subscriptions) ----------
+//
+// Mirrors `server/src/rp_server/routers/dash_webhooks.py`. Admin-only on the
+// server; the UI hides the nav entry for non-admins but the server is the
+// source of truth (403 on any non-admin call).
+
+export interface WebhookSummary {
+  id: string;
+  name: string;
+  url: string;
+  /** Match rules: ``*`` (all), ``prefix.`` (e.g. ``command.``), or ``exact.event``. */
+  event_filter: string[];
+  /** ``null`` means "match any group". */
+  group_filter: string[] | null;
+  enabled: boolean;
+  created_by: string;
+  created_at: string;
+  last_fired_at: string | null;
+  last_status_code: number | null;
+  last_error: string | null;
+  failure_count: number;
+}
+
+export interface WebhookListResponse {
+  webhooks: WebhookSummary[];
+}
+
+/** Surfaced only in the immediate response to `POST /v1/dash/webhooks`. */
+export interface WebhookCreateResponse extends WebhookSummary {
+  secret: string;
+}
+
+export interface CreateWebhookInput {
+  name: string;
+  url: string;
+  event_filter: string[];
+  group_filter?: string[] | null;
+}
+
+export interface UpdateWebhookInput {
+  name?: string;
+  url?: string;
+  event_filter?: string[];
+  group_filter?: string[] | null;
+  enabled?: boolean;
+}
+
+export interface WebhookDeliveryEntry {
+  delivery_id: string;
+  event: string;
+  timestamp: string;
+  status_code: number | null;
+  error: string | null;
+  attempt: number;
+  success: boolean;
+}
+
+export interface WebhookDeliveriesResponse {
+  webhook_id: string;
+  deliveries: WebhookDeliveryEntry[];
+  max_history: number;
+}
+
+export async function getWebhooks(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<WebhookListResponse> {
+  return request<WebhookListResponse>(
+    '/v1/dash/webhooks',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function createWebhook(
+  input: CreateWebhookInput,
+  f?: FetchFn,
+): Promise<WebhookCreateResponse> {
+  return request<WebhookCreateResponse>(
+    '/v1/dash/webhooks',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function updateWebhook(
+  id: string,
+  input: UpdateWebhookInput,
+  f?: FetchFn,
+): Promise<WebhookSummary> {
+  return request<WebhookSummary>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function deleteWebhook(id: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    { fetch: f },
+  );
+}
+
+export async function testWebhook(id: string, f?: FetchFn): Promise<void> {
+  await request<unknown>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}/test`,
+    { method: 'POST' },
+    { fetch: f },
+  );
+}
+
+export async function getWebhookDeliveries(
+  id: string,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<WebhookDeliveriesResponse> {
+  return request<WebhookDeliveriesResponse>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}/deliveries`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
 // Exported for unit tests — keeps URL serialisation honest with the
 // backend contract (multi-value status / action, cursor-paged).
 export const __testing = {

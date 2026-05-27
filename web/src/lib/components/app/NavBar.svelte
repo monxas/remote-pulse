@@ -10,6 +10,7 @@
     Terminal,
     KeyRound,
     Settings,
+    Webhook,
   } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import ThemeToggle from './ThemeToggle.svelte';
@@ -24,6 +25,7 @@
     { href: resolve('/audit'), label: 'Audit', Icon: ListTree, raw: '/audit' },
     { href: resolve('/stats'), label: 'Stats', Icon: BarChart3, raw: '/stats' },
     { href: resolve('/enroll'), label: 'Enroll', Icon: KeyRound, raw: '/enroll' },
+    { href: resolve('/webhooks'), label: 'Webhooks', Icon: Webhook, raw: '/webhooks' },
     { href: resolve('/settings'), label: 'Settings', Icon: Settings, raw: '/settings' },
   ] as const;
 

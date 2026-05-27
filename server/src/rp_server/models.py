@@ -486,3 +486,75 @@ class AuditEvent(Base):
         nullable=False,
         server_default=text("'{}'::jsonb"),
     )
+
+
+class Webhook(Base):
+    """Outbound webhook subscription.
+
+    Each row is one external URL the dispatcher delivers matching events to
+    as a signed JSON POST. The hot path is "scan enabled rows matching this
+    event_type"; a partial index on ``enabled`` keeps that cheap.
+
+    ``recent_deliveries`` is a JSONB sliding window of the last ~20 attempts
+    (oldest dropped at insert time by the dispatcher). We picked a JSONB
+    sliding window over a dedicated ``webhook_deliveries`` table because the
+    log is a debugging aid, not a load-bearing audit — the canonical record
+    of "an admin created/updated/tested this hook" lives in
+    ``audit_events``.
+    """
+
+    __tablename__ = "webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    # HMAC-SHA256 shared secret. Stored cleartext; rotation is by row
+    # delete + recreate. The body signature is delivered in
+    # ``X-RP-Signature-256`` so the receiver verifies without the secret
+    # ever leaving the server.
+    secret: Mapped[str] = mapped_column(Text, nullable=False)
+    event_filter: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+    )
+    # ``None`` = match every group (no filter applied).
+    group_filter: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text),
+        nullable=True,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    )
+    last_fired_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        default=0,
+    )
+    # Bounded sliding window of the last MAX_DELIVERY_HISTORY attempts.
+    # Each entry is ``{delivery_id, event, timestamp, status_code, error,
+    # attempt}``. See ``rp_server.webhooks._append_delivery_history``.
+    recent_deliveries: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+        default=list,
+    )
