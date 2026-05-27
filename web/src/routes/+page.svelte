@@ -9,6 +9,7 @@
   import MetricCard from '$lib/components/app/MetricCard.svelte';
   import HostTable from '$lib/components/app/HostTable.svelte';
   import HostFilters from '$lib/components/app/HostFilters.svelte';
+  import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import BulkActionBar from '$lib/components/app/BulkActionBar.svelte';
   import BulkIssueCommandDialog from '$lib/components/app/BulkIssueCommandDialog.svelte';
@@ -174,6 +175,9 @@
         </Card>
       {/if}
     </div>
+
+    <!-- ============ Saved views ============ -->
+    <SavedViewsSwitcher scope="fleet" pathname="/" />
 
     <!-- ============ Filters ============ -->
     <HostFilters groups={$hosts.data?.groups ?? []} />
