@@ -30,9 +30,11 @@ import {
   createEnrollLink,
   createSettingsGroup,
   createSettingsUser,
+  createWebhook,
   deleteHost,
   deleteSettingsGroup,
   deleteSettingsUser,
+  deleteWebhook,
   getDashAudit,
   getDashCommand,
   getDashCommands,
@@ -43,6 +45,7 @@ import {
   getEnrollLinks,
   getSettingsGroups,
   getSettingsUsers,
+  getWebhooks,
   grantUserPermission,
   IN_FLIGHT_STATUSES,
   issueDashCommand,
@@ -51,7 +54,9 @@ import {
   retryDashCommand,
   revokeEnrollLink,
   revokeUserPermission,
+  testWebhook,
   updateSettingsUser,
+  updateWebhook,
   type AuditListPage,
   type AuditQueryParams,
   type CommandRecord,
@@ -77,6 +82,11 @@ import {
   type UpdateUserInput,
   type UserPermission,
   type UserPermissionsResponse,
+  type CreateWebhookInput,
+  type UpdateWebhookInput,
+  type WebhookCreateResponse,
+  type WebhookListResponse,
+  type WebhookSummary,
 } from '$lib/api';
 
 // ---- query keys ----
@@ -100,6 +110,7 @@ export const qk = {
   settingsAll: () => ['settings'] as const,
   enrollLinks: () => ['enroll', 'links'] as const,
   enrollAll: () => ['enroll'] as const,
+  webhooks: () => ['webhooks'] as const,
 } as const;
 
 export interface HostsParams {
@@ -774,6 +785,91 @@ export function createDeleteHostMutation() {
       void client.invalidateQueries({ queryKey: qk.overview() });
       void client.invalidateQueries({ queryKey: qk.auditAll() });
       void client.invalidateQueries({ queryKey: qk.host(id) });
+    },
+  });
+}
+
+// ---- /v1/dash/webhooks/* ----------------------------------------------- //
+//
+// Single list query (no per-row cache); mutations invalidate the whole
+// `['webhooks']` key. Volumes are tiny (handful of hooks per tenant) so
+// the patch helpers are deliberately straightforward — no optimistic
+// updates beyond what the toast feedback already conveys.
+
+export function createWebhooksQuery() {
+  return createQuery<WebhookListResponse>({
+    queryKey: qk.webhooks(),
+    queryFn: ({ signal }) => getWebhooks(undefined, signal),
+    staleTime: 30_000,
+  });
+}
+
+export function createCreateWebhookMutation() {
+  const client = useQueryClient();
+  return createMutation<WebhookCreateResponse, Error, CreateWebhookInput>({
+    mutationFn: (input) => createWebhook(input),
+    onSuccess: () => {
+      toast.success('Webhook created');
+    },
+    onError: (err) => {
+      toast.error('Could not create webhook', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+export function createUpdateWebhookMutation() {
+  const client = useQueryClient();
+  return createMutation<
+    WebhookSummary,
+    Error,
+    { id: string; input: UpdateWebhookInput }
+  >({
+    mutationFn: ({ id, input }) => updateWebhook(id, input),
+    onSuccess: () => {
+      toast.success('Webhook updated');
+    },
+    onError: (err) => {
+      toast.error('Could not update webhook', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+export function createDeleteWebhookMutation() {
+  const client = useQueryClient();
+  return createMutation<void, Error, string>({
+    mutationFn: (id) => deleteWebhook(id),
+    onSuccess: () => {
+      toast.success('Webhook deleted');
+    },
+    onError: (err) => {
+      toast.error('Could not delete webhook', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+export function createTestWebhookMutation() {
+  const client = useQueryClient();
+  return createMutation<void, Error, string>({
+    mutationFn: (id) => testWebhook(id),
+    onSuccess: () => {
+      toast.success('Test event queued — check Deliveries for the result');
+    },
+    onError: (err) => {
+      toast.error('Could not test webhook', { description: err.message });
+    },
+    onSettled: () => {
+      // The dispatcher writes the delivery outcome back asynchronously;
+      // invalidate so the next refetch picks up `last_status_code` etc.
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
     },
   });
 }
