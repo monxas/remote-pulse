@@ -31,6 +31,7 @@ from rp_server.webhooks import (
     MAX_DELIVERY_HISTORY,
     TEST_EVENT_TYPE,
     generate_secret,
+    get_dispatcher,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,9 @@ class WebhookDeliveryEntry(BaseModel):
     error: str | None = None
     attempt: int
     success: bool
+    # Set on records produced by ``POST .../deliveries/{id}/retry`` —
+    # holds the original delivery_id so the UI can render "retry of X".
+    retry_of: str | None = None
 
 
 class WebhookDeliveriesResponse(BaseModel):
@@ -475,3 +479,140 @@ async def list_deliveries(
         deliveries=entries,
         max_history=MAX_DELIVERY_HISTORY,
     )
+
+
+@router.post(
+    "/{webhook_id}/deliveries/{delivery_id}/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_delivery(
+    webhook_id: uuid.UUID,
+    delivery_id: str,
+    db: DbSession,
+    admin: Annotated[User, Depends(require_admin)],
+) -> dict[str, Any]:
+    """Re-fire a previously recorded delivery (admin-only).
+
+    Reads the original record from the JSONB sliding window — if the
+    entry has rolled out of the retention window the operation fails
+    with 404. The receiver sees a brand-new ``X-RP-Delivery-Id``; the
+    server-side bookkeeping carries a ``retry_of`` marker so the UI can
+    distinguish a manual retry from an organic delivery.
+    """
+    row = await _load_or_404(db, webhook_id)
+
+    history = list(row.recent_deliveries or [])
+    original = next(
+        (e for e in history if e.get("delivery_id") == delivery_id),
+        None,
+    )
+    if original is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delivery no longer in retention window",
+        )
+
+    dispatcher = get_dispatcher()
+    if dispatcher is None:
+        # In practice the dispatcher is always set by the lifespan
+        # handler. Surface a 503 if it's missing rather than a 500 so
+        # the admin gets a clear "try again in a moment" signal.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook dispatcher not ready",
+        )
+
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="webhook.delivery.retried",
+        resource_id=str(row.id),
+        payload={
+            "delivery_id": delivery_id,
+            "event": original.get("event"),
+            "original_status_code": original.get("status_code"),
+        },
+    )
+    await db.commit()
+
+    # Re-fire with a synthetic "manual retry" payload. We don't have the
+    # original event body in the sliding window (only the outcome
+    # metadata), so the retry sends an envelope the receiver can
+    # recognise as a manual replay via the ``retry_of`` field on the
+    # data block. This is intentionally a "best-effort replay" — full
+    # body retention would require a separate deliveries table, which
+    # ADR-0008 explicitly rejected for the JSONB-only design.
+    hook = {"id": row.id, "url": row.url, "secret": row.secret}
+    retry_payload = {
+        "retry_of": delivery_id,
+        "original_event": original.get("event"),
+        "fired_by": admin.email,
+        "note": "Manual retry from dashboard",
+    }
+    # Fire-and-forget so the HTTP request returns quickly; the outcome
+    # surfaces in the next ``GET .../deliveries`` poll.
+    import asyncio as _asyncio
+
+    _asyncio.create_task(
+        dispatcher.dispatch_retry(
+            hook,
+            str(original.get("event") or TEST_EVENT_TYPE),
+            retry_payload,
+            retry_of=delivery_id,
+        ),
+        name=f"webhook-retry-{row.id}",
+    )
+
+    return {
+        "status": "queued",
+        "webhook_id": str(row.id),
+        "retry_of": delivery_id,
+    }
+
+
+@router.post(
+    "/{webhook_id}/reset-failures",
+    response_model=WebhookSummary,
+)
+async def reset_failures(
+    webhook_id: uuid.UUID,
+    db: DbSession,
+    admin: Annotated[User, Depends(require_admin)],
+) -> WebhookSummary:
+    """Clear ``failure_count`` and re-enable the hook (admin-only).
+
+    Intended for recovering from an auto-disable: after the receiver is
+    fixed, the admin clicks "Reset failures" to lift the gate without
+    having to delete + recreate.
+    """
+    row = await _load_or_404(db, webhook_id)
+    before_failures = int(row.failure_count or 0)
+    before_enabled = bool(row.enabled)
+
+    row.failure_count = 0
+    row.enabled = True
+    row.last_error = None
+
+    _emit_audit(
+        db,
+        actor=admin.email,
+        action="webhook.failures_reset",
+        resource_id=str(row.id),
+        payload={
+            "before": {
+                "failure_count": before_failures,
+                "enabled": before_enabled,
+            },
+        },
+    )
+    await db.commit()
+    await db.refresh(row)
+    logger.info(
+        "Webhook failures reset",
+        extra={
+            "webhook_id": str(row.id),
+            "actor": admin.email,
+            "before_failure_count": before_failures,
+        },
+    )
+    return _to_summary(row)
