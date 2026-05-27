@@ -962,6 +962,8 @@ export interface WebhookDeliveryEntry {
   error: string | null;
   attempt: number;
   success: boolean;
+  /** Set on records produced by the manual retry endpoint — original delivery_id. */
+  retry_of?: string | null;
 }
 
 export interface WebhookDeliveriesResponse {
@@ -970,15 +972,8 @@ export interface WebhookDeliveriesResponse {
   max_history: number;
 }
 
-export async function getWebhooks(
-  f?: FetchFn,
-  signal?: AbortSignal,
-): Promise<WebhookListResponse> {
-  return request<WebhookListResponse>(
-    '/v1/dash/webhooks',
-    { method: 'GET' },
-    { fetch: f, signal },
-  );
+export async function getWebhooks(f?: FetchFn, signal?: AbortSignal): Promise<WebhookListResponse> {
+  return request<WebhookListResponse>('/v1/dash/webhooks', { method: 'GET' }, { fetch: f, signal });
 }
 
 export async function createWebhook(
@@ -1037,6 +1032,42 @@ export async function getWebhookDeliveries(
     `/v1/dash/webhooks/${encodeURIComponent(id)}/deliveries`,
     { method: 'GET' },
     { fetch: f, signal },
+  );
+}
+
+/**
+ * Re-fire a previously recorded delivery. Server responds 202 + a small
+ * envelope; the new outcome surfaces in the next deliveries poll.
+ */
+export interface RetryDeliveryResponse {
+  status: string;
+  webhook_id: string;
+  retry_of: string;
+}
+
+export async function retryWebhookDelivery(
+  webhookId: string,
+  deliveryId: string,
+  f?: FetchFn,
+): Promise<RetryDeliveryResponse> {
+  return request<RetryDeliveryResponse>(
+    `/v1/dash/webhooks/${encodeURIComponent(webhookId)}/deliveries/${encodeURIComponent(
+      deliveryId,
+    )}/retry`,
+    { method: 'POST' },
+    { fetch: f },
+  );
+}
+
+/**
+ * Clear failure_count and re-enable a hook. Returns the updated summary
+ * so callers can patch their cache without a refetch.
+ */
+export async function resetWebhookFailures(id: string, f?: FetchFn): Promise<WebhookSummary> {
+  return request<WebhookSummary>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}/reset-failures`,
+    { method: 'POST' },
+    { fetch: f },
   );
 }
 

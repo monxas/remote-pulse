@@ -35,6 +35,9 @@ import {
   deleteSettingsGroup,
   deleteSettingsUser,
   deleteWebhook,
+  getWebhookDeliveries,
+  retryWebhookDelivery,
+  resetWebhookFailures,
   getDashAudit,
   getDashCommand,
   getDashCommands,
@@ -88,6 +91,7 @@ import {
   type CreateWebhookInput,
   type UpdateWebhookInput,
   type WebhookCreateResponse,
+  type WebhookDeliveriesResponse,
   type WebhookListResponse,
   type WebhookSummary,
 } from '$lib/api';
@@ -115,6 +119,7 @@ export const qk = {
   enrollAll: () => ['enroll'] as const,
   stats: (range: StatsRange) => ['stats', range] as const,
   webhooks: () => ['webhooks'] as const,
+  webhookDeliveries: (webhookId: string) => ['webhooks', webhookId, 'deliveries'] as const,
 } as const;
 
 export interface HostsParams {
@@ -840,11 +845,7 @@ export function createCreateWebhookMutation() {
 
 export function createUpdateWebhookMutation() {
   const client = useQueryClient();
-  return createMutation<
-    WebhookSummary,
-    Error,
-    { id: string; input: UpdateWebhookInput }
-  >({
+  return createMutation<WebhookSummary, Error, { id: string; input: UpdateWebhookInput }>({
     mutationFn: ({ id, input }) => updateWebhook(id, input),
     onSuccess: () => {
       toast.success('Webhook updated');
@@ -887,6 +888,73 @@ export function createTestWebhookMutation() {
     onSettled: () => {
       // The dispatcher writes the delivery outcome back asynchronously;
       // invalidate so the next refetch picks up `last_status_code` etc.
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+/**
+ * Poll the sliding-window deliveries log for one webhook.
+ *
+ * ``shouldPoll`` is consulted on every interval tick (svelte-query
+ * accepts a function for ``refetchInterval``) so the consumer can pause
+ * polling when the tab loses focus or the user clicks "pause" without
+ * having to recreate the query. Returns ``false`` from ``shouldPoll`` to
+ * skip the next refetch; we default to 10s.
+ *
+ * ``enabled`` gates the *initial* query — set this to ``false`` for
+ * non-admin viewers so we don't even attempt the call.
+ */
+export function createWebhookDeliveriesQuery(
+  webhookId: string,
+  opts: {
+    intervalMs?: number;
+    shouldPoll?: () => boolean;
+    enabled?: boolean;
+  } = {},
+) {
+  const intervalMs = opts.intervalMs ?? 10_000;
+  const shouldPoll = opts.shouldPoll ?? (() => true);
+  return createQuery<WebhookDeliveriesResponse>({
+    queryKey: qk.webhookDeliveries(webhookId),
+    queryFn: ({ signal }) => getWebhookDeliveries(webhookId, undefined, signal),
+    refetchInterval: () => (shouldPoll() ? intervalMs : false),
+    refetchIntervalInBackground: false,
+    staleTime: 0,
+    enabled: opts.enabled !== false,
+  });
+}
+
+export function createRetryDeliveryMutation(webhookId: string) {
+  const client = useQueryClient();
+  return createMutation<unknown, Error, string>({
+    mutationFn: (deliveryId) => retryWebhookDelivery(webhookId, deliveryId),
+    onSuccess: () => {
+      toast.success('Retry queued — refreshing in a moment');
+    },
+    onError: (err) => {
+      toast.error('Could not retry delivery', { description: err.message });
+    },
+    onSettled: () => {
+      // New attempt is fire-and-forget; invalidate so the next poll
+      // brings the resulting record in.
+      void client.invalidateQueries({ queryKey: qk.webhookDeliveries(webhookId) });
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+export function createResetFailuresMutation() {
+  const client = useQueryClient();
+  return createMutation<WebhookSummary, Error, string>({
+    mutationFn: (id) => resetWebhookFailures(id),
+    onSuccess: () => {
+      toast.success('Failures reset — webhook re-enabled');
+    },
+    onError: (err) => {
+      toast.error('Could not reset failures', { description: err.message });
+    },
+    onSettled: () => {
       void client.invalidateQueries({ queryKey: qk.webhooks() });
     },
   });
