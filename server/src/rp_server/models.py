@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, SmallInteger, Text, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Integer, SmallInteger, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -557,4 +557,66 @@ class Webhook(Base):
         nullable=False,
         server_default=text("'[]'::jsonb"),
         default=list,
+    )
+
+
+class AuditRetentionConfig(Base):
+    """Singleton policy row for the ``audit_events`` GC.
+
+    The retention loop in :mod:`rp_server.audit_retention` reads this row
+    on every tick to decide ``how old is "too old"?`` and ``am I even
+    enabled?``. The schema-level CHECK ``id = 1`` (see alembic 013)
+    guarantees there is exactly one row, so callers can fetch it with a
+    plain ``SELECT … WHERE id = 1`` without worrying about which policy
+    wins.
+
+    ``last_purge_at`` + ``last_purge_count`` are written by the purge
+    function itself so the admin UI can render ``"last purge: 2h ago,
+    1234 events deleted"`` without scraping logs.
+    """
+
+    __tablename__ = "audit_retention_config"
+
+    # Schema-layer singleton invariant. Mirrors the ``CHECK (id = 1)``
+    # in alembic 013 so the ORM is honest about the constraint.
+    __table_args__ = (
+        CheckConstraint("id = 1", name="audit_retention_config_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        server_default=text("1"),
+        default=1,
+    )
+    retention_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("90"),
+        default=90,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+        default=True,
+    )
+    last_purge_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    last_purge_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    updated_by: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'system'"),
+        default="system",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )

@@ -113,6 +113,33 @@ rp_http_request_duration_seconds = Histogram(
     ["method", "path", "status"],
 )
 
+# ----- Audit retention (ADR-0008 follow-up) -------------------------------- #
+#
+# Three signals make the retention loop legible from outside the app:
+#   * how many purge cycles ran, split by outcome
+#   * lifetime total of audit rows deleted by the loop
+#   * the current row count in ``audit_events`` (refreshed on scrape)
+#
+# The cumulative ``events_deleted`` counter is intentionally a counter
+# and not a gauge so Prometheus can show purge velocity over time
+# (rate(...)) — a gauge would only ever show the latest tick's count.
+
+rp_audit_retention_purge_total = Counter(
+    "rp_audit_retention_purge_total",
+    "Audit retention purge cycles, by outcome",
+    ["result"],  # success | failure
+)
+
+rp_audit_retention_events_deleted_total = Counter(
+    "rp_audit_retention_events_deleted_total",
+    "Lifetime count of audit_events rows deleted by the retention loop",
+)
+
+rp_audit_events_total = Gauge(
+    "rp_audit_events_total",
+    "Current row count in audit_events (refreshed on /metrics scrape)",
+)
+
 
 # Counter helper functions for router instrumentation
 def record_enroll_success(group: str) -> None:
@@ -284,6 +311,18 @@ async def refresh_fleet_gauges(db: AsyncSession) -> None:
     ssh_result_revoked = await db.execute(ssh_stmt_revoked)
     revoked_keys = len(ssh_result_revoked.scalars().all())
     rp_ssh_keys_total.labels(revoked="true").set(revoked_keys)
+
+    # Audit-events row count — cheap COUNT(*) since the table is
+    # bounded by the retention policy. We import the model locally to
+    # avoid a circular import (the retention module pulls metrics).
+    from sqlalchemy import func
+
+    from rp_server.models import AuditEvent
+
+    audit_count = (
+        await db.execute(select(func.count()).select_from(AuditEvent))
+    ).scalar_one()
+    rp_audit_events_total.set(int(audit_count or 0))
 
 
 def get_metrics_output() -> bytes:
