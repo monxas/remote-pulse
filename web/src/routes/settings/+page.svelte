@@ -8,9 +8,11 @@
     Users as UsersIcon,
     FolderKanban,
     ShieldCheck,
+    Archive,
   } from '@lucide/svelte';
   import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
   import NotificationsToggle from '$lib/components/app/NotificationsToggle.svelte';
+  import RetentionCard from '$lib/components/app/RetentionCard.svelte';
   import BulkUserActionBar from '$lib/components/app/BulkUserActionBar.svelte';
   import BulkUserDialogs, { type BulkMode } from '$lib/components/app/BulkUserDialogs.svelte';
   import BulkGroupActionBar from '$lib/components/app/BulkGroupActionBar.svelte';
@@ -310,6 +312,10 @@
       <TabsTrigger value="notifications" data-testid="tab-notifications">
         <Bell class="mr-1.5 size-4" aria-hidden="true" />
         Notifications
+      </TabsTrigger>
+      <TabsTrigger value="retention" data-testid="tab-retention">
+        <Archive class="mr-1.5 size-4" aria-hidden="true" />
+        Retention
       </TabsTrigger>
     </TabsList>
 
@@ -649,6 +655,30 @@
         </CardHeader>
         <CardContent>
           <NotificationsToggle />
+        </CardContent>
+      </Card>
+    </TabsContent>
+
+    <!-- ====================== RETENTION TAB ====================== -->
+    <!--
+      Audit log retention is admin-only on the server (403 on non-admin
+      hits). We additionally hide the control surface in the SPA so a
+      viewer/operator landing on this tab gets a useful explanation
+      instead of a wall of red toasts.
+    -->
+    <TabsContent value="retention" class="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">Audit log retention</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {#if userStore.value?.user_role === 'admin'}
+            <RetentionCard />
+          {:else}
+            <p class="text-sm text-muted" data-testid="retention-non-admin">
+              Audit retention is admin-only. Ask an admin to adjust the policy from this page.
+            </p>
+          {/if}
         </CardContent>
       </Card>
     </TabsContent>

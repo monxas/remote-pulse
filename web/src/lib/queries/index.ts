@@ -55,7 +55,10 @@ import {
   retryDashCommand,
   revokeEnrollLink,
   revokeUserPermission,
+  getRetentionConfig,
+  purgeRetentionNow,
   testWebhook,
+  updateRetentionConfig,
   updateSettingsUser,
   updateWebhook,
   type AuditListPage,
@@ -86,6 +89,9 @@ import {
   type UserPermission,
   type UserPermissionsResponse,
   type CreateWebhookInput,
+  type PurgeNowResult,
+  type RetentionConfig,
+  type UpdateRetentionInput,
   type UpdateWebhookInput,
   type WebhookCreateResponse,
   type WebhookListResponse,
@@ -115,6 +121,7 @@ export const qk = {
   enrollAll: () => ['enroll'] as const,
   stats: (range: StatsRange) => ['stats', range] as const,
   webhooks: () => ['webhooks'] as const,
+  retention: () => ['settings', 'retention'] as const,
 } as const;
 
 export interface HostsParams {
@@ -840,11 +847,7 @@ export function createCreateWebhookMutation() {
 
 export function createUpdateWebhookMutation() {
   const client = useQueryClient();
-  return createMutation<
-    WebhookSummary,
-    Error,
-    { id: string; input: UpdateWebhookInput }
-  >({
+  return createMutation<WebhookSummary, Error, { id: string; input: UpdateWebhookInput }>({
     mutationFn: ({ id, input }) => updateWebhook(id, input),
     onSuccess: () => {
       toast.success('Webhook updated');
@@ -888,6 +891,65 @@ export function createTestWebhookMutation() {
       // The dispatcher writes the delivery outcome back asynchronously;
       // invalidate so the next refetch picks up `last_status_code` etc.
       void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+// ---- /v1/dash/settings/retention --------------------------------------- //
+//
+// Single-row config + one-shot mutations. The list of audit events isn't
+// fetched here — that lives in the audit timeline (`auditList`). All we
+// need is the policy + last-purge book-keeping for the Settings card.
+
+export function createRetentionQuery() {
+  return createQuery<RetentionConfig>({
+    queryKey: qk.retention(),
+    queryFn: ({ signal }) => getRetentionConfig(undefined, signal),
+    // Slightly longer than the webhook list — the value is changed
+    // explicitly by an admin, not by background events, so we can
+    // afford to wait a minute between refetches.
+    staleTime: 60_000,
+  });
+}
+
+export function createUpdateRetentionMutation() {
+  const client = useQueryClient();
+  return createMutation<RetentionConfig, Error, UpdateRetentionInput>({
+    mutationFn: (input) => updateRetentionConfig(input),
+    onSuccess: () => {
+      toast.success('Retention policy updated');
+    },
+    onError: (err) => {
+      toast.error('Could not update retention policy', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.retention() });
+      // The audit timeline now has a fresh row for the change; nudge it.
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
+    },
+  });
+}
+
+export function createPurgeRetentionMutation() {
+  const client = useQueryClient();
+  return createMutation<PurgeNowResult, Error, void>({
+    mutationFn: () => purgeRetentionNow(),
+    onSuccess: (result) => {
+      const n = result.deleted;
+      if (n === 0) {
+        toast.success('Purge ran — nothing to delete');
+      } else {
+        toast.success(`Purged ${n} event${n === 1 ? '' : 's'}`);
+      }
+    },
+    onError: (err) => {
+      toast.error('Purge failed', { description: err.message });
+    },
+    onSettled: () => {
+      // Both the config (last_purge_at) and the audit timeline (manual
+      // purge row + the deletions themselves) move.
+      void client.invalidateQueries({ queryKey: qk.retention() });
+      void client.invalidateQueries({ queryKey: qk.auditAll() });
     },
   });
 }

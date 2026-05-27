@@ -16,6 +16,7 @@ from rp_server import __version__
 from rp_server.config import settings
 from rp_server.database import DbSession, async_session_factory, engine
 from rp_server.middleware.compat import APICompatMiddleware
+from rp_server.audit_retention import retention_loop
 from rp_server.routers import (
     admin,
     agent_commands,
@@ -28,6 +29,7 @@ from rp_server.routers import (
     dash_commands,
     dash_enroll,
     dash_redirect,
+    dash_retention,
     dash_settings,
     dash_stats,
     dash_webhooks,
@@ -77,10 +79,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     dispatcher = WebhookDispatcher(async_session_factory)
     dispatcher.start()
     set_dispatcher(dispatcher)
+
+    # Audit retention GC — fires every 24h to delete ``audit_events``
+    # rows older than the policy in ``audit_retention_config``. See
+    # ``rp_server.audit_retention`` for the rationale on rolling our
+    # own asyncio task instead of pulling in APScheduler.
+    import asyncio as _asyncio  # local import to avoid widening the module surface
+
+    retention_task = _asyncio.create_task(
+        retention_loop(async_session_factory),
+        name="audit-retention-loop",
+    )
     try:
         yield
     finally:
         logger.info("Remote-Pulse server shutting down")
+        retention_task.cancel()
+        try:
+            await retention_task
+        except (_asyncio.CancelledError, Exception):
+            # Cancellation is the happy path; any other exception is
+            # already logged by the loop itself. Either way we don't
+            # want shutdown to block on it.
+            pass
         await dispatcher.stop()
         set_dispatcher(None)
         await engine.dispose()
@@ -195,6 +216,7 @@ app.include_router(dash_api.router)
 app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
 app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
 app.include_router(dash_settings.router)  # Phase 4: groups + users management
+app.include_router(dash_retention.router)  # Audit retention policy (admin-only)
 app.include_router(dash_webhooks.router)  # Outbound webhooks (admin-only)
 app.include_router(dash_enroll.router)    # Phase 4+: admin magic-link issuance
 app.include_router(dash_stats.router)     # ADR-0009 stats page: aggregated KPIs

@@ -970,15 +970,8 @@ export interface WebhookDeliveriesResponse {
   max_history: number;
 }
 
-export async function getWebhooks(
-  f?: FetchFn,
-  signal?: AbortSignal,
-): Promise<WebhookListResponse> {
-  return request<WebhookListResponse>(
-    '/v1/dash/webhooks',
-    { method: 'GET' },
-    { fetch: f, signal },
-  );
+export async function getWebhooks(f?: FetchFn, signal?: AbortSignal): Promise<WebhookListResponse> {
+  return request<WebhookListResponse>('/v1/dash/webhooks', { method: 'GET' }, { fetch: f, signal });
 }
 
 export async function createWebhook(
@@ -1037,6 +1030,70 @@ export async function getWebhookDeliveries(
     `/v1/dash/webhooks/${encodeURIComponent(id)}/deliveries`,
     { method: 'GET' },
     { fetch: f, signal },
+  );
+}
+
+// ---------- /v1/dash/settings/retention (audit retention policy) ----------
+//
+// Mirrors `server/src/rp_server/routers/dash_retention.py`. Admin-only on
+// the server; the SPA hides the Retention sub-card for non-admins but the
+// server is still the source of truth (403 on non-admin calls).
+
+export interface RetentionConfig {
+  retention_days: number;
+  enabled: boolean;
+  last_purge_at: string | null;
+  last_purge_count: number | null;
+  updated_by: string;
+  updated_at: string;
+  /** Lower bound surfaced from the server so the SPA need not hard-code it. */
+  min_days: number;
+  /** Upper bound surfaced from the server. */
+  max_days: number;
+}
+
+export interface UpdateRetentionInput {
+  retention_days?: number;
+  enabled?: boolean;
+}
+
+export interface PurgeNowResult {
+  deleted: number;
+  retention_days: number;
+  enabled: boolean;
+}
+
+export async function getRetentionConfig(
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<RetentionConfig> {
+  return request<RetentionConfig>(
+    '/v1/dash/settings/retention',
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
+export async function updateRetentionConfig(
+  input: UpdateRetentionInput,
+  f?: FetchFn,
+): Promise<RetentionConfig> {
+  return request<RetentionConfig>(
+    '/v1/dash/settings/retention',
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { fetch: f },
+  );
+}
+
+export async function purgeRetentionNow(f?: FetchFn): Promise<PurgeNowResult> {
+  return request<PurgeNowResult>(
+    '/v1/dash/settings/retention/purge-now',
+    { method: 'POST' },
+    { fetch: f },
   );
 }
 
