@@ -167,6 +167,9 @@ def _install_sqlite_python_defaults() -> None:
             elif "::jsonb" in txt and "{}" in txt:
                 col.server_default = None
                 col.default = ColumnDefault(lambda: {})
+            elif "::jsonb" in txt and "[]" in txt:
+                col.server_default = None
+                col.default = ColumnDefault(lambda: [])
             elif "array[" in txt:
                 col.server_default = None
                 col.default = ColumnDefault(lambda: [])
