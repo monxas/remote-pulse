@@ -190,12 +190,16 @@ async def _record_result(
     status_code: int | None,
     error: str | None,
     attempt: int,
+    retry_of: str | None = None,
 ) -> None:
     """Persist the outcome of one delivery attempt.
 
     Loads the row, mutates counters + sliding window, commits. Errors
     here are logged but never raised — we don't want a transient DB blip
     to crash the dispatcher background task.
+
+    ``retry_of`` is set on records produced by the manual retry endpoint
+    so the UI can render a "retry of <original>" badge.
     """
     try:
         async with session_factory() as db:
@@ -225,17 +229,20 @@ async def _record_result(
                         },
                     )
 
+            entry: dict[str, Any] = {
+                "delivery_id": delivery_id,
+                "event": event_type,
+                "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                "status_code": status_code,
+                "error": error,
+                "attempt": attempt,
+                "success": success,
+            }
+            if retry_of is not None:
+                entry["retry_of"] = retry_of
             row.recent_deliveries = _append_delivery_history(
                 row.recent_deliveries,
-                {
-                    "delivery_id": delivery_id,
-                    "event": event_type,
-                    "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-                    "status_code": status_code,
-                    "error": error,
-                    "attempt": attempt,
-                    "success": success,
-                },
+                entry,
             )
 
             await db.commit()
@@ -379,8 +386,16 @@ class WebhookDispatcher:
         hook: dict[str, Any],
         event_type: str,
         payload: dict[str, Any],
+        *,
+        retry_of: str | None = None,
     ) -> None:
-        """Deliver one event to one hook, with retries."""
+        """Deliver one event to one hook, with retries.
+
+        ``retry_of`` is set by the manual retry endpoint to mark the
+        produced record so the deliveries UI can render a "retry of
+        <original-id>" badge. The wire payload itself is unchanged — the
+        receiver only sees the new ``X-RP-Delivery-Id``.
+        """
         delivery_id = str(uuid.uuid4())
         envelope, body = _build_delivery(
             event_type=event_type, payload=payload, delivery_id=delivery_id
@@ -440,7 +455,28 @@ class WebhookDispatcher:
             status_code=last_status,
             error=last_error,
             attempt=MAX_ATTEMPTS if not success else (attempt if success else MAX_ATTEMPTS),
+            retry_of=retry_of,
         )
+
+    # -- public manual retry ---------------------------------------------- #
+
+    async def dispatch_retry(
+        self,
+        hook: dict[str, Any],
+        event_type: str,
+        payload: dict[str, Any],
+        *,
+        retry_of: str,
+    ) -> None:
+        """Re-fire a previously recorded delivery payload.
+
+        Thin wrapper over :meth:`_dispatch` so the admin retry endpoint
+        doesn't have to reach for the private name. The original
+        ``delivery_id`` is preserved via ``retry_of`` on the new record;
+        the wire delivery gets a fresh ID (a retry is a new delivery
+        from the receiver's POV).
+        """
+        await self._dispatch(hook, event_type, payload, retry_of=retry_of)
 
     # -- one-off test delivery (admin endpoint) --------------------------- #
 

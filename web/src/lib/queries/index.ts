@@ -35,6 +35,9 @@ import {
   deleteSettingsGroup,
   deleteSettingsUser,
   deleteWebhook,
+  getWebhookDeliveries,
+  retryWebhookDelivery,
+  resetWebhookFailures,
   getDashAudit,
   getDashCommand,
   getDashCommands,
@@ -94,6 +97,7 @@ import {
   type UpdateRetentionInput,
   type UpdateWebhookInput,
   type WebhookCreateResponse,
+  type WebhookDeliveriesResponse,
   type WebhookListResponse,
   type WebhookSummary,
 } from '$lib/api';
@@ -122,6 +126,7 @@ export const qk = {
   stats: (range: StatsRange) => ['stats', range] as const,
   webhooks: () => ['webhooks'] as const,
   retention: () => ['settings', 'retention'] as const,
+  webhookDeliveries: (webhookId: string) => ['webhooks', webhookId, 'deliveries'] as const,
 } as const;
 
 export interface HostsParams {
@@ -905,9 +910,6 @@ export function createRetentionQuery() {
   return createQuery<RetentionConfig>({
     queryKey: qk.retention(),
     queryFn: ({ signal }) => getRetentionConfig(undefined, signal),
-    // Slightly longer than the webhook list — the value is changed
-    // explicitly by an admin, not by background events, so we can
-    // afford to wait a minute between refetches.
     staleTime: 60_000,
   });
 }
@@ -924,7 +926,6 @@ export function createUpdateRetentionMutation() {
     },
     onSettled: () => {
       void client.invalidateQueries({ queryKey: qk.retention() });
-      // The audit timeline now has a fresh row for the change; nudge it.
       void client.invalidateQueries({ queryKey: qk.auditAll() });
     },
   });
@@ -946,10 +947,63 @@ export function createPurgeRetentionMutation() {
       toast.error('Purge failed', { description: err.message });
     },
     onSettled: () => {
-      // Both the config (last_purge_at) and the audit timeline (manual
-      // purge row + the deletions themselves) move.
       void client.invalidateQueries({ queryKey: qk.retention() });
       void client.invalidateQueries({ queryKey: qk.auditAll() });
+    },
+  });
+}
+
+// ---- webhook deliveries (poll + retry + reset) ------------------------- //
+
+export function createWebhookDeliveriesQuery(
+  webhookId: string,
+  opts: {
+    intervalMs?: number;
+    shouldPoll?: () => boolean;
+    enabled?: boolean;
+  } = {},
+) {
+  const intervalMs = opts.intervalMs ?? 10_000;
+  const shouldPoll = opts.shouldPoll ?? (() => true);
+  return createQuery<WebhookDeliveriesResponse>({
+    queryKey: qk.webhookDeliveries(webhookId),
+    queryFn: ({ signal }) => getWebhookDeliveries(webhookId, undefined, signal),
+    refetchInterval: () => (shouldPoll() ? intervalMs : false),
+    refetchIntervalInBackground: false,
+    staleTime: 0,
+    enabled: opts.enabled !== false,
+  });
+}
+
+export function createRetryDeliveryMutation(webhookId: string) {
+  const client = useQueryClient();
+  return createMutation<unknown, Error, string>({
+    mutationFn: (deliveryId) => retryWebhookDelivery(webhookId, deliveryId),
+    onSuccess: () => {
+      toast.success('Retry queued — refreshing in a moment');
+    },
+    onError: (err) => {
+      toast.error('Could not retry delivery', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.webhookDeliveries(webhookId) });
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
+    },
+  });
+}
+
+export function createResetFailuresMutation() {
+  const client = useQueryClient();
+  return createMutation<WebhookSummary, Error, string>({
+    mutationFn: (id) => resetWebhookFailures(id),
+    onSuccess: () => {
+      toast.success('Failures reset — webhook re-enabled');
+    },
+    onError: (err) => {
+      toast.error('Could not reset failures', { description: err.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: qk.webhooks() });
     },
   });
 }

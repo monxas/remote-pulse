@@ -962,6 +962,8 @@ export interface WebhookDeliveryEntry {
   error: string | null;
   attempt: number;
   success: boolean;
+  /** Set on records produced by the manual retry endpoint — original delivery_id. */
+  retry_of?: string | null;
 }
 
 export interface WebhookDeliveriesResponse {
@@ -1092,6 +1094,44 @@ export async function updateRetentionConfig(
 export async function purgeRetentionNow(f?: FetchFn): Promise<PurgeNowResult> {
   return request<PurgeNowResult>(
     '/v1/dash/settings/retention/purge-now',
+    { method: 'POST' },
+    { fetch: f },
+  );
+}
+
+// ---------- webhook deliveries (retry + reset failures) ----------
+
+/**
+ * Re-fire a previously recorded delivery. Server responds 202 + a small
+ * envelope; the new outcome surfaces in the next deliveries poll.
+ */
+export interface RetryDeliveryResponse {
+  status: string;
+  webhook_id: string;
+  retry_of: string;
+}
+
+export async function retryWebhookDelivery(
+  webhookId: string,
+  deliveryId: string,
+  f?: FetchFn,
+): Promise<RetryDeliveryResponse> {
+  return request<RetryDeliveryResponse>(
+    `/v1/dash/webhooks/${encodeURIComponent(webhookId)}/deliveries/${encodeURIComponent(
+      deliveryId,
+    )}/retry`,
+    { method: 'POST' },
+    { fetch: f },
+  );
+}
+
+/**
+ * Clear failure_count and re-enable a hook. Returns the updated summary
+ * so callers can patch their cache without a refetch.
+ */
+export async function resetWebhookFailures(id: string, f?: FetchFn): Promise<WebhookSummary> {
+  return request<WebhookSummary>(
+    `/v1/dash/webhooks/${encodeURIComponent(id)}/reset-failures`,
     { method: 'POST' },
     { fetch: f },
   );

@@ -10,8 +10,19 @@
    * available per row.
    */
 
-  import { Copy, Loader2, Plus, Send, ShieldCheck, Trash2, TriangleAlert } from '@lucide/svelte';
+  import {
+    Copy,
+    History,
+    Loader2,
+    Plus,
+    RotateCcw,
+    Send,
+    ShieldCheck,
+    Trash2,
+    TriangleAlert,
+  } from '@lucide/svelte';
   import { toast } from 'svelte-sonner';
+  import { resolve } from '$app/paths';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -29,15 +40,16 @@
     createWebhooksQuery,
     createCreateWebhookMutation,
     createDeleteWebhookMutation,
+    createResetFailuresMutation,
     createTestWebhookMutation,
     createUpdateWebhookMutation,
   } from '$lib/queries';
+  // ``AUTO_DISABLE_AFTER`` on the server. Mirrored here so the UI can
+  // surface "Auto-disabled" without a round trip — kept in sync via the
+  // backend's documented threshold (see rp_server.webhooks).
+  const AUTO_DISABLE_AFTER = 10;
   import { userStore } from '$lib/stores/user.svelte';
-  import type {
-    CreateWebhookInput,
-    WebhookCreateResponse,
-    WebhookSummary,
-  } from '$lib/api';
+  import type { CreateWebhookInput, WebhookCreateResponse, WebhookSummary } from '$lib/api';
 
   // ---- Data + mutations ----
   const webhooksQuery = createWebhooksQuery();
@@ -45,6 +57,7 @@
   const updateMut = createUpdateWebhookMutation();
   const deleteMut = createDeleteWebhookMutation();
   const testMut = createTestWebhookMutation();
+  const resetFailuresMut = createResetFailuresMutation();
 
   const webhooks = $derived<WebhookSummary[]>($webhooksQuery.data?.webhooks ?? []);
 
@@ -162,6 +175,31 @@
     }
   }
 
+  async function resetFailures(hook: WebhookSummary): Promise<void> {
+    // Cheap-and-cheerful confirm — same pattern as `deleteHook`. The
+    // intent here is "I fixed the receiver, lift the auto-disable",
+    // so we don't gate behind a full modal.
+    if (
+      !window.confirm(
+        `Reset failures for "${hook.name}"? This clears the consecutive-failure counter and re-enables the webhook.`,
+      )
+    )
+      return;
+    try {
+      await $resetFailuresMut.mutateAsync(hook.id);
+    } catch {
+      /* surfaced by toast */
+    }
+  }
+
+  function isAutoDisabled(hook: WebhookSummary): boolean {
+    // Server flips ``enabled = false`` once ``failure_count`` hits the
+    // threshold, so the row's auto-disabled iff both conditions hold.
+    // (A hook that's disabled manually with failure_count < threshold is
+    // intentionally NOT shown as auto-disabled.)
+    return !hook.enabled && hook.failure_count >= AUTO_DISABLE_AFTER;
+  }
+
   function statusBadge(hook: WebhookSummary) {
     if (!hook.enabled) return { variant: 'muted' as const, label: 'disabled' };
     if (hook.last_status_code == null) return { variant: 'secondary' as const, label: 'idle' };
@@ -192,8 +230,8 @@
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Webhooks</h1>
       <p class="mt-1 text-sm text-muted">
-        Forward Remote-Pulse events to external URLs. Each delivery is signed with HMAC-SHA256 so the
-        receiver can verify authenticity. Useful for n8n, Discord, Slack, or any HTTP target.
+        Forward Remote-Pulse events to external URLs. Each delivery is signed with HMAC-SHA256 so
+        the receiver can verify authenticity. Useful for n8n, Discord, Slack, or any HTTP target.
       </p>
     </div>
     {#if isAdmin}
@@ -237,7 +275,9 @@
       </CardHeader>
       <CardContent class="overflow-x-auto p-0">
         <table class="w-full min-w-[800px] text-sm">
-          <thead class="border-b border-border-subtle bg-subtle/30 text-left text-xs uppercase tracking-wide text-muted">
+          <thead
+            class="border-b border-border-subtle bg-subtle/30 text-left text-xs uppercase tracking-wide text-muted"
+          >
             <tr>
               <th class="px-4 py-2">Name</th>
               <th class="px-4 py-2">URL</th>
@@ -285,7 +325,15 @@
                   <Badge variant={sb.variant}>{sb.label}</Badge>
                 </td>
                 <td class="px-4 py-2">
-                  {#if hook.failure_count > 0}
+                  {#if isAutoDisabled(hook)}
+                    <Badge
+                      variant="danger"
+                      data-testid="webhook-autodisabled-badge"
+                      title="Disabled after {AUTO_DISABLE_AFTER} consecutive failures. Re-enable manually after fixing."
+                    >
+                      Auto-disabled ({hook.failure_count})
+                    </Badge>
+                  {:else if hook.failure_count > 0}
                     <span class="text-danger-text">{hook.failure_count}</span>
                   {:else}
                     <span class="text-muted">0</span>
@@ -293,6 +341,15 @@
                 </td>
                 <td class="px-4 py-2">
                   <div class="flex items-center justify-end gap-1">
+                    <a
+                      href={resolve('/webhooks/[id]/deliveries', { id: hook.id })}
+                      class="inline-flex h-8 items-center justify-center rounded-md px-2 text-sm hover:bg-subtle"
+                      data-testid="webhook-deliveries-link"
+                      aria-label={`View deliveries for ${hook.name}`}
+                      title="View deliveries"
+                    >
+                      <History class="size-4" aria-hidden="true" />
+                    </a>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -302,6 +359,19 @@
                     >
                       <Send class="size-4" aria-hidden="true" />
                     </Button>
+                    {#if hook.failure_count > 0}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onclick={() => resetFailures(hook)}
+                        disabled={$resetFailuresMut.isPending}
+                        data-testid="webhook-reset-failures-btn"
+                        aria-label={`Reset failures for ${hook.name}`}
+                        title="Reset failure counter and re-enable"
+                      >
+                        <RotateCcw class="size-4" aria-hidden="true" />
+                      </Button>
+                    {/if}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -373,11 +443,7 @@
         </div>
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Group filter (optional)</span>
-          <Input
-            bind:value={newGroupFilter}
-            placeholder="prod, family"
-            data-testid="wh-groups"
-          />
+          <Input bind:value={newGroupFilter} placeholder="prod, family" data-testid="wh-groups" />
           <span class="mt-1 block text-xs text-muted">
             Comma-separated group names. Leave blank to receive events from every group.
           </span>
