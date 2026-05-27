@@ -39,6 +39,7 @@ import {
   getDashHosts,
   getDashOverview,
   getDashPendingApprovals,
+  getDashStats,
   getDashTimeseries,
   getEnrollLinks,
   getSettingsGroups,
@@ -60,6 +61,7 @@ import {
   type CreateGroupInput,
   type CreateUserInput,
   type DashOverview,
+  type DashStats,
   type EnrollLinkCreateInput,
   type EnrollLinkListResponse,
   type EnrollLinkOut,
@@ -73,6 +75,7 @@ import {
   type SettingsGroupsResponse,
   type SettingsUser,
   type SettingsUsersResponse,
+  type StatsRange,
   type TimeseriesPayload,
   type UpdateUserInput,
   type UserPermission,
@@ -100,6 +103,7 @@ export const qk = {
   settingsAll: () => ['settings'] as const,
   enrollLinks: () => ['enroll', 'links'] as const,
   enrollAll: () => ['enroll'] as const,
+  stats: (range: StatsRange) => ['stats', range] as const,
 } as const;
 
 export interface HostsParams {
@@ -112,6 +116,20 @@ export interface HostsParams {
 export interface TimeseriesParams {
   window: string;
   series: string[];
+}
+
+// ---- /v1/dash/stats ----
+export function createStatsQuery(range: Readable<StatsRange>) {
+  return createQuery<DashStats>(
+    derived(range, (r) => ({
+      queryKey: qk.stats(r),
+      queryFn: ({ signal }: { signal: AbortSignal }) => getDashStats(r, undefined, signal),
+      // Aggregations don't need sub-second freshness; refetch every
+      // minute so users on the page see new commands trickle in.
+      refetchInterval: 60_000,
+      staleTime: 30_000,
+    })),
+  );
 }
 
 // ---- /v1/dash/overview ----

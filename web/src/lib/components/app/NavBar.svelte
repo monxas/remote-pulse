@@ -3,6 +3,7 @@
   import { base, resolve } from '$app/paths';
   import {
     Activity,
+    BarChart3,
     ListTree,
     Server,
     ShieldAlert,
@@ -21,6 +22,7 @@
     { href: resolve('/commands'), label: 'Commands', Icon: Terminal, raw: '/commands' },
     { href: resolve('/approvals'), label: 'Approvals', Icon: ShieldAlert, raw: '/approvals' },
     { href: resolve('/audit'), label: 'Audit', Icon: ListTree, raw: '/audit' },
+    { href: resolve('/stats'), label: 'Stats', Icon: BarChart3, raw: '/stats' },
     { href: resolve('/enroll'), label: 'Enroll', Icon: KeyRound, raw: '/enroll' },
     { href: resolve('/settings'), label: 'Settings', Icon: Settings, raw: '/settings' },
   ] as const;
@@ -51,6 +53,7 @@
             active ? 'bg-subtle text-default' : 'text-muted hover:bg-subtle hover:text-default',
           )}
           aria-current={active ? 'page' : undefined}
+          data-testid="nav-{link.label.toLowerCase()}"
         >
           <link.Icon class="size-4" aria-hidden="true" />
           {link.label}

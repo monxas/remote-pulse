@@ -519,6 +519,90 @@ export function buildAuditExportUrl(
   return `/v1/dash/audit/export${qs}${sep}format=${format}`;
 }
 
+// ---------- /v1/dash/stats ----------
+export type StatsRange = '24h' | '7d' | '30d' | '90d';
+
+export const ALL_STATS_RANGES: ReadonlyArray<StatsRange> = ['24h', '7d', '30d', '90d'] as const;
+
+export interface StatsFleet {
+  total_hosts: number;
+  online_now: number;
+  offline_now: number;
+  uptime_percent: number;
+}
+
+export interface StatsCommandType {
+  type: string;
+  count: number;
+}
+
+export interface StatsCommandDaily {
+  day: string;
+  issued: number;
+  succeeded: number;
+  failed: number;
+}
+
+export interface StatsCommands {
+  total: number;
+  succeeded: number;
+  failed: number;
+  pending: number;
+  success_rate: number;
+  by_type: StatsCommandType[];
+  daily: StatsCommandDaily[];
+}
+
+export interface StatsHeartbeats {
+  total: number;
+  per_host_avg_per_min: number;
+  stale_events: number;
+  offline_events: number;
+}
+
+export interface StatsHostUptime {
+  hostname: string;
+  uptime_percent: number;
+  downtime_minutes: number;
+}
+
+export interface StatsAuditEntry {
+  action: string;
+  count: number;
+}
+
+export interface StatsAuditActor {
+  actor: string;
+  count: number;
+}
+
+export interface StatsAuditSummary {
+  total_events: number;
+  by_action: StatsAuditEntry[];
+  by_actor: StatsAuditActor[];
+}
+
+export interface DashStats {
+  range: StatsRange;
+  fleet: StatsFleet;
+  commands: StatsCommands;
+  heartbeats: StatsHeartbeats;
+  uptime_per_host: StatsHostUptime[];
+  audit_summary: StatsAuditSummary;
+}
+
+export async function getDashStats(
+  range: StatsRange,
+  f?: FetchFn,
+  signal?: AbortSignal,
+): Promise<DashStats> {
+  return request<DashStats>(
+    `/v1/dash/stats?range=${encodeURIComponent(range)}`,
+    { method: 'GET' },
+    { fetch: f, signal },
+  );
+}
+
 // ---------- /v1/dash/settings/* (ADR-0009 Phase 4) ----------
 export interface SettingsGroup {
   name: string;
