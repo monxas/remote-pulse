@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from rp_server import __version__
 from rp_server.config import settings
-from rp_server.database import DbSession, engine
+from rp_server.database import DbSession, async_session_factory, engine
 from rp_server.middleware.compat import APICompatMiddleware
 from rp_server.routers import (
     admin,
@@ -29,6 +29,7 @@ from rp_server.routers import (
     dash_enroll,
     dash_redirect,
     dash_settings,
+    dash_webhooks,
     enroll,
     enrollment_links,
     heartbeat,
@@ -36,6 +37,7 @@ from rp_server.routers import (
     keys,
     metrics,
 )
+from rp_server.webhooks import WebhookDispatcher, set_dispatcher
 from starlette.middleware.sessions import SessionMiddleware
 
 # Configure structured logging
@@ -68,9 +70,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "Remote-Pulse server starting",
         extra={"version": __version__, "log_level": settings.log_level},
     )
-    yield
-    logger.info("Remote-Pulse server shutting down")
-    await engine.dispose()
+    # Wire up the outbound webhook dispatcher. It subscribes to the
+    # in-process event bus and POSTs matching events to registered URLs.
+    # Lives for the whole app lifetime so it shares one connection pool.
+    dispatcher = WebhookDispatcher(async_session_factory)
+    dispatcher.start()
+    set_dispatcher(dispatcher)
+    try:
+        yield
+    finally:
+        logger.info("Remote-Pulse server shutting down")
+        await dispatcher.stop()
+        set_dispatcher(None)
+        await engine.dispose()
 
 
 app = FastAPI(
@@ -182,6 +194,7 @@ app.include_router(dash_api.router)
 app.include_router(dash_commands.router)  # Phase 2: Commands + Approvals
 app.include_router(dash_audit.router)     # Phase 2: synthetic audit timeline
 app.include_router(dash_settings.router)  # Phase 4: groups + users management
+app.include_router(dash_webhooks.router)  # Outbound webhooks (admin-only)
 app.include_router(dash_enroll.router)    # Phase 4+: admin magic-link issuance
 # ADR-0009 Phase 3 cutover: the legacy Jinja+HTMX dashboard previously
 # mounted via ``web.router`` is now replaced by a thin redirect shim that
