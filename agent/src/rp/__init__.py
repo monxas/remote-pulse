@@ -1,3 +1,3 @@
 """Remote-Pulse agent."""
 
-__version__ = "1.0.11"
+__version__ = "1.0.12"
