@@ -11,6 +11,7 @@
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import AuditEvent from '$lib/components/app/AuditEvent.svelte';
   import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
+  import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
   import { createAuditQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -125,233 +126,237 @@
 </svelte:head>
 
 <PullToRefresh onRefresh={() => $audit.refetch()}>
-<section class="space-y-6">
-  <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">Audit log</h1>
-      <p class="text-sm text-muted">Every state-changing event in the system, append-only.</p>
-    </div>
-    <div class="flex items-center gap-2">
-      {#if live}
-        <LiveBadge state={live.state} />
-      {/if}
-      <div class="relative">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={() => (exportOpen = !exportOpen)}
-          aria-haspopup="menu"
-          aria-expanded={exportOpen}
-          data-testid="audit-export-button"
-        >
-          <Download class="size-4" aria-hidden="true" />
-          Export
-          <ChevronDown class="size-3.5" aria-hidden="true" />
-        </Button>
-        {#if exportOpen}
-          <!-- Click-away handler closes the menu when interacting elsewhere. -->
-          <button
-            type="button"
-            class="fixed inset-0 z-10 cursor-default"
-            aria-hidden="true"
-            tabindex="-1"
-            onclick={() => (exportOpen = false)}
-          ></button>
-          <div
-            role="menu"
-            class="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-md border border-border-default bg-elevated shadow-lg"
-          >
-            <!-- The href targets the backend export endpoint directly (out of SvelteKit's router). -->
-            <!-- eslint-disable svelte/no-navigation-without-resolve -->
-            <a
-              role="menuitem"
-              href={exportHref('csv')}
-              download
-              data-testid="audit-export-csv"
-              class="block px-3 py-2 text-sm hover:bg-subtle"
-              onclick={() => (exportOpen = false)}
-            >
-              Export as CSV
-            </a>
-            <a
-              role="menuitem"
-              href={exportHref('json')}
-              download
-              data-testid="audit-export-json"
-              class="block px-3 py-2 text-sm hover:bg-subtle"
-              onclick={() => (exportOpen = false)}
-            >
-              Export as JSON
-            </a>
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
-          </div>
-        {/if}
+  <section class="space-y-6">
+    <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Audit log</h1>
+        <p class="text-sm text-muted">Every state-changing event in the system, append-only.</p>
       </div>
-    </div>
-  </header>
-
-  <div class="space-y-3 rounded-lg border border-border-default bg-elevated p-3">
-    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted">Actor</span>
-        <Input
-          value={actorLocal}
-          oninput={onActorInput}
-          placeholder="alice@example.com"
-          aria-label="Actor filter"
-          data-testid="audit-actor-filter"
-        />
-      </label>
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted">Action prefix</span>
-        <Input
-          value={actionPrefixLocal}
-          oninput={onActionPrefixInput}
-          placeholder="settings."
-          aria-label="Action prefix filter"
-          data-testid="audit-action-prefix-filter"
-        />
-      </label>
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted">Target type</span>
-        <select
-          value={selectedTarget}
-          onchange={(e) =>
-            updateUrl({ target_type: (e.target as HTMLSelectElement).value || null })}
-          class="h-9 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {#each targetTypes as t (t.value)}
-            <option value={t.value}>{t.label}</option>
-          {/each}
-        </select>
-      </label>
-      <div class="space-y-1">
-        <span class="text-xs font-medium text-muted">Range</span>
-        <div class="flex h-9 items-center gap-1 rounded-md border border-border-default p-0.5">
-          {#each ranges as r (r.value)}
+      <div class="flex items-center gap-2">
+        {#if live}
+          <LiveBadge state={live.state} />
+        {/if}
+        <div class="relative">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => (exportOpen = !exportOpen)}
+            aria-haspopup="menu"
+            aria-expanded={exportOpen}
+            data-testid="audit-export-button"
+          >
+            <Download class="size-4" aria-hidden="true" />
+            Export
+            <ChevronDown class="size-3.5" aria-hidden="true" />
+          </Button>
+          {#if exportOpen}
+            <!-- Click-away handler closes the menu when interacting elsewhere. -->
             <button
               type="button"
-              onclick={() => updateUrl({ range: r.value })}
-              class={cn(
-                'flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors',
-                range === r.value ? 'bg-accent-bg text-accent-text' : 'text-muted hover:bg-subtle',
-              )}
-              aria-pressed={range === r.value}
+              class="fixed inset-0 z-10 cursor-default"
+              aria-hidden="true"
+              tabindex="-1"
+              onclick={() => (exportOpen = false)}
+            ></button>
+            <div
+              role="menu"
+              class="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-md border border-border-default bg-elevated shadow-lg"
             >
-              {r.label}
-            </button>
-          {/each}
+              <!-- The href targets the backend export endpoint directly (out of SvelteKit's router). -->
+              <!-- eslint-disable svelte/no-navigation-without-resolve -->
+              <a
+                role="menuitem"
+                href={exportHref('csv')}
+                download
+                data-testid="audit-export-csv"
+                class="block px-3 py-2 text-sm hover:bg-subtle"
+                onclick={() => (exportOpen = false)}
+              >
+                Export as CSV
+              </a>
+              <a
+                role="menuitem"
+                href={exportHref('json')}
+                download
+                data-testid="audit-export-json"
+                class="block px-3 py-2 text-sm hover:bg-subtle"
+                onclick={() => (exportOpen = false)}
+              >
+                Export as JSON
+              </a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+            </div>
+          {/if}
         </div>
       </div>
-    </div>
+    </header>
 
-    {#if range === 'custom'}
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <SavedViewsSwitcher scope="audit" />
+
+    <div class="space-y-3 rounded-lg border border-border-default bg-elevated p-3">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label class="block space-y-1">
-          <span class="text-xs font-medium text-muted">Since (ISO 8601)</span>
+          <span class="text-xs font-medium text-muted">Actor</span>
           <Input
-            value={since}
-            oninput={(e) => updateUrl({ since: (e.target as HTMLInputElement).value || null })}
-            placeholder="2026-01-01T00:00:00Z"
-            aria-label="Since"
+            value={actorLocal}
+            oninput={onActorInput}
+            placeholder="alice@example.com"
+            aria-label="Actor filter"
+            data-testid="audit-actor-filter"
           />
         </label>
         <label class="block space-y-1">
-          <span class="text-xs font-medium text-muted">Until (ISO 8601)</span>
+          <span class="text-xs font-medium text-muted">Action prefix</span>
           <Input
-            value={until}
-            oninput={(e) => updateUrl({ until: (e.target as HTMLInputElement).value || null })}
-            placeholder="2026-01-31T23:59:59Z"
-            aria-label="Until"
+            value={actionPrefixLocal}
+            oninput={onActionPrefixInput}
+            placeholder="settings."
+            aria-label="Action prefix filter"
+            data-testid="audit-action-prefix-filter"
           />
         </label>
+        <label class="block space-y-1">
+          <span class="text-xs font-medium text-muted">Target type</span>
+          <select
+            value={selectedTarget}
+            onchange={(e) =>
+              updateUrl({ target_type: (e.target as HTMLSelectElement).value || null })}
+            class="h-9 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {#each targetTypes as t (t.value)}
+              <option value={t.value}>{t.label}</option>
+            {/each}
+          </select>
+        </label>
+        <div class="space-y-1">
+          <span class="text-xs font-medium text-muted">Range</span>
+          <div class="flex h-9 items-center gap-1 rounded-md border border-border-default p-0.5">
+            {#each ranges as r (r.value)}
+              <button
+                type="button"
+                onclick={() => updateUrl({ range: r.value })}
+                class={cn(
+                  'flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors',
+                  range === r.value
+                    ? 'bg-accent-bg text-accent-text'
+                    : 'text-muted hover:bg-subtle',
+                )}
+                aria-pressed={range === r.value}
+              >
+                {r.label}
+              </button>
+            {/each}
+          </div>
+        </div>
       </div>
-    {/if}
 
-    <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-medium text-muted">Actions</span>
-      {#each ALL_AUDIT_ACTIONS as a (a)}
-        {@const on = selectedActions.includes(a)}
+      {#if range === 'custom'}
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-muted">Since (ISO 8601)</span>
+            <Input
+              value={since}
+              oninput={(e) => updateUrl({ since: (e.target as HTMLInputElement).value || null })}
+              placeholder="2026-01-01T00:00:00Z"
+              aria-label="Since"
+            />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-muted">Until (ISO 8601)</span>
+            <Input
+              value={until}
+              oninput={(e) => updateUrl({ until: (e.target as HTMLInputElement).value || null })}
+              placeholder="2026-01-31T23:59:59Z"
+              aria-label="Until"
+            />
+          </label>
+        </div>
+      {/if}
+
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-medium text-muted">Actions</span>
+        {#each ALL_AUDIT_ACTIONS as a (a)}
+          {@const on = selectedActions.includes(a)}
+          <button
+            type="button"
+            onclick={() => toggleAction(a)}
+            class={cn(
+              'rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
+              on
+                ? 'border-accent bg-accent-bg text-accent-text'
+                : 'border-border-default text-muted hover:bg-subtle',
+            )}
+            aria-pressed={on}
+          >
+            {a}
+          </button>
+        {/each}
+      </div>
+
+      <div class="flex items-center justify-between">
         <button
           type="button"
-          onclick={() => toggleAction(a)}
-          class={cn(
-            'rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
-            on
-              ? 'border-accent bg-accent-bg text-accent-text'
-              : 'border-border-default text-muted hover:bg-subtle',
-          )}
-          aria-pressed={on}
+          class="text-xs text-accent-text underline-offset-4 hover:underline"
+          onclick={clearFilters}
         >
-          {a}
+          Clear filters
         </button>
-      {/each}
-    </div>
-
-    <div class="flex items-center justify-between">
-      <button
-        type="button"
-        class="text-xs text-accent-text underline-offset-4 hover:underline"
-        onclick={clearFilters}
-      >
-        Clear filters
-      </button>
-      <span class="text-xs text-muted" data-testid="audit-count">
-        {#if $audit.isPending && !$audit.data}
-          Loading…
-        {:else}
-          Showing {events.length} of {total} events
-        {/if}
-      </span>
-    </div>
-  </div>
-
-  {#if $audit.isPending && !$audit.data}
-    <div class="space-y-2" aria-busy="true">
-      {#each [0, 1, 2, 3] as i (i)}
-        <div class="h-12 animate-pulse rounded-md bg-subtle"></div>
-      {/each}
-    </div>
-  {:else if $audit.isError}
-    <Card>
-      <CardContent class="space-y-3 py-6">
-        <p class="text-sm text-muted">
-          Could not load audit log: {$audit.error?.message ?? 'unknown error'}.
-        </p>
-        <Button size="sm" onclick={() => void $audit.refetch()}>Reload</Button>
-      </CardContent>
-    </Card>
-  {:else if events.length === 0}
-    <Card>
-      <CardContent class="flex flex-col items-center gap-3 py-12 text-center">
-        <ListTree class="size-8 text-muted" aria-hidden="true" />
-        <p class="text-sm text-muted">No events match these filters.</p>
-      </CardContent>
-    </Card>
-  {:else}
-    <ol class="list-none">
-      {#each events as ev (ev.id)}
-        <AuditEvent event={ev} />
-      {/each}
-    </ol>
-    {#if $audit.hasNextPage}
-      <div class="flex justify-center pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onclick={() => void $audit.fetchNextPage()}
-          disabled={$audit.isFetchingNextPage}
-        >
-          {#if $audit.isFetchingNextPage}
-            <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+        <span class="text-xs text-muted" data-testid="audit-count">
+          {#if $audit.isPending && !$audit.data}
             Loading…
           {:else}
-            Load more
+            Showing {events.length} of {total} events
           {/if}
-        </Button>
+        </span>
       </div>
+    </div>
+
+    {#if $audit.isPending && !$audit.data}
+      <div class="space-y-2" aria-busy="true">
+        {#each [0, 1, 2, 3] as i (i)}
+          <div class="h-12 animate-pulse rounded-md bg-subtle"></div>
+        {/each}
+      </div>
+    {:else if $audit.isError}
+      <Card>
+        <CardContent class="space-y-3 py-6">
+          <p class="text-sm text-muted">
+            Could not load audit log: {$audit.error?.message ?? 'unknown error'}.
+          </p>
+          <Button size="sm" onclick={() => void $audit.refetch()}>Reload</Button>
+        </CardContent>
+      </Card>
+    {:else if events.length === 0}
+      <Card>
+        <CardContent class="flex flex-col items-center gap-3 py-12 text-center">
+          <ListTree class="size-8 text-muted" aria-hidden="true" />
+          <p class="text-sm text-muted">No events match these filters.</p>
+        </CardContent>
+      </Card>
+    {:else}
+      <ol class="list-none">
+        {#each events as ev (ev.id)}
+          <AuditEvent event={ev} />
+        {/each}
+      </ol>
+      {#if $audit.hasNextPage}
+        <div class="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={() => void $audit.fetchNextPage()}
+            disabled={$audit.isFetchingNextPage}
+          >
+            {#if $audit.isFetchingNextPage}
+              <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+              Loading…
+            {:else}
+              Load more
+            {/if}
+          </Button>
+        </div>
+      {/if}
     {/if}
-  {/if}
-</section>
+  </section>
 </PullToRefresh>

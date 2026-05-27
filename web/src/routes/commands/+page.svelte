@@ -12,6 +12,7 @@
   import LiveBadge from '$lib/components/app/LiveBadge.svelte';
   import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
   import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
+  import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
   import { createCommandsQuery, createHostsQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
@@ -111,6 +112,8 @@
         </Button>
       </div>
     </header>
+
+    <SavedViewsSwitcher scope="commands" />
 
     <!-- Filter bar -->
     <div class="flex flex-col gap-3 rounded-lg border border-border-default bg-elevated p-3">
