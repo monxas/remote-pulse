@@ -51,6 +51,11 @@
   const AUTO_DISABLE_AFTER = 10;
   import { userStore } from '$lib/stores/user.svelte';
   import type { CreateWebhookInput, WebhookCreateResponse, WebhookSummary } from '$lib/api';
+  import {
+    INTEGRATION_TEMPLATES,
+    applyTemplate as applyTemplatePure,
+    type IntegrationTemplate,
+  } from './integration-templates';
 
   // ---- Data + mutations ----
   const webhooksQuery = createWebhooksQuery();
@@ -71,6 +76,34 @@
       .filter((n) => typeof n === 'string')
       .sort(),
   );
+
+  // ---- Integration templates (v1.0.15) ------------------------------
+  // Quick-fill buttons that drop a *placeholder* URL + sensible defaults
+  // into the empty form. We intentionally only fill *empty* fields so an
+  // operator who has half-typed something doesn't lose their work when
+  // they click a template. Pure apply logic lives in
+  // ``./integration-templates.ts`` so the contract is unit-tested.
+  function applyTemplate(tmpl: IntegrationTemplate): void {
+    const next = applyTemplatePure(tmpl, {
+      name: newName,
+      url: newUrl,
+      events: newEventFilter,
+    });
+    newName = next.name;
+    newUrl = next.url;
+    newEventFilter = next.events;
+    // Focus the URL input so the operator lands on the {ID}/{TOKEN}
+    // placeholder. The Input wrapper component doesn't expose a ref
+    // binding, so we reach for the underlying element via testid — this
+    // works without leaking implementation details into <Input>.
+    queueMicrotask(() => {
+      const el = document.querySelector<HTMLInputElement>('[data-testid="wh-url"]');
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    });
+  }
 
   // ---- New webhook modal state ----
   let createOpen = $state(false);
@@ -318,7 +351,7 @@
                 </td>
                 <td class="px-4 py-2">
                   <div class="flex flex-wrap gap-1">
-                    {#each hook.event_filter as evt}
+                    {#each hook.event_filter as evt (evt)}
                       <Badge variant="outline">{evt}</Badge>
                     {/each}
                     {#if hook.group_filter && hook.group_filter.length > 0}
@@ -423,6 +456,28 @@
           <span class="mb-1 block font-medium">Name</span>
           <Input bind:value={newName} placeholder="n8n bridge" required data-testid="wh-name" />
         </label>
+        <div class="block text-sm" data-testid="wh-templates">
+          <span class="mb-1 block font-medium">
+            Quick fill <span class="font-normal text-muted">(optional)</span>
+          </span>
+          <div class="flex flex-wrap gap-1">
+            {#each INTEGRATION_TEMPLATES as tmpl (tmpl.key)}
+              <button
+                type="button"
+                class="rounded-full border border-border-default px-2.5 py-0.5 text-xs text-muted transition-colors hover:bg-subtle"
+                onclick={() => applyTemplate(tmpl)}
+                data-testid={`wh-template-${tmpl.key}`}
+                title={`Fills empty fields with ${tmpl.label} defaults. Existing input is preserved.`}
+              >
+                {tmpl.label}
+              </button>
+            {/each}
+          </div>
+          <span class="mt-1 block text-xs text-muted">
+            Drops a placeholder URL + sensible event filters into empty fields. Replace
+            <code>{`{ID}/{TOKEN}`}</code> with your real webhook credentials before saving.
+          </span>
+        </div>
         <label class="block text-sm">
           <span class="mb-1 block font-medium">URL</span>
           <Input
