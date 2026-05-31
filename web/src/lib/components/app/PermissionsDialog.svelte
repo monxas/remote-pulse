@@ -11,7 +11,7 @@
    * action — the table still shows any explicit rows that might exist for
    * historical reasons but the empty-state copy is different.
    */
-  import { Loader2, Plus, ShieldCheck, Trash2, Key } from '@lucide/svelte';
+  import { Loader2, Plus, ShieldCheck, Trash2, Key, Globe } from '@lucide/svelte';
   import {
     Dialog,
     DialogContent,
@@ -21,7 +21,6 @@
     DialogFooter,
   } from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
   import { Badge } from '$lib/components/ui/badge';
   import {
     createGrantPermissionMutation,
@@ -30,11 +29,7 @@
   } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { userStore } from '$lib/stores/user.svelte';
-  import {
-    ALL_PERMISSION_ACTIONS,
-    type PermissionAction,
-    type SettingsUser,
-  } from '$lib/api';
+  import { ALL_PERMISSION_ACTIONS, type PermissionAction, type SettingsUser } from '$lib/api';
 
   type Props = {
     open: boolean;
@@ -58,28 +53,73 @@
   const revoke = createRevokePermissionMutation();
 
   // ---- Grant form state ----
+  // Scope picker (v1.0.15): two modes — the wildcard `*` toggle (granting
+  // ``action`` over every group) OR a multi-select of specific groups. The
+  // backend's grant endpoint accepts ONE scope per call, so when the
+  // operator selects N specific groups we fan out N POSTs on submit.
+  // Rationale: typing scopes into a free-text Input let typos through
+  // (a scope of "ops-prod" with a hyphen typo silently never matches);
+  // chips reading from the live ``groups`` prop close that hole.
   let newAction = $state<PermissionAction>('command.issue');
-  let newScope = $state<string>('*');
+  let wildcardSelected = $state<boolean>(true);
+  let selectedGroups = $state<string[]>([]);
 
   $effect(() => {
     // Reset the form whenever the dialog opens against a fresh user so the
     // last selection doesn't leak between modals.
     if (open && user) {
       newAction = 'command.issue';
-      newScope = '*';
+      wildcardSelected = true;
+      selectedGroups = [];
     }
   });
 
   const isAdmin = $derived(user?.role === 'admin');
 
+  /** Selecting the wildcard clears any specific picks; selecting a specific
+   * group clears the wildcard. Mutually exclusive — matches the server's
+   * scope semantics (``*`` is strictly broader than any named group). */
+  function toggleWildcard(): void {
+    wildcardSelected = true;
+    selectedGroups = [];
+  }
+
+  function toggleGroup(name: string): void {
+    wildcardSelected = false;
+    selectedGroups = selectedGroups.includes(name)
+      ? selectedGroups.filter((g) => g !== name)
+      : [...selectedGroups, name];
+    // If the operator unselects every chip, snap back to wildcard so the
+    // Grant button never lands in an unsubmittable empty state.
+    if (selectedGroups.length === 0) {
+      wildcardSelected = true;
+    }
+  }
+
+  /** The set of scopes the Grant button will issue, in order. */
+  const scopesToGrant = $derived<string[]>(wildcardSelected ? ['*'] : selectedGroups);
+
+  const canSubmit = $derived(scopesToGrant.length > 0 && !$grant.isPending);
+
   function submitGrant(e: Event): void {
     e.preventDefault();
     if (!user) return;
-    const scope = newScope.trim() || '*';
-    $grant.mutate({
-      userId: user.id,
-      input: { action: newAction, scope },
-    });
+    // Fan out one mutation per selected scope. Each one is its own
+    // optimistic update; the table refreshes as they settle. Duplicates
+    // already-held by the user surface as the server's 409 — the
+    // mutation's onError surfaces a toast and rolls back.
+    for (const scope of scopesToGrant) {
+      $grant.mutate({
+        userId: user.id,
+        input: { action: newAction, scope },
+      });
+    }
+    // Reset the multi-select once dispatched so the next round doesn't
+    // re-fire stale scopes.
+    if (!wildcardSelected) {
+      selectedGroups = [];
+      wildcardSelected = true;
+    }
   }
 
   function confirmRevoke(permissionId: string, label: string): void {
@@ -99,8 +139,8 @@
       </DialogTitle>
       <DialogDescription>
         {#if user}
-          Fine-grained ACL for <span class="font-mono">{user.email}</span>. These rows layer on
-          top of role + accessible groups.
+          Fine-grained ACL for <span class="font-mono">{user.email}</span>. These rows layer on top
+          of role + accessible groups.
         {:else}
           No user selected.
         {/if}
@@ -115,8 +155,8 @@
         >
           <ShieldCheck class="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
           <span>
-            This user is an <strong>admin</strong> and implicitly holds every action. Explicit
-            grants below are honoured but redundant.
+            This user is an <strong>admin</strong> and implicitly holds every action. Explicit grants
+            below are honoured but redundant.
           </span>
         </div>
       {/if}
@@ -182,47 +222,83 @@
       <!-- Grant form -->
       <form onsubmit={submitGrant} class="space-y-3 border-t border-border-subtle pt-4">
         <p class="text-xs font-medium uppercase text-muted">Grant new permission</p>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-          <label class="block text-sm">
-            <span class="mb-1 block font-medium">Action</span>
-            <select
-              class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
-              bind:value={newAction}
+        <label class="block text-sm">
+          <span class="mb-1 block font-medium">Action</span>
+          <select
+            class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            bind:value={newAction}
+            data-testid="perm-action"
+          >
+            {#each ALL_PERMISSION_ACTIONS as a (a)}
+              <option value={a}>{a}</option>
+            {/each}
+          </select>
+        </label>
+
+        <div class="block text-sm">
+          <span class="mb-1 block font-medium">Scope</span>
+          <div class="flex flex-wrap gap-1" data-testid="perm-scope-chips">
+            <button
+              type="button"
+              class={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                wildcardSelected
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border-default text-muted hover:bg-subtle'
+              }`}
+              aria-pressed={wildcardSelected}
+              onclick={toggleWildcard}
+              data-testid="perm-scope-wildcard"
             >
-              {#each ALL_PERMISSION_ACTIONS as a (a)}
-                <option value={a}>{a}</option>
-              {/each}
-            </select>
-          </label>
-          <label class="block text-sm">
-            <span class="mb-1 block font-medium">Scope</span>
-            <Input
-              bind:value={newScope}
-              placeholder="* or group name"
-              list="permission-scope-suggestions"
-            />
-            <datalist id="permission-scope-suggestions">
-              <option value="*"></option>
+              <Globe class="size-3" aria-hidden="true" />
+              All groups (<code>*</code>)
+            </button>
+            {#if groups.length === 0}
+              <span class="px-2 py-0.5 text-xs text-muted">
+                No groups defined yet — only <code>*</code> available.
+              </span>
+            {:else}
               {#each groups as g (g)}
-                <option value={g}></option>
+                {@const on = !wildcardSelected && selectedGroups.includes(g)}
+                <button
+                  type="button"
+                  class={`rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors ${
+                    on
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border-default text-muted hover:bg-subtle'
+                  }`}
+                  aria-pressed={on}
+                  onclick={() => toggleGroup(g)}
+                  data-testid={`perm-scope-${g}`}
+                >
+                  {g}
+                </button>
               {/each}
-            </datalist>
-          </label>
-          <div class="flex items-end">
-            <Button type="submit" size="sm" disabled={$grant.isPending}>
-              {#if $grant.isPending}
-                <Loader2 class="mr-1 size-4 animate-spin" aria-hidden="true" />
-              {:else}
-                <Plus class="mr-1 size-4" aria-hidden="true" />
-              {/if}
-              Grant
-            </Button>
+            {/if}
           </div>
+          {#if !wildcardSelected && selectedGroups.length > 1}
+            <p class="mt-1 text-xs text-muted" data-testid="perm-multi-hint">
+              Will create {selectedGroups.length} grants — one per group.
+            </p>
+          {/if}
         </div>
-        <p class="text-xs text-muted">
-          Scope <code>*</code> grants the action on every group. Otherwise, the row matches only
-          hosts whose <code>group_name</code> equals the scope string.
-        </p>
+
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-xs text-muted">
+            <code>*</code> grants on every group. Pick specific groups to scope the grant — each chip
+            becomes its own row.
+          </p>
+          <Button type="submit" size="sm" disabled={!canSubmit} data-testid="perm-grant-submit">
+            {#if $grant.isPending}
+              <Loader2 class="mr-1 size-4 animate-spin" aria-hidden="true" />
+            {:else}
+              <Plus class="mr-1 size-4" aria-hidden="true" />
+            {/if}
+            Grant
+            {#if !wildcardSelected && selectedGroups.length > 1}
+              <span class="ml-1 font-mono text-xs">×{selectedGroups.length}</span>
+            {/if}
+          </Button>
+        </div>
       </form>
     {/if}
 
