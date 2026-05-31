@@ -128,10 +128,28 @@ class AuditActorCount(BaseModel):
     count: int
 
 
+class AuditDailyBucket(BaseModel):
+    """Per-day audit-event count over the requested range.
+
+    Added in v1.0.15 so the dashboard Stats page can render a sparkline
+    next to the `audit_events_total` KPI. When the retention purge
+    fires, the rightmost-to-leftmost gradient visibly drops — gives
+    operators a no-clicks-required signal that retention is doing
+    something.
+    """
+
+    day: str  # ISO date (YYYY-MM-DD)
+    count: int
+
+
 class AuditSummary(BaseModel):
     total_events: int
     by_action: list[AuditActionCount]
     by_actor: list[AuditActorCount]
+    # New in v1.0.15. Same length + shape semantics as
+    # ``commands.daily`` so the sparkline rendering code on the dashboard
+    # can be a copy-paste of the existing per-day bar chart.
+    daily: list[AuditDailyBucket] = []
 
 
 class StatsResponse(BaseModel):
@@ -499,6 +517,44 @@ async def stats(
     by_actor_rows = (await db.execute(by_actor_stmt)).all()
     by_actor = [AuditActorCount(actor=r.actor, count=int(r.count)) for r in by_actor_rows]
 
+    # Daily audit-event counts for the sparkline (v1.0.15). We reuse the
+    # exact same filter set (range + group scoping) as `total_events` so
+    # the sparkline's sum lines up with the KPI tile. Postgres path uses
+    # ``time_bucket('1 day', ...)``; SQLite path uses ``date()``.
+    audit_daily: list[AuditDailyBucket] = []
+    if is_pg:
+        audit_daily_stmt = (
+            select(
+                func.time_bucket(text("'1 day'"), AuditEvent.ts).label("day"),
+                func.count(AuditEvent.id).label("count"),
+            )
+            .where(*audit_filter_stmts)
+            .group_by(text("day"))
+            .order_by(text("day ASC"))
+        )
+    else:
+        audit_daily_stmt = (
+            select(
+                func.date(AuditEvent.ts).label("day"),
+                func.count(AuditEvent.id).label("count"),
+            )
+            .where(*audit_filter_stmts)
+            .group_by(text("day"))
+            .order_by(text("day ASC"))
+        )
+    audit_daily_rows = (await db.execute(audit_daily_stmt)).all()
+    audit_daily = [
+        AuditDailyBucket(
+            day=(
+                row.day.date().isoformat()
+                if hasattr(row.day, "date")
+                else str(row.day)[:10]
+            ),
+            count=int(row.count),
+        )
+        for row in audit_daily_rows
+    ]
+
     logger.debug(
         "dash stats computed",
         extra={
@@ -538,5 +594,6 @@ async def stats(
             total_events=total_audit_events,
             by_action=by_action,
             by_actor=by_actor,
+            daily=audit_daily,
         ),
     )

@@ -588,10 +588,17 @@ export interface StatsAuditActor {
   count: number;
 }
 
+export interface StatsAuditDaily {
+  day: string;
+  count: number;
+}
+
 export interface StatsAuditSummary {
   total_events: number;
   by_action: StatsAuditEntry[];
   by_actor: StatsAuditActor[];
+  /** Per-day counts across the requested range. New in v1.0.15. */
+  daily?: StatsAuditDaily[];
 }
 
 export interface DashStats {
