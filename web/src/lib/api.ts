@@ -69,11 +69,23 @@ async function request<T>(path: string, init: RequestInit, opts: ApiOptions = {}
 }
 
 // ---------- /auth/me ----------
+export interface AuthMePermission {
+  action: string;
+  scope: string;
+}
+
 export interface AuthMe {
   user_id: string | null;
   user_email: string | null;
   user_role: string | null;
   authenticated: boolean;
+  /**
+   * Row-level grants for the authenticated user. Always present (possibly
+   * empty). Admins implicitly bypass — their permissions list is empty
+   * and `userStore.hasPermission()` short-circuits on `role === 'admin'`.
+   * Field added in v1.0.14 for client-side capability gating.
+   */
+  permissions?: AuthMePermission[];
 }
 
 export async function getAuthMe(f?: FetchFn): Promise<AuthMe> {

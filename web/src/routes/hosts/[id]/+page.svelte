@@ -60,13 +60,18 @@
   let issueOpen = $state(false);
   let deleteOpen = $state(false);
 
-  // Show the "Danger zone" only to admins. Non-admins with a row-level
-  // `host.delete` grant are gated client-side here for UX clarity; the
-  // server is the source of truth and answers 403 if a stale grant has
-  // already been revoked. Granting non-admins visibility would require
-  // an extra `/v1/dash/settings/users/{me}/permissions` round-trip per
-  // host page — not worth the latency for a marginal UX win.
-  const canDeleteHost = $derived(userStore.value?.user_role === 'admin');
+  // Show the "Danger zone" to anyone with the capability — admins (always)
+  // plus operators holding a `host.delete` grant whose scope matches this
+  // host's group (or wildcard `*`). v1.0.14: the permissions list now
+  // ships in the boot-time `/auth/me` payload (see `userStore` →
+  // `hasPermission`) so we no longer need a per-page round-trip and the
+  // operator-with-grant case is no longer invisible.
+  //
+  // Server-side enforcement remains authoritative (DELETE returns 403 if
+  // a stale grant has since been revoked); the gate here is UX-only.
+  const canDeleteHost = $derived(
+    userStore.hasPermission('host.delete', $hostQuery.data?.group_name ?? undefined),
+  );
 
   function updateWindow(next: string): void {
     const sp = new SvelteURLSearchParams($page.url.searchParams);

@@ -64,6 +64,11 @@
   );
 
   let purgeConfirmOpen = $state(false);
+  // High-friction confirmation: operator must type "DELETE" verbatim to
+  // arm the destructive purge. Matches the convention used by bulk-delete
+  // users / groups in Settings (v1.0.11) so the muscle memory transfers.
+  let purgeConfirmText = $state('');
+  const purgeConfirmArmed = $derived(purgeConfirmText === 'DELETE');
 
   function saveChanges(): void {
     if (!config) return;
@@ -81,13 +86,16 @@
   }
 
   function openPurgeConfirm(): void {
+    purgeConfirmText = '';
     purgeConfirmOpen = true;
   }
 
   function confirmPurge(): void {
+    if (!purgeConfirmArmed) return;
     $purgeMutation.mutate(undefined, {
       onSettled: () => {
         purgeConfirmOpen = false;
+        purgeConfirmText = '';
       },
     });
   }
@@ -227,6 +235,21 @@
         {config?.retention_days ?? '?'} days. The deletion cannot be undone.
       </DialogDescription>
     </DialogHeader>
+    <div class="space-y-2 px-1">
+      <label class="block text-sm">
+        <span class="mb-1 block">Type <code class="font-mono font-semibold">DELETE</code> to confirm:</span>
+        <input
+          type="text"
+          class="w-full rounded border border-border-default bg-base px-2 py-1.5 font-mono text-sm focus:border-danger focus:outline-none"
+          bind:value={purgeConfirmText}
+          placeholder="DELETE"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          data-testid="retention-purge-confirm-input"
+        />
+      </label>
+    </div>
     <DialogFooter>
       <Button
         type="button"
@@ -240,7 +263,7 @@
         type="button"
         variant="danger"
         onclick={confirmPurge}
-        disabled={$purgeMutation.isPending}
+        disabled={$purgeMutation.isPending || !purgeConfirmArmed}
         data-testid="retention-purge-confirm"
       >
         {#if $purgeMutation.isPending}

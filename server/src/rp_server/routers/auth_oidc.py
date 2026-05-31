@@ -191,8 +191,15 @@ async def logout(request: Request):
 
 
 @router.get("/me")
-async def me(request: Request):
-    """Debug whoami: returns whatever is in the session.
+async def me(request: Request, db: DbSession):
+    """Debug whoami: returns whatever is in the session, plus the user's
+    row-level permission grants so the SPA can gate UI affordances on
+    actual capability rather than the coarse role string.
+
+    The ``permissions`` field is always a list (possibly empty) of
+    ``{action, scope}`` rows; admins implicitly bypass everything so we
+    return an empty list for them and let the client treat ``role ==
+    'admin'`` as capability-superset (see ``userStore.hasPermission``).
 
     Honors the same Lighthouse CI bypass as ``current_user``: if the env
     var ``RP_LIGHTHOUSE_BYPASS_TOKEN`` is set AND the request carries
@@ -212,14 +219,32 @@ async def me(request: Request):
                 "user_email": lh_user.email,
                 "user_role": lh_user.role,
                 "authenticated": True,
+                "permissions": [],
             }
         )
 
+    user_id = request.session.get("user_id")
+    user_role = request.session.get("user_role")
+
+    # Only query permissions for non-admins; admins bypass everything so
+    # an empty list + role check on the client is correct and cheaper.
+    permissions: list[dict[str, str]] = []
+    if user_id and user_role != "admin":
+        from sqlalchemy import select as _select
+        from rp_server.models import UserPermission
+
+        stmt = _select(UserPermission.action, UserPermission.scope).where(
+            UserPermission.user_id == user_id,
+        )
+        result = await db.execute(stmt)
+        permissions = [{"action": a, "scope": s} for (a, s) in result.all()]
+
     return JSONResponse(
         {
-            "user_id": request.session.get("user_id"),
+            "user_id": user_id,
             "user_email": request.session.get("user_email"),
-            "user_role": request.session.get("user_role"),
-            "authenticated": bool(request.session.get("user_id")),
+            "user_role": user_role,
+            "authenticated": bool(user_id),
+            "permissions": permissions,
         }
     )

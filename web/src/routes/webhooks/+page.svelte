@@ -41,6 +41,7 @@
     createCreateWebhookMutation,
     createDeleteWebhookMutation,
     createResetFailuresMutation,
+    createSettingsGroupsQuery,
     createTestWebhookMutation,
     createUpdateWebhookMutation,
   } from '$lib/queries';
@@ -53,6 +54,7 @@
 
   // ---- Data + mutations ----
   const webhooksQuery = createWebhooksQuery();
+  const groupsQuery = createSettingsGroupsQuery();
   const createMut = createCreateWebhookMutation();
   const updateMut = createUpdateWebhookMutation();
   const deleteMut = createDeleteWebhookMutation();
@@ -60,6 +62,15 @@
   const resetFailuresMut = createResetFailuresMutation();
 
   const webhooks = $derived<WebhookSummary[]>($webhooksQuery.data?.webhooks ?? []);
+  // Sorted group names available as filter pills. We read from the live
+  // /v1/dash/settings/groups list so the operator can only pick groups
+  // that exist — no typos, no stale references.
+  const availableGroups = $derived(
+    ($groupsQuery.data?.groups ?? [])
+      .map((g) => g.name)
+      .filter((n) => typeof n === 'string')
+      .sort(),
+  );
 
   // ---- New webhook modal state ----
   let createOpen = $state(false);
@@ -76,7 +87,15 @@
     { key: 'audit.', label: 'Audit' },
   ] as const;
   let newEventFilter = $state<string[]>(['*']);
-  let newGroupFilter = $state<string>(''); // comma-separated, '' = no filter
+  // Multi-select pills (v1.0.14): pick from /v1/dash/settings/groups
+  // instead of free-text. Empty array = no filter (delivery on every group).
+  let newGroupFilter = $state<string[]>([]);
+
+  function toggleGroup(name: string): void {
+    newGroupFilter = newGroupFilter.includes(name)
+      ? newGroupFilter.filter((g) => g !== name)
+      : [...newGroupFilter, name];
+  }
 
   function toggleEvent(key: string): void {
     if (key === '*') {
@@ -97,7 +116,7 @@
     newName = '';
     newUrl = '';
     newEventFilter = ['*'];
-    newGroupFilter = '';
+    newGroupFilter = [];
   }
 
   // ---- Secret-just-once dialog state ----
@@ -121,15 +140,11 @@
       toast.error('Name and URL are required');
       return;
     }
-    const groupFilter = newGroupFilter
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
     const input: CreateWebhookInput = {
       name: newName.trim(),
       url: newUrl.trim(),
       event_filter: newEventFilter,
-      group_filter: groupFilter.length > 0 ? groupFilter : null,
+      group_filter: newGroupFilter.length > 0 ? newGroupFilter : null,
     };
     try {
       const out = await $createMut.mutateAsync(input);
@@ -441,13 +456,38 @@
             {/each}
           </div>
         </div>
-        <label class="block text-sm">
+        <div class="block text-sm">
           <span class="mb-1 block font-medium">Group filter (optional)</span>
-          <Input bind:value={newGroupFilter} placeholder="prod, family" data-testid="wh-groups" />
+          {#if availableGroups.length === 0}
+            <p class="text-xs text-muted" data-testid="wh-groups-empty">
+              No groups in the system yet. Leave blank to deliver every event.
+            </p>
+          {:else}
+            <div class="flex flex-wrap gap-1" data-testid="wh-groups">
+              {#each availableGroups as g (g)}
+                {@const on = newGroupFilter.includes(g)}
+                <button
+                  type="button"
+                  class={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                    on
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border-default text-muted hover:bg-subtle'
+                  }`}
+                  onclick={() => toggleGroup(g)}
+                  aria-pressed={on}
+                  data-testid={`wh-group-${g}`}
+                >
+                  {g}
+                </button>
+              {/each}
+            </div>
+          {/if}
           <span class="mt-1 block text-xs text-muted">
-            Comma-separated group names. Leave blank to receive events from every group.
+            {newGroupFilter.length === 0
+              ? 'Leave none selected to receive events from every group.'
+              : `Delivering only for: ${newGroupFilter.join(', ')}`}
           </span>
-        </label>
+        </div>
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onclick={() => (createOpen = false)}>Cancel</Button>
