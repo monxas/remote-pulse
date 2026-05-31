@@ -4,8 +4,10 @@ import {
   RANGES,
   paramsFromSearch,
   sinceFor,
+  sortActionsByFrequency,
   type Range,
 } from './audit-filters';
+import type { AuditAction } from '$lib/api';
 
 describe('RANGES', () => {
   it('exposes the six preset ranges in stable order', () => {
@@ -130,5 +132,52 @@ describe('CLEAR_FILTERS_PATCH', () => {
     expect(CLEAR_FILTERS_PATCH.action_prefix).toBeNull();
     expect(CLEAR_FILTERS_PATCH.since).toBeNull();
     expect(CLEAR_FILTERS_PATCH.until).toBeNull();
+  });
+});
+
+describe('sortActionsByFrequency', () => {
+  // A representative subset of the real ALL_AUDIT_ACTIONS list. Keeping
+  // the sample small means the assertion isn't a moving target when new
+  // action constants are added to api.ts.
+  const SAMPLE: ReadonlyArray<AuditAction> = [
+    'command.issued',
+    'command.approved',
+    'host.enrolled',
+    'settings.user.create',
+  ];
+
+  it('orders by count desc, ties alphabetical', () => {
+    const out = sortActionsByFrequency(SAMPLE, {
+      'command.issued': 50,
+      'command.approved': 10,
+      'host.enrolled': 10,
+      'settings.user.create': 0,
+    });
+    expect(out).toEqual([
+      'command.issued', // highest count
+      'command.approved', // tied with host.enrolled, alphabetically first
+      'host.enrolled',
+      'settings.user.create', // zero count, last
+    ]);
+  });
+
+  it('treats missing keys as zero and keeps them alphabetical at the tail', () => {
+    // Only one action has a recorded count; the rest fall to the back
+    // in stable alphabetical order — important so the UI doesn't shuffle
+    // pills around between renders on a fresh-fleet dashboard.
+    const out = sortActionsByFrequency(SAMPLE, { 'host.enrolled': 3 });
+    expect(out).toEqual([
+      'host.enrolled',
+      'command.approved',
+      'command.issued',
+      'settings.user.create',
+    ]);
+  });
+
+  it('is pure — does not mutate the input list', () => {
+    const input = [...SAMPLE];
+    const snapshot = [...input];
+    sortActionsByFrequency(input, { 'command.issued': 99 });
+    expect(input).toEqual(snapshot);
   });
 });

@@ -12,7 +12,7 @@
   import AuditEvent from '$lib/components/app/AuditEvent.svelte';
   import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
   import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
-  import { createAuditQuery } from '$lib/queries';
+  import { createAuditQuery, createStatsQuery } from '$lib/queries';
   import { runeReadable } from '$lib/queries/reactive.svelte';
   import { getLiveStream } from '$lib/queries/live-context';
   import {
@@ -22,13 +22,38 @@
     type AuditQueryParams,
     type AuditTargetType,
   } from '$lib/api';
-  import { CLEAR_FILTERS_PATCH, RANGES, paramsFromSearch, type Range } from './audit-filters';
+  import {
+    CLEAR_FILTERS_PATCH,
+    RANGES,
+    paramsFromSearch,
+    sortActionsByFrequency,
+    type Range,
+  } from './audit-filters';
 
   const live = getLiveStream();
 
   const params: AuditQueryParams = $derived(paramsFromSearch($page.url.searchParams));
 
   const audit = createAuditQuery(runeReadable(() => params));
+
+  // Pull the audit-action frequency counts from the stats endpoint
+  // (v1.0.15) so the action filter chips below sort with the most-used
+  // actions first. We deliberately pin the range to 30d rather than
+  // mirroring the current filter range, so the chip ordering stays
+  // stable as the operator changes the range — otherwise switching
+  // 24h <-> 30d would reorder pills mid-pick.
+  const actionCountStats = createStatsQuery(runeReadable(() => '30d' as const));
+  const actionCounts = $derived<Record<string, number>>(
+    Object.fromEntries(
+      ($actionCountStats.data?.audit_summary.by_action ?? []).map((e) => [e.action, e.count]),
+    ),
+  );
+  /** Sorted copy of ALL_AUDIT_ACTIONS: highest count first, ties broken
+   * alphabetically. Actions with zero recorded events fall to the end
+   * but stay alphabetical among themselves — so an operator new to the
+   * fleet sees a stable list and an operator with months of history
+   * sees their actual hot path first. */
+  const sortedActions = $derived(sortActionsByFrequency(ALL_AUDIT_ACTIONS, actionCounts));
   const events = $derived($audit.data?.pages.flatMap((p) => p.events) ?? []);
   // ``total`` is consistent across pages (per server contract); use the
   // first page's count so the displayed total doesn't bounce as the user
@@ -274,22 +299,30 @@
         </div>
       {/if}
 
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2" data-testid="audit-action-chips">
         <span class="text-xs font-medium text-muted">Actions</span>
-        {#each ALL_AUDIT_ACTIONS as a (a)}
+        {#each sortedActions as a (a)}
           {@const on = selectedActions.includes(a)}
+          {@const count = actionCounts[a] ?? 0}
           <button
             type="button"
             onclick={() => toggleAction(a)}
             class={cn(
-              'rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
+              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
               on
                 ? 'border-accent bg-accent-bg text-accent-text'
                 : 'border-border-default text-muted hover:bg-subtle',
             )}
             aria-pressed={on}
+            data-action={a}
+            data-count={count}
           >
-            {a}
+            <span>{a}</span>
+            {#if count > 0}
+              <span class="rounded-sm bg-subtle/60 px-1 text-[10px] tabular-nums text-muted">
+                {count}
+              </span>
+            {/if}
           </button>
         {/each}
       </div>
