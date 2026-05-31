@@ -78,6 +78,33 @@
   const actionMax = $derived(topActions[0]?.count ?? 1);
   const actorMax = $derived(topActors[0]?.count ?? 1);
 
+  // ----- Audit events sparkline (v1.0.15) -------------------------------
+  // 60×20 inline SVG polyline. Driven directly off the new
+  // `audit_summary.daily` payload. When retention purges old events the
+  // leftmost cell drops to zero — visible without any clicks.
+  const auditDaily = $derived(audit?.daily ?? []);
+  const auditDailyMax = $derived.by(() => {
+    if (auditDaily.length === 0) return 0;
+    return Math.max(1, ...auditDaily.map((d) => d.count));
+  });
+  const auditSparklinePath = $derived.by(() => {
+    if (auditDaily.length === 0) return '';
+    const W = 60;
+    const H = 20;
+    const n = auditDaily.length;
+    // Single-point sparkline degenerates to a centred dot; render as a
+    // tiny horizontal stroke so the SVG isn't visually empty.
+    if (n === 1) return `M0 ${H / 2} L${W} ${H / 2}`;
+    const stepX = W / (n - 1);
+    return auditDaily
+      .map((d, i) => {
+        const x = i * stepX;
+        const y = H - (d.count / auditDailyMax) * H;
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(' ');
+  });
+
   // Collapsible state for tables -----------------------------------------
   let showByType = $state(false);
   let showUptimeTable = $state(false);
@@ -120,10 +147,7 @@
   </header>
 
   {#if $stats.isLoading && !$stats.data}
-    <div
-      class="flex h-32 items-center justify-center gap-2 text-muted"
-      data-testid="stats-loading"
-    >
+    <div class="flex h-32 items-center justify-center gap-2 text-muted" data-testid="stats-loading">
       <Loader2 class="size-4 animate-spin" aria-hidden="true" />
       <span>Loading statistics…</span>
     </div>
@@ -131,13 +155,7 @@
     <Card class="border-danger-border bg-danger-subtle">
       <CardContent class="py-4 text-sm text-danger-text">
         Could not load statistics: {$stats.error.message}
-        <Button
-          variant="outline"
-          size="sm"
-          class="ml-2"
-          onclick={reload}
-          data-testid="stats-retry"
-        >
+        <Button variant="outline" size="sm" class="ml-2" onclick={reload} data-testid="stats-retry">
           Retry
         </Button>
       </CardContent>
@@ -170,13 +188,50 @@
         tone={commands && commands.failed === 0 ? 'success' : 'warn'}
         Icon={CheckCircle2}
       />
-      <MetricCard
-        label="Audit events"
-        value={String(audit?.total_events ?? 0)}
-        hint={range}
-        tone="default"
-        Icon={ListTree}
-      />
+      <!-- Audit events KPI with inline sparkline (v1.0.15). Using a bespoke
+           Card here instead of MetricCard so we can lay out the sparkline
+           below the count — MetricCard has no slot. The sparkline tracks
+           per-day counts over the selected range, so when retention
+           purges old events the leftmost band drops visibly. -->
+      <Card data-testid="stats-audit-card">
+        <CardHeader class="flex flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle class="text-sm font-medium text-muted">Audit events</CardTitle>
+          <ListTree class="size-4 text-muted" aria-hidden="true" />
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-baseline justify-between gap-2">
+            <span
+              class="font-mono text-2xl font-semibold tracking-tight"
+              data-testid="stats-audit-total"
+            >
+              {audit?.total_events ?? 0}
+            </span>
+            <span class="text-xs text-muted">{range}</span>
+          </div>
+          {#if auditDaily.length > 0}
+            <svg
+              viewBox="0 0 60 20"
+              preserveAspectRatio="none"
+              class="mt-2 h-6 w-full"
+              role="img"
+              aria-label={`Audit events per day, peak ${auditDailyMax}`}
+              data-testid="stats-audit-sparkline"
+            >
+              <path
+                d={auditSparklinePath}
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="text-accent"
+              />
+            </svg>
+          {:else}
+            <div class="mt-2 h-6" aria-hidden="true"></div>
+          {/if}
+        </CardContent>
+      </Card>
     </section>
 
     <!-- Daily commands stacked bar chart ------------------------------ -->
@@ -207,7 +262,7 @@
                 {@const totalH = okH + failH}
                 <g>
                   <rect
-                    x={x}
+                    {x}
                     y={150 - totalH}
                     width={w}
                     height={failH}
@@ -217,7 +272,7 @@
                     <title>{bucket.day}: {bucket.failed} failed</title>
                   </rect>
                   <rect
-                    x={x}
+                    {x}
                     y={150 - okH}
                     width={w}
                     height={okH}
@@ -359,14 +414,8 @@
         class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4"
         data-testid="stats-heartbeat-band"
       >
-        <MetricCard
-          label="Total heartbeats"
-          value={heartbeats.total.toLocaleString()}
-        />
-        <MetricCard
-          label="Avg/host/min"
-          value={heartbeats.per_host_avg_per_min.toFixed(2)}
-        />
+        <MetricCard label="Total heartbeats" value={heartbeats.total.toLocaleString()} />
+        <MetricCard label="Avg/host/min" value={heartbeats.per_host_avg_per_min.toFixed(2)} />
         <MetricCard
           label="Stale (now)"
           value={String(heartbeats.stale_events)}

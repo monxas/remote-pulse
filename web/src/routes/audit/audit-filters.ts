@@ -86,3 +86,28 @@ export const CLEAR_FILTERS_PATCH: Record<string, string | string[] | null> = {
   since: null,
   until: null,
 };
+
+/**
+ * Order ``ALL_AUDIT_ACTIONS`` by recency-weighted usage. Actions with a
+ * recorded count (from ``stats.audit_summary.by_action``) come first,
+ * highest count down, ties broken alphabetically. Actions with no
+ * recorded activity bring up the rear, also alphabetical.
+ *
+ * Why this lives here:
+ *   - The audit filter pills sort by frequency (v1.0.15) so an operator
+ *     with a long-running fleet sees their hot actions first.
+ *   - Sorting in a pure helper means the test isolates the contract
+ *     ("frequent first, zero last, alphabetical tiebreak") without a
+ *     component harness.
+ */
+export function sortActionsByFrequency(
+  actions: ReadonlyArray<AuditAction>,
+  counts: Readonly<Record<string, number>>,
+): AuditAction[] {
+  return [...actions].sort((a, b) => {
+    const ca = counts[a] ?? 0;
+    const cb = counts[b] ?? 0;
+    if (cb !== ca) return cb - ca;
+    return a.localeCompare(b);
+  });
+}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import QRCode from 'qrcode';
   import { Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from '@lucide/svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
@@ -135,9 +136,55 @@
   );
 
   // Drive the hero countdown off the $state tick.
-  const heroCountdown = $derived(
-    lastIssued ? expiresIn(lastIssued.expires_at, now) : '',
-  );
+  const heroCountdown = $derived(lastIssued ? expiresIn(lastIssued.expires_at, now) : '');
+
+  // ---- QR code rendering ------------------------------------------------
+  // We render the Unix install_url as a data-URL PNG so a second device
+  // (Family-Hub tablet → phone, friend's mac → friend's phone) can scan
+  // the bootstrap command without copy-pasting through a chat app. We use
+  // the SVG-as-data-URL form of the `qrcode` lib because:
+  //   - it scales without blur (we display at two sizes: ~140 mobile,
+  //     ~180 desktop) and the dashboard is dark-first, so the contrast
+  //     stays sharp;
+  //   - it's ~6 KB gzipped — cheaper than wiring a Svelte action;
+  //   - the data-URL renders synchronously in <img>, no flash of empty.
+  // We deliberately encode the *Unix* install_url (the bash one-liner)
+  // because that is the only platform where a QR scan into a phone-then-
+  // -kick-back-to-laptop flow makes sense; Windows agents are PowerShell
+  // and operators on Windows always copy-paste the command directly.
+  let qrDataUrl = $state<string>('');
+  $effect(() => {
+    const url = lastIssued?.install_url;
+    if (!url) {
+      qrDataUrl = '';
+      return;
+    }
+    // Medium error correction is the sweet-spot: still scans through the
+    // small specular reflections you get on a tablet screen, doesn't
+    // bloat the matrix to the point of unreadable cells. The ``width``
+    // param controls the *intrinsic* PNG size; the CSS scales it.
+    void QRCode.toDataURL(url, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 360,
+      color: {
+        // Pure black-on-white so it scans reliably under any browser
+        // theme — the QR spec assumes a high-contrast pair.
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+      .then((d) => {
+        qrDataUrl = d;
+      })
+      .catch(() => {
+        // QR generation can only fail on extreme inputs (>2953 bytes).
+        // Our install_url is always well under that; if we ever break
+        // that bound, fall back to "no QR" silently — the copy button
+        // still works.
+        qrDataUrl = '';
+      });
+  });
 </script>
 
 <svelte:head>
@@ -149,9 +196,9 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Enroll an agent</h1>
       <p class="text-sm text-muted">
-        Generate a short, memorable enrollment code (e.g. <code class="font-mono">K7M-X3F</code>)
-        to bootstrap a new Remote-Pulse agent. The code is single-use by default and expires in
-        5 minutes.
+        Generate a short, memorable enrollment code (e.g. <code class="font-mono">K7M-X3F</code>) to
+        bootstrap a new Remote-Pulse agent. The code is single-use by default and expires in 5
+        minutes.
       </p>
     </div>
     <Badge variant="default" class="self-start sm:self-end">
@@ -248,23 +295,41 @@
         <CardTitle class="text-base">Enrollment code ready</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4 text-sm">
-        <!-- HERO: big monospace code. Tapping it copies the canonical
-             display form (with dash). -->
-        <div class="flex flex-col items-center gap-2 rounded-lg bg-accent/5 px-4 py-6">
-          <button
-            type="button"
-            class="font-mono text-5xl font-bold tracking-widest tabular-nums hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-2"
-            onclick={() => void copy(lastIssued!.code)}
-            data-testid="enroll-code-hero"
-            aria-label="Copy enrollment code"
-          >
-            {lastIssued.code}
-          </button>
-          <p class="text-xs text-muted" data-testid="enroll-countdown">
-            Expires in <span class="font-mono">{heroCountdown}</span> · {lastIssued.max_uses}
-            {lastIssued.max_uses === 1 ? 'use' : 'uses'} · group
-            <span class="font-mono">{lastIssued.group_name}</span>
-          </p>
+        <!-- HERO: big monospace code on the left, scannable QR on the
+             right (desktop) or stacked (mobile). The QR encodes the Unix
+             install_url so a second device (operator's phone, Family Hub
+             tablet → friend's phone) can scan it and paste-and-run on
+             the target machine. -->
+        <div
+          class="flex flex-col items-center gap-4 rounded-lg bg-accent/5 px-4 py-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8"
+        >
+          <div class="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              class="font-mono text-5xl font-bold tracking-widest tabular-nums hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-2"
+              onclick={() => void copy(lastIssued!.code)}
+              data-testid="enroll-code-hero"
+              aria-label="Copy enrollment code"
+            >
+              {lastIssued.code}
+            </button>
+            <p class="text-xs text-muted" data-testid="enroll-countdown">
+              Expires in <span class="font-mono">{heroCountdown}</span> · {lastIssued.max_uses}
+              {lastIssued.max_uses === 1 ? 'use' : 'uses'} · group
+              <span class="font-mono">{lastIssued.group_name}</span>
+            </p>
+          </div>
+          {#if qrDataUrl}
+            <div class="flex flex-col items-center gap-1" data-testid="enroll-qr">
+              <img
+                src={qrDataUrl}
+                alt="QR code linking to the Unix install command"
+                class="h-[140px] w-[140px] rounded-md bg-white p-1 sm:h-[180px] sm:w-[180px]"
+                data-testid="enroll-qr-img"
+              />
+              <p class="text-xs text-muted">Scan to install (Unix/macOS)</p>
+            </div>
+          {/if}
         </div>
 
         <!-- Install command (Linux/macOS) -->

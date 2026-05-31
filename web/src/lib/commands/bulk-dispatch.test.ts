@@ -16,7 +16,7 @@ vi.mock('$lib/api', async () => {
 });
 
 import { ApiError } from '$lib/api';
-import { dispatchBulk, seedItems } from './bulk-dispatch';
+import { dispatchBulk, seedItems, type BulkItem } from './bulk-dispatch';
 
 describe('seedItems', () => {
   it('returns one pending item per host id, mapping hostnames when known', () => {
@@ -108,5 +108,69 @@ describe('dispatchBulk', () => {
     expect(result.okCount).toBe(0);
     expect(result.errorCount).toBe(2);
     expect(result.items.every((i) => i.status === 'error')).toBe(true);
+  });
+
+  it('honours an AbortSignal — queued hosts settle as cancelled, in-flight finish', async () => {
+    // Block resolution of the first request until we manually flip a
+    // deferred promise. With concurrency=1 this lets us assert that the
+    // *queued* tail (h2, h3) is dropped while the *in-flight* h1 still
+    // gets to settle, matching the production semantics.
+    let releaseFirst: () => void = () => {};
+    const firstStarted = new Promise<void>((resolve) => {
+      issueDashCommandMock.mockImplementationOnce(async (body: { host_ids: string[] }) => {
+        resolve();
+        await new Promise<void>((r) => (releaseFirst = r));
+        return { commands: [{ id: `cmd-${body.host_ids[0]}` }] };
+      });
+    });
+    issueDashCommandMock.mockImplementation(async (body: { host_ids: string[] }) => ({
+      commands: [{ id: `cmd-${body.host_ids[0]}` }],
+    }));
+
+    const ctl = new AbortController();
+    const events: BulkItem[] = [];
+    const promise = dispatchBulk(
+      {
+        hostIds: ['h1', 'h2', 'h3'],
+        hostnamesById: { h1: 'a', h2: 'b', h3: 'c' },
+        command_type: 'shell',
+        command_payload: { cmd: 'uptime' },
+        signal: ctl.signal,
+        concurrency: 1,
+      },
+      (item) => events.push({ ...item }),
+    );
+
+    // Wait until h1 has started, then abort and release h1 so the pool
+    // drains. With the abort tripped, h2 and h3 must NOT trigger
+    // issueDashCommand at all.
+    await firstStarted;
+    ctl.abort();
+    releaseFirst();
+
+    const result = await promise;
+    expect(issueDashCommandMock).toHaveBeenCalledTimes(1);
+    expect(result.okCount).toBe(1);
+    expect(result.cancelledCount).toBe(2);
+    expect(result.items.map((i) => i.status)).toEqual(['success', 'cancelled', 'cancelled']);
+  });
+
+  it('aborting before any request starts cancels every host', async () => {
+    const ctl = new AbortController();
+    ctl.abort();
+    const result = await dispatchBulk(
+      {
+        hostIds: ['h1', 'h2'],
+        hostnamesById: { h1: 'a', h2: 'b' },
+        command_type: 'shell',
+        command_payload: { cmd: 'uptime' },
+        signal: ctl.signal,
+      },
+      () => {},
+    );
+    expect(issueDashCommandMock).not.toHaveBeenCalled();
+    expect(result.cancelledCount).toBe(2);
+    expect(result.okCount).toBe(0);
+    expect(result.errorCount).toBe(0);
   });
 });

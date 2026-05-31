@@ -23,7 +23,7 @@
 
 import { issueDashCommand, ApiError, type IssueCommandInput } from '$lib/api';
 
-export type BulkItemStatus = 'pending' | 'in-flight' | 'success' | 'error';
+export type BulkItemStatus = 'pending' | 'in-flight' | 'success' | 'error' | 'cancelled';
 
 export interface BulkItem {
   host_id: string;
@@ -37,6 +37,14 @@ export interface BulkItem {
   command_id?: string;
 }
 
+/** Bounded concurrency for the fan-out. v1.0.14 used unbounded
+ * `Promise.all`, which made "Cancel remaining" a no-op (everything was
+ * already in-flight on the network). v1.0.15 runs a small pool so an
+ * abort mid-flight actually drops the queued tail. Four is the sweet
+ * spot: high enough to feel snappy on a 20-host bulk, low enough that
+ * a 100-host bulk still has meaningful "remaining to cancel" room. */
+const DEFAULT_CONCURRENCY = 4;
+
 export interface BulkDispatchInput {
   hostIds: ReadonlyArray<string>;
   hostnamesById: Readonly<Record<string, string>>;
@@ -44,12 +52,20 @@ export interface BulkDispatchInput {
   command_payload: Record<string, unknown>;
   reason?: string;
   requires_approval?: boolean;
+  /** Aborts queued (not-yet-sent) requests. In-flight requests are
+   * allowed to settle — the server has already received them, and a
+   * mid-flight 4xx surfaces as a confusing "did it issue or not?" so we
+   * deliberately do NOT signal the underlying fetch. */
+  signal?: AbortSignal;
+  /** Override concurrency for tests; default 4. */
+  concurrency?: number;
 }
 
 export interface BulkDispatchResult {
   items: BulkItem[];
   okCount: number;
   errorCount: number;
+  cancelledCount: number;
 }
 
 /**
@@ -84,10 +100,19 @@ async function issueOne(
 }
 
 /**
- * Fan-out across all host ids; resolves once every request has settled.
- * `onItemChange` fires twice per host: once when its request starts
- * (status `in-flight`) and once when it settles. The Svelte dialog uses
- * this to drive its per-host status badges in real time.
+ * Fan-out across all host ids with bounded concurrency; resolves once
+ * every request has settled (or been cancelled). `onItemChange` fires
+ * for every per-host state transition (in-flight → success / error /
+ * cancelled). The Svelte dialog uses this to drive its per-host status
+ * badges in real time.
+ *
+ * Cancellation (`input.signal`):
+ *   - Only the *queued* tail is dropped — anything already in-flight
+ *     gets to settle, because the server has accepted it and the
+ *     command row would otherwise leak as "did it actually issue?".
+ *   - Cancelled items emit `status: 'cancelled'` so the UI can render
+ *     a distinct chip and the operator sees exactly which hosts were
+ *     skipped.
  */
 export async function dispatchBulk(
   input: BulkDispatchInput,
@@ -100,20 +125,49 @@ export async function dispatchBulk(
     requires_approval: input.requires_approval,
   };
 
-  const promises = input.hostIds.map(async (host_id) => {
-    const hostname = input.hostnamesById[host_id] ?? host_id;
-    onItemChange({ host_id, hostname, status: 'in-flight' });
-    const outcome = await issueOne(host_id, base);
-    const item: BulkItem = { host_id, hostname, ...outcome };
-    onItemChange(item);
-    return item;
-  });
+  const concurrency = Math.max(1, input.concurrency ?? DEFAULT_CONCURRENCY);
+  const signal = input.signal;
+  const results: BulkItem[] = new Array(input.hostIds.length);
 
-  const items = await Promise.all(promises);
+  // Worker-pool driven by a shared cursor — each worker pulls the next
+  // host id, checks the signal, then either issues or marks cancelled.
+  // This is a tiny bit fiddlier than `Promise.all(map)` but it's the
+  // only way to actually skip work once an abort fires.
+  let cursor = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= input.hostIds.length) return;
+      const host_id = input.hostIds[i]!;
+      const hostname = input.hostnamesById[host_id] ?? host_id;
+
+      if (signal?.aborted) {
+        const item: BulkItem = { host_id, hostname, status: 'cancelled' };
+        results[i] = item;
+        onItemChange(item);
+        continue;
+      }
+
+      onItemChange({ host_id, hostname, status: 'in-flight' });
+      const outcome = await issueOne(host_id, base);
+      const item: BulkItem = { host_id, hostname, ...outcome };
+      results[i] = item;
+      onItemChange(item);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, input.hostIds.length) }, () =>
+    worker(),
+  );
+  await Promise.all(workers);
+
   return {
-    items,
-    okCount: items.filter((i) => i.status === 'success').length,
-    errorCount: items.filter((i) => i.status === 'error').length,
+    items: results,
+    okCount: results.filter((i) => i.status === 'success').length,
+    errorCount: results.filter((i) => i.status === 'error').length,
+    cancelledCount: results.filter((i) => i.status === 'cancelled').length,
   };
 }
 
