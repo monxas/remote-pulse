@@ -1,5 +1,15 @@
 <script lang="ts">
-  import { ArrowLeft, ArrowRight, Check, Loader2, Terminal, X, AlertCircle } from '@lucide/svelte';
+  import {
+    ArrowLeft,
+    ArrowRight,
+    Ban,
+    Check,
+    Loader2,
+    Terminal,
+    X,
+    AlertCircle,
+    MinusCircle,
+  } from '@lucide/svelte';
   import { useQueryClient } from '@tanstack/svelte-query';
   import { toast } from 'svelte-sonner';
   import {
@@ -73,6 +83,11 @@
   let dispatchState = $state<DispatchState>('idle');
   let items = $state<BulkItem[]>([]);
 
+  // AbortController for the bulk run. We create a fresh one per submit
+  // so reopening the dialog after a cancel doesn't trip on a stale
+  // already-aborted signal.
+  let abortCtl = $state<AbortController | null>(null);
+
   const queryClient = useQueryClient();
 
   // Build a hostId -> hostname lookup that survives even when the
@@ -96,6 +111,17 @@
     inlineError = null;
     dispatchState = 'idle';
     items = [];
+    // Abort the previous run if the dialog is reopened mid-flight —
+    // otherwise the worker pool would keep firing into a closed UI.
+    abortCtl?.abort();
+    abortCtl = null;
+  }
+
+  /** Operator-initiated mid-flight cancel. Aborts queued items; the
+   * worker pool flips them to `cancelled` as it drains, and any
+   * in-flight requests are allowed to settle. */
+  function cancelRemaining(): void {
+    abortCtl?.abort();
   }
 
   // Reset whenever the dialog reopens.
@@ -148,6 +174,7 @@
     dispatchState = 'submitting';
     step = 4;
 
+    abortCtl = new AbortController();
     const result = await dispatchBulk(
       {
         hostIds,
@@ -156,6 +183,7 @@
         command_payload: payload,
         reason: reason.trim() || undefined,
         requires_approval: requiresApproval,
+        signal: abortCtl.signal,
       },
       (next) => {
         items = items.map((i) => (i.host_id === next.host_id ? next : i));
@@ -171,12 +199,20 @@
     void queryClient.invalidateQueries({ queryKey: qk.auditAll() });
     void queryClient.invalidateQueries({ queryKey: qk.overview() });
 
-    if (result.errorCount === 0) {
-      toast.success(`${result.okCount} commands issued`);
-    } else if (result.okCount === 0) {
-      toast.error(`All ${result.errorCount} commands failed`);
+    // Cancellation is the third axis of the summary toast: surface it
+    // distinctly so operators don't think the missing rows are silent
+    // failures.
+    const parts: string[] = [];
+    if (result.okCount > 0) parts.push(`${result.okCount} issued`);
+    if (result.errorCount > 0) parts.push(`${result.errorCount} failed`);
+    if (result.cancelledCount > 0) parts.push(`${result.cancelledCount} cancelled`);
+    const summary = parts.join(', ') || 'No commands issued';
+    if (result.errorCount === 0 && result.cancelledCount === 0 && result.okCount > 0) {
+      toast.success(summary);
+    } else if (result.okCount === 0 && result.cancelledCount === 0) {
+      toast.error(summary);
     } else {
-      toast.warning(`${result.okCount} commands issued, ${result.errorCount} failed`);
+      toast.warning(summary);
     }
 
     onAllSubmitted?.();
@@ -193,12 +229,25 @@
 
   const progress = $derived.by(() => {
     const total = items.length;
-    const settled = items.filter((i) => i.status === 'success' || i.status === 'error').length;
+    // Cancelled rows count as settled — they're not coming back.
+    const settled = items.filter(
+      (i) => i.status === 'success' || i.status === 'error' || i.status === 'cancelled',
+    ).length;
     return { total, settled };
   });
 
   const okCount = $derived(items.filter((i) => i.status === 'success').length);
   const errorCount = $derived(items.filter((i) => i.status === 'error').length);
+  const cancelledCount = $derived(items.filter((i) => i.status === 'cancelled').length);
+  // "Can we still cancel?" iff at least one row is still queued or in
+  // flight AND we haven't already aborted. The button vanishes when
+  // there's nothing left to skip.
+  const hasPendingWork = $derived(
+    items.some((i) => i.status === 'pending' || i.status === 'in-flight'),
+  );
+  const canCancel = $derived(
+    dispatchState === 'submitting' && hasPendingWork && !(abortCtl?.signal.aborted ?? false),
+  );
 
   function close(): void {
     onOpenChange(false);
@@ -415,6 +464,12 @@
             <span class="text-success-text">{okCount} OK</span>
             ·
             <span class="text-danger-text">{errorCount} failed</span>
+            {#if cancelledCount > 0}
+              ·
+              <span class="text-muted" data-testid="bulk-cancelled-count">
+                {cancelledCount} cancelled
+              </span>
+            {/if}
           </span>
         </div>
         <div class="max-h-72 overflow-y-auto rounded-md border border-border-default">
@@ -447,6 +502,11 @@
                         <Check class="size-3" aria-hidden="true" />
                         issued
                       </span>
+                    {:else if item.status === 'cancelled'}
+                      <span class="inline-flex items-center gap-1 text-xs text-muted">
+                        <MinusCircle class="size-3" aria-hidden="true" />
+                        cancelled
+                      </span>
                     {:else}
                       <span class="inline-flex items-center gap-1 text-xs text-danger-text">
                         <AlertCircle class="size-3" aria-hidden="true" />
@@ -459,6 +519,8 @@
                       {item.error ?? 'Unknown error'}
                     {:else if item.status === 'success' && item.command_id}
                       <span class="font-mono">{item.command_id.slice(0, 8)}</span>
+                    {:else if item.status === 'cancelled'}
+                      <span>Skipped — operator cancelled remaining</span>
                     {:else}
                       —
                     {/if}
@@ -474,9 +536,19 @@
     <DialogFooter>
       {#if step === 4}
         {#if dispatchState === 'submitting'}
+          {#if canCancel}
+            <Button variant="outline" onclick={cancelRemaining} data-testid="bulk-cancel-remaining">
+              <Ban class="size-4" aria-hidden="true" />
+              Cancel remaining
+            </Button>
+          {/if}
           <Button disabled>
             <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-            Submitting…
+            {#if abortCtl?.signal.aborted}
+              Draining…
+            {:else}
+              Submitting…
+            {/if}
           </Button>
         {:else}
           <Button onclick={close} data-testid="bulk-close">
