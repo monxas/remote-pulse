@@ -31,7 +31,7 @@ jobs:
           ls -lh dist/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rp-linux-x64
           path: agent/dist/rp
@@ -71,7 +71,7 @@ jobs:
                      ls -lh dist/"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rp-linux-arm64
           path: agent/dist/rp
@@ -101,7 +101,7 @@ jobs:
           ls -lh dist/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rp-macos-x64
           path: agent/dist/rp
@@ -131,7 +131,7 @@ jobs:
           ls -lh dist/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rp-macos-arm64
           path: agent/dist/rp
@@ -160,7 +160,7 @@ jobs:
           dist\rp.exe version
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rp-windows-x64.exe
           path: agent/dist/rp.exe
@@ -201,7 +201,7 @@ jobs:
           mv SHA256SUMS ../release/
 
       - name: Upload SHA256SUMS
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SHA256SUMS
           path: release/SHA256SUMS
@@ -247,7 +247,7 @@ jobs:
           done
 
       - name: Upload signatures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: signatures
           path: release/*.sig
@@ -401,7 +401,7 @@ jobs:
           "
 
       - name: Upload manifests artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: winget-manifests
           path: ${{ runner.temp }}/manifests/
