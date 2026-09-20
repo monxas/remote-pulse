@@ -1,16 +1,18 @@
 """Tests for local policy enforcement."""
 
 import time
+
 import pytest
 
+from rp import __version__
 from rp.local_policy import (
-    LocalPolicy,
     CommandDecision,
-    touch_flag,
+    LocalPolicy,
     add_to_whitelist,
+    get_flag_status,
     remove_from_whitelist,
     show_whitelist,
-    get_flag_status,
+    touch_flag,
 )
 
 
@@ -102,9 +104,7 @@ def test_service_restart_prod_whitelist_match_allows(policy, policy_dir):
     """Whitelisted service should be allowed."""
     add_to_whitelist("restart-whitelist", "nginx", policy_dir=policy_dir)
 
-    decision, reason = policy.evaluate(
-        "service_restart", {"service_name": "nginx"}, "prod"
-    )
+    decision, reason = policy.evaluate("service_restart", {"service_name": "nginx"}, "prod")
     assert decision == CommandDecision.ALLOW
     assert "nginx" in reason
 
@@ -113,26 +113,20 @@ def test_service_restart_prod_not_whitelisted_denies(policy, policy_dir):
     """Non-whitelisted service should be denied."""
     add_to_whitelist("restart-whitelist", "nginx", policy_dir=policy_dir)
 
-    decision, reason = policy.evaluate(
-        "service_restart", {"service_name": "apache2"}, "prod"
-    )
+    decision, reason = policy.evaluate("service_restart", {"service_name": "apache2"}, "prod")
     assert decision == CommandDecision.DENY
     assert "not in" in reason.lower()
 
 
 def test_service_restart_prod_no_whitelist_denies(policy):
     """Missing whitelist file should deny."""
-    decision, reason = policy.evaluate(
-        "service_restart", {"service_name": "nginx"}, "prod"
-    )
+    decision, reason = policy.evaluate("service_restart", {"service_name": "nginx"}, "prod")
     assert decision == CommandDecision.DENY
 
 
 def test_service_restart_family_allows(policy):
     """Family group should allow without whitelist."""
-    decision, reason = policy.evaluate(
-        "service_restart", {"service_name": "nginx"}, "family"
-    )
+    decision, reason = policy.evaluate("service_restart", {"service_name": "nginx"}, "family")
     assert decision == CommandDecision.ALLOW
 
 
@@ -153,9 +147,7 @@ def test_file_read_prod_glob_match(policy, policy_dir):
     """Matching path should allow file_read."""
     add_to_whitelist("read-allowlist", "/var/log/*.log", policy_dir=policy_dir)
 
-    decision, reason = policy.evaluate(
-        "file_read", {"path": "/var/log/syslog.log"}, "prod"
-    )
+    decision, reason = policy.evaluate("file_read", {"path": "/var/log/syslog.log"}, "prod")
     assert decision == CommandDecision.ALLOW
 
 
@@ -169,17 +161,13 @@ def test_file_read_prod_no_match_denies(policy, policy_dir):
 
 def test_file_read_prod_no_allowlist_denies(policy):
     """Missing allowlist should deny."""
-    decision, reason = policy.evaluate(
-        "file_read", {"path": "/var/log/test.log"}, "prod"
-    )
+    decision, reason = policy.evaluate("file_read", {"path": "/var/log/test.log"}, "prod")
     assert decision == CommandDecision.DENY
 
 
 def test_file_read_family_allows(policy):
     """Family group should allow without allowlist."""
-    decision, reason = policy.evaluate(
-        "file_read", {"path": "/var/log/test.log"}, "family"
-    )
+    decision, reason = policy.evaluate("file_read", {"path": "/var/log/test.log"}, "family")
     assert decision == CommandDecision.ALLOW
 
 
@@ -205,18 +193,14 @@ def test_file_write_prod_external_path_requires_approval(policy, policy_dir):
     """External path should require approval even with flag."""
     touch_flag("allow-remote-write", policy_dir=policy_dir)
 
-    decision, reason = policy.evaluate(
-        "file_write", {"path": "/etc/systemd/test"}, "prod"
-    )
+    decision, reason = policy.evaluate("file_write", {"path": "/etc/systemd/test"}, "prod")
     assert decision == CommandDecision.REQUIRE_APPROVAL
     assert "outside" in reason.lower()
 
 
 def test_file_write_family_safe_path_allows(policy):
     """Family group with safe path should allow."""
-    decision, reason = policy.evaluate(
-        "file_write", {"path": "/opt/rp/config"}, "family"
-    )
+    decision, reason = policy.evaluate("file_write", {"path": "/opt/rp/config"}, "family")
     assert decision == CommandDecision.ALLOW
 
 
@@ -259,18 +243,14 @@ def test_ssh_keys_sync_sha_mismatch_denies(policy, policy_dir):
     sha_file = policy_dir / "groups-yml-sha256"
     sha_file.write_text("abc123def456")
 
-    decision, reason = policy.evaluate(
-        "ssh_keys_sync", {"groups_yml_sha256": "wrong_sha"}, "prod"
-    )
+    decision, reason = policy.evaluate("ssh_keys_sync", {"groups_yml_sha256": "wrong_sha"}, "prod")
     assert decision == CommandDecision.DENY
     assert "mismatch" in reason.lower()
 
 
 def test_ssh_keys_sync_no_reference_denies(policy):
     """Missing reference SHA should deny."""
-    decision, reason = policy.evaluate(
-        "ssh_keys_sync", {"groups_yml_sha256": "test"}, "prod"
-    )
+    decision, reason = policy.evaluate("ssh_keys_sync", {"groups_yml_sha256": "test"}, "prod")
     assert decision == CommandDecision.DENY
 
 
@@ -278,17 +258,24 @@ def test_ssh_keys_sync_no_reference_denies(policy):
 
 
 def test_agent_upgrade_major_version_requires_approval(policy):
-    """Major version change should require approval."""
-    decision, reason = policy.evaluate("agent_upgrade", {"version": "1.0.0"}, "prod")
-    # Current version is 0.1.0, upgrading to 1.x.x
+    """Major version change should require approval.
+
+    Targets are derived from the running ``__version__`` rather than written
+    out: these used to hardcode "current is 0.1.0", so they silently inverted
+    their own meaning the moment the agent shipped 1.x.
+    """
+    current_major = int(__version__.split(".")[0])
+    target = f"{current_major + 1}.0.0"
+    decision, reason = policy.evaluate("agent_upgrade", {"version": target}, "prod")
     assert decision == CommandDecision.REQUIRE_APPROVAL
     assert "major version" in reason.lower()
 
 
 def test_agent_upgrade_minor_bump_allows(policy):
-    """Minor bump should allow."""
-    decision, reason = policy.evaluate("agent_upgrade", {"version": "0.2.0"}, "prod")
-    # Current version is 0.1.0, upgrading to 0.2.0
+    """Minor bump (same major) should allow."""
+    current_major, current_minor = (int(p) for p in __version__.split(".")[:2])
+    target = f"{current_major}.{current_minor + 1}.0"
+    decision, reason = policy.evaluate("agent_upgrade", {"version": target}, "prod")
     assert decision == CommandDecision.ALLOW
 
 
@@ -422,9 +409,7 @@ def test_group_default_uses_lenient_rules(policy):
     assert decision == CommandDecision.ALLOW
 
     # service_restart allowed
-    decision, _ = policy.evaluate(
-        "service_restart", {"service_name": "test"}, "default"
-    )
+    decision, _ = policy.evaluate("service_restart", {"service_name": "test"}, "default")
     assert decision == CommandDecision.ALLOW
 
 

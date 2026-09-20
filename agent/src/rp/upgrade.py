@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ import structlog
 from rp import __version__
 from rp.client import RPClient
 from rp.commands.runner import RemoteCommand
-from rp.platform_detect import get_os, get_arch
+from rp.platform_detect import get_arch, get_os
 
 logger = structlog.get_logger()
 
@@ -100,7 +100,7 @@ class AgentUpgrader:
         Returns:
             UpgradeResult with outcome details
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         old_version = __version__
         errors: list[str] = []
 
@@ -115,10 +115,6 @@ class AgentUpgrader:
             # Verify signature if provided (already done in runner.py, but double-check)
             if signed_command and not dry_run:
                 logger.info("signature already verified by runner")
-
-            # Ensure directories exist
-            BIN_DIR.mkdir(parents=True, exist_ok=True)
-            STATE_DIR.mkdir(parents=True, exist_ok=True)
 
             # Determine binary name for current platform
             os_type = get_os()
@@ -140,10 +136,15 @@ class AgentUpgrader:
                     duration_s=0.0,
                 )
 
+            # Ensure directories exist. Deliberately *after* the dry-run
+            # early-return above: a dry run must not touch the filesystem, and
+            # creating /opt/rp/bin + /var/lib/rp here used to be the first thing
+            # `rp upgrade --dry-run` did.
+            BIN_DIR.mkdir(parents=True, exist_ok=True)
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+
             # Download new binary
-            binary_path, checksum_ok = await self._download_binary(
-                target_version, binary_name
-            )
+            binary_path, checksum_ok = await self._download_binary(target_version, binary_name)
             if not checksum_ok:
                 errors.append("SHA256 checksum verification failed")
                 return UpgradeResult(
@@ -152,9 +153,7 @@ class AgentUpgrader:
                     rollback=False,
                     success=False,
                     errors=errors,
-                    duration_s=(
-                        datetime.now(timezone.utc) - start_time
-                    ).total_seconds(),
+                    duration_s=(datetime.now(UTC) - start_time).total_seconds(),
                 )
 
             # Preserve current version as N-1
@@ -201,9 +200,7 @@ class AgentUpgrader:
                     rollback=True,
                     success=False,
                     errors=errors,
-                    duration_s=(
-                        datetime.now(timezone.utc) - start_time
-                    ).total_seconds(),
+                    duration_s=(datetime.now(UTC) - start_time).total_seconds(),
                 )
 
             # Send version_handshake to server
@@ -224,12 +221,12 @@ class AgentUpgrader:
                 {
                     "target_version": target_version,
                     "old_version": old_version,
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "success": True,
                 }
             )
 
-            duration_s = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration_s = (datetime.now(UTC) - start_time).total_seconds()
             logger.info(
                 "upgrade completed successfully",
                 old_version=old_version,
@@ -255,7 +252,7 @@ class AgentUpgrader:
                 rollback=False,
                 success=False,
                 errors=errors,
-                duration_s=(datetime.now(timezone.utc) - start_time).total_seconds(),
+                duration_s=(datetime.now(UTC) - start_time).total_seconds(),
             )
 
     async def rollback(self, reason: str = "manual") -> RollbackResult:
@@ -304,9 +301,7 @@ class AgentUpgrader:
             temp_symlink.symlink_to(prev_target)
             os.rename(temp_symlink, CURRENT_BIN)
 
-            logger.info(
-                "symlink rolled back", from_version=from_version, to_version=to_version
-            )
+            logger.info("symlink rolled back", from_version=from_version, to_version=to_version)
 
             # Restart service (systemctl restart remote-pulse)
             try:
@@ -343,7 +338,7 @@ class AgentUpgrader:
                 {
                     "from_version": from_version,
                     "to_version": to_version,
-                    "rolled_back_at": datetime.now(timezone.utc).isoformat(),
+                    "rolled_back_at": datetime.now(UTC).isoformat(),
                     "reason": reason,
                 }
             )
@@ -401,18 +396,14 @@ class AgentUpgrader:
             if response.status_code == 200:
                 releases = response.json()
                 versions["available_versions"] = [
-                    r["tag_name"].lstrip("v")
-                    for r in releases
-                    if not r.get("prerelease")
+                    r["tag_name"].lstrip("v") for r in releases if not r.get("prerelease")
                 ]
         except Exception as e:
             logger.warning("failed to fetch available versions", error=str(e))
 
         return versions
 
-    async def _download_binary(
-        self, version: str, binary_name: str
-    ) -> tuple[Path, bool]:
+    async def _download_binary(self, version: str, binary_name: str) -> tuple[Path, bool]:
         """Download binary from GitHub Releases and verify SHA256.
 
         Args:
@@ -422,9 +413,7 @@ class AgentUpgrader:
         Returns:
             Tuple of (binary_path, checksum_ok)
         """
-        base_url = (
-            f"https://github.com/monxas/remote-pulse/releases/download/v{version}"
-        )
+        base_url = f"https://github.com/monxas/remote-pulse/releases/download/v{version}"
         binary_url = f"{base_url}/{binary_name}"
         checksum_url = f"{base_url}/SHA256SUMS"
 
@@ -517,9 +506,7 @@ class AgentUpgrader:
             stdout, stderr = await result.communicate()
 
             if result.returncode != 0:
-                logger.warning(
-                    "rp status check returned non-zero", stderr=stderr.decode()
-                )
+                logger.warning("rp status check returned non-zero", stderr=stderr.decode())
                 # Not critical, continue
 
             logger.info("rp status check OK")
@@ -532,7 +519,7 @@ class AgentUpgrader:
                         timeout=30.0,
                     )
                     logger.info("heartbeat check OK")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error("heartbeat check timed out")
                     return False
                 except Exception as e:
@@ -544,7 +531,7 @@ class AgentUpgrader:
             logger.info("self-check completed successfully")
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("self-check timed out", timeout_s=timeout_s)
             return False
         except Exception as e:

@@ -14,7 +14,9 @@ from rp.ssh_keys import (
     sync_authorized_keys,
 )
 
-SAMPLE_PUBKEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example"
+SAMPLE_PUBKEY = (
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example"
+)
 
 
 class TestComputeFingerprint:
@@ -87,8 +89,8 @@ class TestRegisterKeyWithServer:
     async def test_register_key_success(self):
         """Register key successfully."""
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = MagicMock()
+        # httpx.Response is sync: json() / raise_for_status() are not awaitables.
+        mock_response = MagicMock()
         mock_response.json.return_value = {
             "id": str(uuid.uuid4()),
             "host_id": str(uuid.uuid4()),
@@ -122,8 +124,8 @@ class TestSyncAuthorizedKeys:
             managed_path = Path(tmpdir) / "managed"
 
             mock_client = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.raise_for_status = MagicMock()
+            # httpx.Response is sync: json() / raise_for_status() are not awaitables.
+            mock_response = MagicMock()
             mock_response.json.return_value = {
                 "content": f"{SAMPLE_PUBKEY}\n",
                 "sha256": "abc123",
@@ -138,9 +140,7 @@ class TestSyncAuthorizedKeys:
                     assert changed is True
                     assert managed_path.exists()
                     assert SAMPLE_PUBKEY in managed_path.read_text()
-                    mock_client.get.assert_called_once_with(
-                        f"/v1/keys/authorized/{host_id}"
-                    )
+                    mock_client.get.assert_called_once_with(f"/v1/keys/authorized/{host_id}")
 
     async def test_sync_authorized_keys_idempotent(self):
         """Sync is idempotent when content unchanged."""
@@ -154,8 +154,8 @@ class TestSyncAuthorizedKeys:
             sha256 = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
             mock_client = AsyncMock()
-            mock_response = AsyncMock()
-            mock_response.raise_for_status = MagicMock()
+            # httpx.Response is sync: json() / raise_for_status() are not awaitables.
+            mock_response = MagicMock()
             mock_response.json.return_value = {
                 "content": content,
                 "sha256": sha256,
