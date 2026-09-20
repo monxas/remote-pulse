@@ -7,9 +7,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from rp_server.models import Command, Host
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(as_admin):
+    """These endpoints gained require_admin / require_operator_or_admin after
+    this module was written, and the module never ran in CI to notice. Every
+    request here is meant to be an authenticated admin; the 401/403 paths are
+    covered by test_user_permissions.py."""
 
 
 @pytest.fixture
@@ -153,13 +161,14 @@ class TestApproveCommand:
         response = await client.post(f"/v1/admin/commands/{test_command.id}/request-approval")
         approval_token = response.json()["approval_token"]
 
-        # Manually backdate approval_requested_at to simulate expiration
-        stmt = select(Command).where(Command.id == test_command.id)
-        result = await db_session.execute(stmt)
-        command = result.scalar_one()
-
-        # Set to 6 minutes ago (past 5min TTL)
-        command.approval_requested_at = datetime.now(UTC) - timedelta(minutes=6)
+        # Backdate approval_requested_at past the 5min TTL. Must go through a
+        # Core UPDATE: Command.__setattr__ refuses to mutate a persistent
+        # instance, so the old ORM assignment raised RuntimeError here.
+        await db_session.execute(
+            update(Command)
+            .where(Command.id == test_command.id)
+            .values(approval_requested_at=datetime.now(UTC) - timedelta(minutes=6))
+        )
         await db_session.commit()
 
         # Try to approve
@@ -169,8 +178,18 @@ class TestApproveCommand:
             json=payload,
         )
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "expired" in response.json()["detail"].lower()
+        # 404, not 403. approve_command() is unauthenticated -- the token *is*
+        # the credential -- so it deliberately collapses "unknown", "expired"
+        # and "already processed" into one answer rather than confirming that a
+        # given token exists. The old 403 + "expired" assertion predates that
+        # atomic-claim refactor. What matters is that approval did not happen:
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+        command = (
+            await db_session.execute(select(Command).where(Command.id == test_command.id))
+        ).scalar_one()
+        assert command.human_approved is False
+        assert command.approved_by is None
 
     async def test_approve_command_already_processed(
         self,

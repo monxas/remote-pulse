@@ -27,7 +27,12 @@ async def test_tailscale_identity_missing(client: AsyncClient):
     response = await client.get("/v1/hosts")
 
     assert response.status_code == 401
-    assert "not from tailnet" in response.json()["detail"].lower()
+    # /v1/hosts accepts EITHER a tailnet identity OR a logged-in PocketID user
+    # (tailscale_identity_optional + current_user_optional), so the combined
+    # rejection message is "Authentication required". The old assertion looked
+    # for "not from tailnet", which is what the strict-only dependency said
+    # before the endpoint grew the second auth path.
+    assert "authentication required" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -46,7 +51,13 @@ async def test_tailscale_identity_partial_headers(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_tailscale_identity_invalid_email(client: AsyncClient):
-    """Test that invalid email in Tailscale-User-Login returns 422."""
+    """A malformed Tailscale-User-Login must not reach the handler.
+
+    This used to let pydantic's ValidationError escape the dependency, which
+    FastAPI reports as an unhandled 500 (the test expected 422 and got a raw
+    exception). Both dependencies now catch it: the optional one degrades to
+    "no identity", so /v1/hosts answers 401 rather than crashing.
+    """
     response = await client.get(
         "/v1/hosts",
         headers={
@@ -54,13 +65,31 @@ async def test_tailscale_identity_invalid_email(client: AsyncClient):
         },
     )
 
-    # Pydantic EmailStr validation should reject
-    assert response.status_code == 422
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_requires_tailscale_identity(client: AsyncClient, enrollment_token: str):
-    """Test that heartbeat endpoint requires Tailscale identity."""
+async def test_heartbeat_accepts_unauthenticated_writes(
+    client: AsyncClient, enrollment_token: str
+):
+    """POST /v1/heartbeat is deliberately unauthenticated today.
+
+    This test was written as `test_heartbeat_requires_tailscale_identity` and
+    asserted 401 without identity headers. The handler does the opposite, on
+    purpose and in writing: it takes `tailscale_identity_optional` and its
+    docstring says "F1: No authentication enforcement (HTTP plaintext LAN).
+    F2 TODO: Verify Tailscale identity matches host ownership."
+
+    So the test asserted a requirement that was never implemented. It now pins
+    the contract that actually ships, because the alternative -- enforcing
+    identity on heartbeat -- would instantly mute every agent in the fleet
+    (they send no identity header) and is a coordinated agent+server rollout,
+    not a test fix.
+
+    SECURITY GAP, reported separately: anything that can reach :8080 can forge
+    a heartbeat for any known host_id, which is enough to keep an offline host
+    looking online. Tracked for the F2 auth work, NOT closed by this test.
+    """
     # First enroll a host (enrollment is public, no TS required yet in F2)
     enroll_response = await client.post(
         "/v1/enroll",
@@ -89,9 +118,10 @@ async def test_heartbeat_requires_tailscale_identity(client: AsyncClient, enroll
         },
     )
 
-    assert heartbeat_response.status_code == 401
+    # Documented current behaviour: accepted without any identity.
+    assert heartbeat_response.status_code == 200
 
-    # With Tailscale identity, should succeed
+    # With Tailscale identity, also succeeds (identity is recorded, not required).
     heartbeat_response = await client.post(
         "/v1/heartbeat",
         json={

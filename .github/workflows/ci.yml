@@ -95,15 +95,6 @@ jobs:
       - name: Ruff check
         run: uv run ruff check .
 
-      # ServerSigningKey.load_or_generate() defaults to /etc/rp and the enroll /
-      # heartbeat / keys routers call it with no override, so hitting those
-      # endpoints in a test generates a real Ed25519 key on disk. Production has
-      # this directory owned by the `rp` user; the runner does not, hence
-      # PermissionError. Created here rather than by changing how the server
-      # resolves its key path, which is a behaviour change for a live service.
-      - name: Provision server key dir
-        run: sudo install -d -o "$USER" -m 0700 /etc/rp
-
       - name: Alembic upgrade
         run: uv run alembic upgrade head
 

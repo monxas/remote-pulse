@@ -205,9 +205,16 @@ async def refresh_fleet_gauges(db: AsyncSession) -> None:
         hostname = host.hostname or "unknown"
         group = host.group_name or "default"
 
-        # Compute last_seen age
+        # Compute last_seen age. Normalise tzinfo first: Postgres TIMESTAMPTZ
+        # hands back aware datetimes, but a SQLite-backed session drops the
+        # offset and `now - naive` raises TypeError. dash_api._classify_status
+        # already guards the same way; this call site did not, so /metrics blew
+        # up with "can't subtract offset-naive and offset-aware datetimes".
         if host.last_seen_at:
-            age_seconds = (now - host.last_seen_at).total_seconds()
+            last_seen_at = host.last_seen_at
+            if last_seen_at.tzinfo is None:
+                last_seen_at = last_seen_at.replace(tzinfo=UTC)
+            age_seconds = (now - last_seen_at).total_seconds()
             rp_host_last_seen_age_seconds.labels(
                 host_id=host_id_str,
                 hostname=hostname,

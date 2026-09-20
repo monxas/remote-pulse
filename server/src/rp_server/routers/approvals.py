@@ -153,12 +153,29 @@ async def request_approval(
 
     # Generate approval token
     approval_token = uuid.uuid4()
-    expires_at = datetime.now(UTC) + timedelta(minutes=5)
+    requested_at = datetime.now(UTC)
+    expires_at = requested_at + timedelta(minutes=5)
 
-    # Update command (NOTE: this is OK despite __setattr__ guard because
-    # we're updating before first commit completes in transaction)
-    command.approval_token = approval_token
-    command.approval_requested_at = datetime.now(UTC)
+    # Write through Core UPDATE, like approve_command() below. The old code
+    # assigned the ORM attributes directly with a comment claiming that was
+    # "OK despite the __setattr__ guard because we're updating before first
+    # commit completes" -- which was wrong: `command` was just SELECTed, so its
+    # instance state is `persistent` and Command.__setattr__ raises
+    # RuntimeError("Cannot modify Command after commit"). This endpoint
+    # therefore returned 500 every single time it was called.
+    #
+    # The `approval_token IS NULL` guard also makes the 409 above TOCTOU-safe:
+    # two concurrent requests can both pass the SELECT, only one updates a row.
+    stmt = (
+        update(Command)
+        .where(and_(Command.id == command_id, Command.approval_token.is_(None)))
+        .values(approval_token=approval_token, approval_requested_at=requested_at)
+    )
+    if (await db.execute(stmt)).rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approval already requested for this command",
+        )
 
     await db.commit()
 
@@ -347,11 +364,19 @@ async def reject_command(
                 detail="Approval token expired",
             )
 
-    # Mark rejected
+    # Mark rejected. Core UPDATE for the same reason as request_approval():
+    # `command` came out of a SELECT, so direct attribute assignment tripped
+    # Command.__setattr__ and made this endpoint return 500 unconditionally.
     reason = payload.reason or "rejected by admin via Telegram"
-    command.rejected_reason = f"telegram_reject:{payload.approver_id}:{reason}"
-    command.approval_responded_at = datetime.now(UTC)
-    command.approval_token = None
+    await db.execute(
+        update(Command)
+        .where(Command.id == command.id)
+        .values(
+            rejected_reason=f"telegram_reject:{payload.approver_id}:{reason}",
+            approval_responded_at=datetime.now(UTC),
+            approval_token=None,  # single-use
+        )
+    )
 
     await db.commit()
 

@@ -4,35 +4,25 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from rp_server.models import AgentVersion, Base, Command, Group, Host, SSHKey
+from rp_server.models import AgentVersion, Command, Group, Host, SSHKey
 
-# Postgres-only tests (ARRAY type, triggers)
 pytestmark = pytest.mark.asyncio
 
-
-@pytest.fixture
-async def db_session():
-    """Create test database session with F4 schema."""
-    # Use in-memory SQLite for simple tests, but ARRAY types require postgres
-    # In real CI, this should point to test postgres instance
-    engine = create_async_engine(
-        "postgresql+asyncpg://test:test@localhost/test_rp",
-        echo=False,
-    )
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with async_session() as session:
-        yield session
-
-    await engine.dispose()
+# NOTE: this module used to define its own `db_session` fixture pointing at a
+# hardcoded "postgresql+asyncpg://test:test@localhost/test_rp" -- a database that
+# exists nowhere, with a comment admitting "In real CI, this should point to test
+# postgres instance". Every test here errored at setup with a connection error,
+# and because seven *other* modules also asked for `db_session` (which only ever
+# existed here, module-locally) they errored with "fixture 'db_session' not
+# found". 52 tests in total never ran.
+#
+# The fixture is gone: these tests now use the shared `db_session` from
+# conftest.py, whose SQLite session has ARRAY/JSONB/UUID shims and
+# PRAGMA foreign_keys=ON, which is enough for everything asserted below.
+# The one test that genuinely needs the migrated Postgres schema
+# (test_default_groups_seeded) says so at its own definition.
 
 
 async def test_group_create_and_query(db_session: AsyncSession):
@@ -124,9 +114,22 @@ async def test_ssh_key_cascade_delete(db_session: AsyncSession):
     assert result.scalar_one_or_none() is None
 
 
-async def test_command_immutable_via_trigger(db_session: AsyncSession):
-    """Test commands table is immutable (UPDATE raises exception)."""
-    # Create host
+async def test_command_orm_guard_raises_on_attribute_assignment(db_session: AsyncSession):
+    """Assigning to a persistent Command raises immediately, at assignment time.
+
+    Renamed from ``test_command_immutable_via_trigger``, which was wrong twice
+    over:
+
+    1. It wrapped only ``db_session.commit()`` in ``pytest.raises``, but
+       ``Command.__setattr__`` raises on the assignment itself, one line
+       earlier and outside the context manager -- so the test errored instead
+       of passing, whatever the database did.
+    2. There is no BEFORE UPDATE trigger on ``commands``. Verified against the
+       production database: the only trigger is
+       ``commands_truncate_immutable`` (BEFORE TRUNCATE). The "append-only
+       audit log" property is enforced by the Python guard below and nothing
+       else -- see test_postgres_immutability.py and the PR notes.
+    """
     host = Host(
         hostname="cmd-test",
         os="linux",
@@ -136,7 +139,6 @@ async def test_command_immutable_via_trigger(db_session: AsyncSession):
     db_session.add(host)
     await db_session.commit()
 
-    # Create command
     command = Command(
         host_id=host.id,
         issued_by="test-user",
@@ -147,10 +149,9 @@ async def test_command_immutable_via_trigger(db_session: AsyncSession):
     db_session.add(command)
     await db_session.commit()
 
-    # Try to update (should raise)
-    command.exit_code = 0
-    with pytest.raises(Exception, match="append-only"):
-        await db_session.commit()
+    # The guard fires on assignment, before any flush is attempted.
+    with pytest.raises(RuntimeError, match="append-only"):
+        command.exit_code = 0
 
 
 async def test_command_immutable_via_model(db_session: AsyncSession):
@@ -239,10 +240,17 @@ async def test_agent_version_tracking(db_session: AsyncSession):
     assert isinstance(fetched.last_check, datetime)
 
 
-async def test_default_groups_seeded(db_session: AsyncSession):
-    """Test that migration 003 seeds default groups."""
-    # Query for seeded groups
-    result = await db_session.execute(
+@pytest.mark.postgres
+async def test_default_groups_seeded(pg_session: AsyncSession):
+    """Migration 003 seeds the default groups.
+
+    This one is about the *migrated schema*, not about the ORM, so it cannot run
+    against the in-memory SQLite session (``Base.metadata.create_all`` creates
+    the tables but of course does not replay the migration's INSERTs). It is
+    marked ``postgres`` and takes a session on the alembic-migrated database
+    that CI provisions, i.e. the same thing `alembic upgrade head` ran against.
+    """
+    result = await pg_session.execute(
         select(Group).where(Group.name.in_(["default", "prod", "family", "iarq"]))
     )
     groups = result.scalars().all()

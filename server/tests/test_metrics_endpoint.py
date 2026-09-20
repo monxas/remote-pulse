@@ -4,9 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rp_server.models import Enrollment, Heartbeat, Host
+from rp_server.models import Heartbeat, Host
 
 
 @pytest.mark.asyncio
@@ -15,7 +16,11 @@ async def test_metrics_endpoint_returns_200(client: AsyncClient):
     response = await client.get("/metrics")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
-    assert "version=0.0.4" in response.headers["content-type"]
+    # Compare against the library's own constant instead of hardcoding
+    # "version=0.0.4": prometheus_client now advertises the 1.0.0 text
+    # exposition format, so the literal broke on a dependency bump. Production
+    # already serves version=1.0.0 and Prometheus scrapes it fine.
+    assert response.headers["content-type"] == CONTENT_TYPE_LATEST
 
 
 @pytest.mark.asyncio
@@ -43,21 +48,9 @@ async def test_metrics_after_enroll_and_heartbeat(
     client: AsyncClient, db_session: AsyncSession, enrollment_token: str
 ):
     """Test metrics counters increment after enrollment and heartbeat."""
-    # Create enrollment record
-    from rp_server.auth import decode_enrollment_token
-
-    payload = decode_enrollment_token(enrollment_token)
-
-    enrollment = Enrollment(
-        token_jti=payload["jti"],
-        issued_by="test-user",
-        group_name="test-group",
-        expires_at=datetime.now(UTC) + timedelta(hours=1),
-        max_uses=5,
-        used_count=0,
-    )
-    db_session.add(enrollment)
-    await db_session.commit()
+    # The `enrollment_token` fixture already inserts the matching Enrollment
+    # row; this test used to insert a second one with the same token_jti, which
+    # is UNIQUE, so it died on "UNIQUE constraint failed: enrollments.token_jti".
 
     # Enroll agent
     enroll_response = await client.post(

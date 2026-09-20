@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rp_server.models import Heartbeat, Host
+from rp_server.routers import metrics as metrics_router
 
 
 @pytest.fixture
@@ -165,8 +166,23 @@ async def test_sparkline_invalid_window(client: AsyncClient, host_with_metrics: 
 
 
 @pytest.mark.asyncio
-async def test_sparkline_default_params(client: AsyncClient, host_with_metrics: Host) -> None:
-    """Test sparkline uses defaults when params not specified."""
+async def test_sparkline_default_params(
+    client: AsyncClient, host_with_metrics: Host, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test sparkline uses defaults when params not specified.
+
+    The bucketing query needs TimescaleDB's time_bucket(); this session is
+    SQLite, so the helper is stubbed out -- the assertions below are about
+    default parameter resolution and response shape, not about the SQL. Same
+    approach as _patch_sparkline_helpers in test_dash_api.py. Previously this
+    test just exploded with "no such function: time_bucket".
+    """
+
+    async def _no_points(db, **kwargs) -> list:
+        return []
+
+    monkeypatch.setattr(metrics_router, "_fetch_bucketed_metric", _no_points)
+
     response = await client.get(f"/v1/metrics/{host_with_metrics.id}/sparkline")
 
     assert response.status_code == 200

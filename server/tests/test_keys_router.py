@@ -10,6 +10,13 @@ from rp_server.models import Group, Host, SSHKey
 from rp_server.routers.keys import compute_ssh_fingerprint
 
 
+@pytest.fixture(autouse=True)
+def _authenticated(as_tailnet):
+    """routers/keys.py gates every endpoint on `tailscale_identity` /
+    `tailscale_identity_optional`, added after this module was written.
+    Unauthenticated behaviour is covered by test_tailscale_identity.py."""
+
+
 @pytest.fixture
 async def test_host(db_session):
     """Create a test host."""
@@ -115,12 +122,18 @@ class TestRegisterKey:
     async def test_register_key_fingerprint_mismatch(
         self, client: AsyncClient, test_host, test_group
     ):
-        """Invalid fingerprint returns 400."""
+        """A well-formed fingerprint that doesn't match the pubkey returns 400.
+
+        The fingerprint must still satisfy the schema pattern
+        (``^SHA256:[A-Za-z0-9+/]{43}$``) to reach the handler's mismatch check.
+        The previous value was only 38 chars, so pydantic rejected it with 422
+        and the 400 branch this test exists to cover was never exercised.
+        """
         payload = {
             "host_id": str(test_host.id),
             "user_name": "root",
             "pubkey": SAMPLE_PUBKEY,
-            "fingerprint": "SHA256:wrongfingerprint1234567890123456789012",
+            "fingerprint": "SHA256:" + "A" * 43,
             "algorithm": "ed25519",
         }
 

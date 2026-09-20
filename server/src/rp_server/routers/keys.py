@@ -229,7 +229,15 @@ async def list_ssh_keys(
     return [SSHKeyResponse.model_validate(key) for key in keys]
 
 
-@router.delete("/{fingerprint}", response_model=SSHKeyResponse)
+# `:path` is load-bearing. An SSH SHA256 fingerprint is base64, so it very
+# often contains "/" (e.g. SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU).
+# With a plain `{fingerprint}` the router only captured up to the first slash,
+# so revoking such a key answered 404 and the key stayed active. The agent
+# (`rp keys rotate` -> DELETE /v1/keys/{old_fingerprint}) sends the fingerprint
+# unencoded and swallows the failure as a warning, so rotation silently left the
+# old key valid. This is the only DELETE route on the router, so the greedy
+# converter is unambiguous.
+@router.delete("/{fingerprint:path}", response_model=SSHKeyResponse)
 async def revoke_ssh_key(
     fingerprint: str,
     reason: Annotated[str, Query(min_length=1)],

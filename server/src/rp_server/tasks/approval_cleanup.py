@@ -7,7 +7,7 @@ Runs every 1 minute as background task in server.
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, update
 
 from rp_server.database import get_async_session
 from rp_server.models import Command
@@ -46,11 +46,18 @@ async def cleanup_expired_approvals(ttl_minutes: int = 5) -> int:
         if not commands:
             return 0
 
-        # Mark as rejected
+        # Mark as rejected. Core UPDATE, not ORM attribute assignment: these
+        # rows came out of a SELECT so they are `persistent`, and
+        # Command.__setattr__ raises RuntimeError on any mutation of a
+        # persistent instance. The old loop therefore blew up on the first
+        # expired approval it ever found, taking the whole sweep with it.
         count = 0
         for command in commands:
-            command.rejected_reason = "approval_timeout"
-            command.approval_token = None  # Clear token
+            await db.execute(
+                update(Command)
+                .where(Command.id == command.id)
+                .values(rejected_reason="approval_timeout", approval_token=None)
+            )
             count += 1
 
             logger.info(

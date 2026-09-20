@@ -23,17 +23,25 @@ async def test_enroll_rate_limit_behavior(client: AsyncClient):
     - First 10 requests from same IP in 1min: 200/400 (depending on validity)
     - 11th request: 429 Too Many Requests (Caddy response, not app)
     """
-    # Generate test enrollment request
+    # Schema-complete payload with a bogus token, so the request gets past
+    # pydantic and is actually answered by the enroll handler. The old payload
+    # omitted the (now required) host_fingerprint, so it never reached the
+    # handler at all and returned 422 -- which was not in the accepted list.
     payload = {
         "token": "fake-token-for-rate-limit-test",
         "hostname": "test-host-rate-limit",
         "group": "test",
+        "host_fingerprint": "fp-rate-limit-test",
+        "os": "linux",
+        "arch": "x86_64",
+        "agent_version": "1.0.0",
     }
 
-    # First request should reach the application
-    # (Even if it fails validation, it's not rate-limited yet)
+    # First request should reach the application and be rejected on its merits
+    # (invalid token), not rate-limited.
     response = await client.post("/v1/enroll", json=payload)
     assert response.status_code in [400, 401, 500]  # App validation, not rate limit
+    assert response.status_code != 429
 
     # Document: In production behind Caddy, the 11th request within 1min
     # from the same IP will receive:

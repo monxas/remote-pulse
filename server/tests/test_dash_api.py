@@ -15,12 +15,13 @@ SQLite by overriding the buffer-fetch helpers.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rp_server.deps import current_user
@@ -565,7 +566,13 @@ async def test_sse_endpoint_streams_events(
 ) -> None:
     """End-to-end: subscribe to ``/v1/dash/stream`` and assert we receive events.
 
-    Uses a fresh ASGI transport so we can stream the response.
+    Drives the ASGI app directly instead of going through
+    ``httpx.ASGITransport``. The previous version said it used "a fresh ASGI
+    transport so we can stream the response", but httpx's ASGITransport buffers
+    the whole response body before returning -- against an endpoint that never
+    ends, it simply hung until the 3s timeout and reported an empty buffer (the
+    anyio.WouldBlock in the traceback came from the transport's own receive
+    channel, not from the server).
     """
     admin = User(
         pocketid_sub="admin-stream",
@@ -585,38 +592,64 @@ async def test_sse_endpoint_streams_events(
 
     app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=app)
-    received_events: list[str] = []
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "path": "/v1/dash/stream",
+        "raw_path": b"/v1/dash/stream",
+        "root_path": "",
+        "scheme": "http",
+        "query_string": b"",
+        "headers": [(b"host", b"test"), (b"accept", b"text/event-stream")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+
+    sent: list[dict[str, Any]] = []
+    body_seen = asyncio.Event()
+    request_delivered = False
+
+    async def receive() -> dict[str, Any]:
+        nonlocal request_delivered
+        if not request_delivered:
+            request_delivered = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        # Never disconnect; the endpoint stays open until cancelled.
+        await asyncio.sleep(3600)
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        if message["type"] == "http.response.body" and b"host.heartbeat" in message.get(
+            "body", b""
+        ):
+            body_seen.set()
+
+    app_task = asyncio.create_task(app(scope, receive, send))
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-
-            async def reader() -> None:
-                async with ac.stream("GET", "/v1/dash/stream") as resp:
-                    assert resp.status_code == 200
-                    assert "text/event-stream" in resp.headers["content-type"]
-                    async for line in resp.aiter_lines():
-                        received_events.append(line)
-                        if any("host.heartbeat" in e for e in received_events):
-                            return
-
-            reader_task = asyncio.create_task(reader())
-            # Give the SSE handler time to subscribe.
-            await asyncio.sleep(0.1)
-            await event_bus.publish(
-                "host.heartbeat",
-                {"host_id": "abc", "group_name": "prod", "cpu_pct": 1.0},
-            )
-            try:
-                await asyncio.wait_for(reader_task, timeout=3.0)
-            except TimeoutError:
-                reader_task.cancel()
-                pytest.fail(
-                    f"SSE event not received in time. Buffer: {received_events!r}"
-                )
+        # Let the handler start and subscribe to the bus.
+        await asyncio.sleep(0.1)
+        await event_bus.publish(
+            "host.heartbeat",
+            {"host_id": "abc", "group_name": "prod", "cpu_pct": 1.0},
+        )
+        try:
+            await asyncio.wait_for(body_seen.wait(), timeout=5.0)
+        except TimeoutError:
+            pytest.fail(f"SSE event not received in time. Sent: {sent!r}")
     finally:
+        app_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await app_task
         _clear_user_override()
         app.dependency_overrides.pop(get_db, None)
 
-    assert any("event: host.heartbeat" in line for line in received_events), (
-        f"expected host.heartbeat event in: {received_events!r}"
-    )
+    start_msg = next(m for m in sent if m["type"] == "http.response.start")
+    assert start_msg["status"] == 200
+    headers = {k.decode().lower(): v.decode() for k, v in start_msg["headers"]}
+    assert "text/event-stream" in headers["content-type"]
+
+    body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+    assert b"event: host.heartbeat" in body, f"expected host.heartbeat event in: {body!r}"

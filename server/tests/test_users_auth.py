@@ -9,8 +9,12 @@ from rp_server.models import Host, User
 @pytest.mark.asyncio
 async def test_current_user_creates_on_first_login(client: AsyncClient, db_session):
     """Test that current_user dependency creates user on first login."""
+    # Hits /v1/dash/me, which actually depends on `current_user`. The old test
+    # called "/dash", which is now just a 307 redirect to "/dash/" (it became a
+    # prefixed router), and httpx does not follow redirects by default -- so the
+    # dependency under test never ran and no user was ever created.
     response = await client.get(
-        "/dash",
+        "/v1/dash/me",
         headers={
             "X-Forwarded-User": "test-sub-123",
             "X-Forwarded-Email": "test@example.com",
@@ -18,9 +22,7 @@ async def test_current_user_creates_on_first_login(client: AsyncClient, db_sessi
         },
     )
 
-    # Should fail with 200 (dashboard renders) or specific error if templates missing
-    # For now, just verify it doesn't 401
-    assert response.status_code != 401
+    assert response.status_code == 200
 
     # Verify user was created in DB
     from sqlalchemy import select

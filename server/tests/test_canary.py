@@ -9,6 +9,11 @@ from sqlalchemy import select
 from rp_server.models import CanaryDeploy, Command, Host
 
 
+@pytest.fixture(autouse=True)
+def _authenticated(as_admin):
+    """/v1/admin/commands/canary-* is require_admin; see test_approvals.py."""
+
+
 @pytest.fixture
 async def test_hosts(db_session):
     """Create test hosts in prod group."""
@@ -109,7 +114,11 @@ async def test_canary_upgrade_nonexistent_group(client: AsyncClient):
 
     response = await client.post("/v1/admin/commands/canary-upgrade", json=payload)
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    # The handler says "No hosts found in group <name>"; the old assertion
+    # looked for the literal "not found", which never appeared in it.
+    detail = response.json()["detail"].lower()
+    assert "no hosts found" in detail
+    assert "nonexistent" in detail
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,7 @@ from sqlalchemy import ColumnDefault
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.pool import NullPool
 
 # --- SQLite compatibility shims for local pytest runs --------------------- #
 # Production runs on PostgreSQL; CI uses a real Postgres service. The
@@ -140,7 +141,7 @@ _patch_pg_types_for_sqlite()
 from rp_server.auth import create_enrollment_token  # noqa: E402
 from rp_server.database import get_db  # noqa: E402
 from rp_server.main import app  # noqa: E402
-from rp_server.models import Base, Enrollment  # noqa: E402
+from rp_server.models import Base, Enrollment, User  # noqa: E402
 
 
 def _install_sqlite_python_defaults() -> None:
@@ -241,6 +242,127 @@ async def test_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
     await engine.dispose()
+
+
+@pytest.fixture
+async def pg_session() -> AsyncGenerator[AsyncSession, None]:
+    """Session on the real, alembic-migrated Postgres that CI provisions.
+
+    For the handful of tests marked ``postgres``: they assert things only a real
+    Postgres has -- migration-seeded rows, TRUNCATE triggers, ARRAY semantics --
+    and previously took the SQLite ``test_db`` fixture instead, which is why
+    test_postgres_immutability.py failed on "near TRUNCATE: syntax error"
+    despite being labelled "Postgres-real".
+
+    Uses ``POSTGRES_URL`` from the environment (the workflow points it at the
+    service container). Everything runs inside a transaction that is rolled back
+    afterwards, so the shared database is left exactly as alembic made it.
+    """
+    url = os.environ.get("POSTGRES_URL", "")
+    if "postgresql" not in url:
+        pytest.fail(
+            "pg_session requires POSTGRES_URL to point at a real Postgres; "
+            f"got {url!r}. These tests are selected with `-m postgres`."
+        )
+
+    engine = create_async_engine(url, poolclass=NullPool)
+    conn = await engine.connect()
+    trans = await conn.begin()
+    session = AsyncSession(
+        bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
+    )
+    try:
+        yield session
+    finally:
+        await session.close()
+        await trans.rollback()
+        await conn.close()
+        await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_signing_key(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the Ed25519 server signing key out of /etc/rp.
+
+    ``ServerSigningKey.load_or_generate()`` defaults to /etc/rp and the
+    enroll / heartbeat / keys / commands routers all call it through a lazy
+    module-level singleton, so simply touching those endpoints from a test
+    tries to generate a real key under /etc. Unprivileged runners get
+    PermissionError (12 tests), and a privileged one would be worse: the
+    suite would write to a real system path.
+
+    test_dash_phase2, test_user_permissions, test_short_code_enrollment and
+    others each grew their own local copy of this; hoisted here so the whole
+    suite is hermetic. monkeypatch restores the singletons after each test.
+    """
+    from rp_server.routers import commands as _commands
+    from rp_server.routers import enroll as _enroll
+    from rp_server.routers import keys as _keys
+    from rp_server.signing import ServerSigningKey
+
+    key = ServerSigningKey.load_or_generate(tmp_path / "signing")
+    monkeypatch.setattr(_commands, "_signing_key", key, raising=False)
+    monkeypatch.setattr(_enroll, "_server_signing_key", key, raising=False)
+    monkeypatch.setattr(_keys, "_server_signing_key", key, raising=False)
+
+
+@pytest.fixture
+async def as_admin(test_db: AsyncSession) -> AsyncGenerator[User, None]:
+    """Authenticate the test client as a real admin row.
+
+    Opt-in on purpose -- it is NOT autouse, so the modules that assert on
+    unauthenticated behaviour keep asserting it. `require_admin` and
+    `require_operator_or_admin` both resolve through `current_user`, so
+    overriding that one dependency covers them.
+    """
+    from rp_server.deps import current_user
+
+    user = User(
+        pocketid_sub=f"test-admin-{_uuid.uuid4().hex[:8]}",
+        email=f"admin-{_uuid.uuid4().hex[:6]}@test.local",
+        name="Test Admin",
+        role="admin",
+        accessible_groups=[],
+    )
+    test_db.add(user)
+    await test_db.commit()
+    await test_db.refresh(user)
+
+    async def _current_user() -> User:
+        return user
+
+    app.dependency_overrides[current_user] = _current_user
+    yield user
+    app.dependency_overrides.pop(current_user, None)
+
+
+@pytest.fixture
+def as_tailnet() -> Generator[None, None, None]:
+    """Present the request as coming from a verified tailnet identity.
+
+    routers/keys.py gates on `tailscale_identity` / `tailscale_identity_optional`
+    rather than on `current_user`.
+    """
+    from rp_server.deps import (
+        TailscaleIdentity,
+        tailscale_identity,
+        tailscale_identity_optional,
+    )
+
+    identity = TailscaleIdentity(
+        login="test@monxas.casa",
+        name="Test Tailnet User",
+        node_id="test-node",
+    )
+
+    async def _identity() -> TailscaleIdentity:
+        return identity
+
+    app.dependency_overrides[tailscale_identity] = _identity
+    app.dependency_overrides[tailscale_identity_optional] = _identity
+    yield
+    app.dependency_overrides.pop(tailscale_identity, None)
+    app.dependency_overrides.pop(tailscale_identity_optional, None)
 
 
 @pytest.fixture

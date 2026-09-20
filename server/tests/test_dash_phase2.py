@@ -471,7 +471,10 @@ async def test_pending_approvals_visible_only_to_acl(
     finally:
         _clear_user_override()
     assert resp.status_code == 200
-    items = resp.json()
+    # The endpoint returns the SPA-shaped envelope {"approvals": [...]}
+    # (PendingApprovalsResponse). The old test indexed the response directly,
+    # which on a dict meant items[0] -> KeyError: 0.
+    items = resp.json()["approvals"]
     assert len(items) == 1
     assert items[0]["host_hostname"] == "fam-h"
 
