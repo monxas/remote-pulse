@@ -244,6 +244,20 @@ async def test_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
+async def db_session(test_db: AsyncSession) -> AsyncSession:
+    """Alias of ``test_db``.
+
+    Seven test modules (approvals, canary, keys_router, metrics,
+    metrics_endpoint, agent_commands, users_auth) ask for a ``db_session``
+    fixture that only ever existed module-locally inside test_models_f4.py, so
+    pytest reported "fixture 'db_session' not found" and errored out 52 tests at
+    setup. They use it exactly like ``test_db``, so it is exposed here under
+    both names rather than renamed across eight files.
+    """
+    return test_db
+
+
+@pytest.fixture
 async def client(test_db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Create test HTTP client with overridden DB dependency."""
 
