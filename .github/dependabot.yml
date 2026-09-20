@@ -44,10 +44,14 @@ updates:
       agent-seguridad:
         applies-to: security-updates
         patterns: ['*']
+      # Sin `update-types` a propósito: el `allow` de arriba ya deja fuera los
+      # mayores, y con `update-types: [minor, patch]` AQUÍ se escapaban del grupo
+      # los PRs de rango de requirements.txt ("update requests requirement from
+      # >=2.28.0 to >=2.34.2"), que no casan con esos tipos: la primera pasada
+      # abrió 4 PRs sueltos en plundrio-ecosystem por eso mismo.
       agent-mantenimiento:
         applies-to: version-updates
         patterns: ['*']
-        update-types: [minor, patch]
 
   # --------------------------------------------------------------- servidor
   # `uv`, no `pip`: /server tiene uv.lock y es el ecosistema que GitHub eligió por
@@ -76,7 +80,6 @@ updates:
       server-mantenimiento:
         applies-to: version-updates
         patterns: ['*']
-        update-types: [minor, patch]
 
   # --------------------------------------------------------------- SPA web
   # Faltaba por completo, y ahí estaban las alertas altas (js-yaml, extract-zip):
@@ -112,7 +115,6 @@ updates:
         applies-to: version-updates
         patterns: ['*']
         exclude-patterns: ['vitest', '@vitest/*']
-        update-types: [minor, patch]
 
   # --------------------------------------------------------------- docs
   - package-ecosystem: pip            # docs/requirements.txt (mkdocs)
@@ -135,7 +137,6 @@ updates:
       docs-mantenimiento:
         applies-to: version-updates
         patterns: ['*']
-        update-types: [minor, patch]
 
   # --------------------------------------------------------------- GitHub Actions
   - package-ecosystem: github-actions
@@ -158,4 +159,3 @@ updates:
       actions-mantenimiento:
         applies-to: version-updates
         patterns: ['*']
-        update-types: [minor, patch]
