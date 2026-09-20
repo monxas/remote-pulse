@@ -49,8 +49,14 @@ jobs:
     # Only POSTGRES_URL was ever set, so `alembic upgrade head` and both pytest
     # steps would have died on a pydantic ValidationError -- invisible until now
     # because the job always failed earlier, at `ruff check`.
+    # `tests/conftest.py` pins POSTGRES_URL to test:test@localhost:5432/test in
+    # an autouse fixture, so that is the DSN the suite really uses no matter what
+    # the workflow exports. The service below is provisioned to match it, and
+    # alembic points at the same database so the tests that open their own
+    # engine (test_models_f4) find a migrated schema instead of
+    # InvalidPasswordError.
     env:
-      POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
+      POSTGRES_URL: postgresql+asyncpg://test:test@localhost:5432/test
       JWT_SECRET: ci-only-not-a-real-secret-0123456789abcdef
     defaults:
       run:
@@ -64,12 +70,13 @@ jobs:
         # available'. Matches production (LXC 280: PG 16.15 + TimescaleDB 2.27.1).
         image: timescale/timescaledb:latest-pg16
         env:
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: remote_pulse_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test -d test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -88,11 +95,24 @@ jobs:
       - name: Ruff check
         run: uv run ruff check .
 
+      # ServerSigningKey.load_or_generate() defaults to /etc/rp and the enroll /
+      # heartbeat / keys routers call it with no override, so hitting those
+      # endpoints in a test generates a real Ed25519 key on disk. Production has
+      # this directory owned by the `rp` user; the runner does not, hence
+      # PermissionError. Created here rather than by changing how the server
+      # resolves its key path, which is a behaviour change for a live service.
+      - name: Provision server key dir
+        run: sudo install -d -o "$USER" -m 0700 /etc/rp
+
       - name: Alembic upgrade
         run: uv run alembic upgrade head
 
+      # `-m "not postgres"` deselects the tests that need a real Postgres via
+      # testcontainers; they run in the dedicated step below. Without it they ran
+      # twice, and the first run hit them against in-memory SQLite, which cannot
+      # do TRUNCATE or bind a UUID.
       - name: Pytest (full suite)
-        run: uv run pytest -v
+        run: uv run pytest -v -m "not postgres"
 
       - name: Pytest (Postgres-only — audit log immutability)
         run: uv run pytest -v -m postgres
