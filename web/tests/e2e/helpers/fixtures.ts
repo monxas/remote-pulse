@@ -55,15 +55,17 @@ export function makeHost(overrides: Partial<HostFixture> = {}): HostFixture {
   };
 }
 
-export function makeOverview(overrides: Partial<{
-  total: number;
-  online: number;
-  stale: number;
-  offline: number;
-  pending_approvals: number;
-  online_pct: number;
-  online_pct_24h_ago: number;
-}> = {}) {
+export function makeOverview(
+  overrides: Partial<{
+    total: number;
+    online: number;
+    stale: number;
+    offline: number;
+    pending_approvals: number;
+    online_pct: number;
+    online_pct_24h_ago: number;
+  }> = {},
+) {
   return {
     total: 3,
     online: 1,

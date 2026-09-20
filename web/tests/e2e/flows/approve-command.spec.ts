@@ -39,21 +39,18 @@ test.describe('flow: approve a pending command', () => {
       }),
     );
 
-    await page.route(
-      '**/v1/dash/approvals/cmd-pending-1/approve',
-      (route: Route) => {
-        if (route.request().method() !== 'POST') return route.fallback();
-        approveCalled += 1;
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            ok: true,
-            command: { ...pending, status: 'approved', approved_by: 'admin@test.local' },
-          }),
-        });
-      },
-    );
+    await page.route('**/v1/dash/approvals/cmd-pending-1/approve', (route: Route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      approveCalled += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          command: { ...pending, status: 'approved', approved_by: 'admin@test.local' },
+        }),
+      });
+    });
 
     // Side-effects of the approve mutation invalidate other caches.
     // Stub them with empty responses so the SPA does not show error

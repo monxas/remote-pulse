@@ -12,9 +12,7 @@ import { mockAdminAuth, mockSseSilent } from '../helpers/auth';
  */
 
 test.describe('flow: audit timeline', () => {
-  test('admin sees mixed action types in DESC order and can filter by action', async ({
-    page,
-  }) => {
+  test('admin sees mixed action types in DESC order and can filter by action', async ({ page }) => {
     await mockAdminAuth(page);
     await mockSseSilent(page);
 
@@ -100,11 +98,7 @@ test.describe('flow: audit timeline', () => {
     const orderedActions = await allRows.evaluateAll((nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset.action ?? ''),
     );
-    expect(orderedActions).toEqual([
-      'command.issued',
-      'settings.group.create',
-      'host.enrolled',
-    ]);
+    expect(orderedActions).toEqual(['command.issued', 'settings.group.create', 'host.enrolled']);
 
     // Tone-based dot icons surface per ACTION_TONE table. We assert the
     // visible action-label texts emitted by `AuditEvent.svelte`.
