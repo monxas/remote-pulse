@@ -73,8 +73,14 @@ async def trigger_webhook(event: str, payload: dict) -> None:
     Note:
         No-op if webhook URL not configured. Real implementation will use httpx.
     """
-    # TODO: Implement webhook trigger when n8n endpoint configured
-    logger.info("webhook_stub", event=event, payload=payload)
+    # Not yet implemented; will POST to the n8n endpoint once configured.
+    #
+    # NOTE: the kwarg must not be called `event`. structlog's
+    # BoundLogger.info(event, **kw) already binds the first positional
+    # parameter to that name, so `logger.info("webhook_stub", event=event)`
+    # raised TypeError: got multiple values for argument 'event' -- on every
+    # call, i.e. on every key register / re-register / revoke.
+    logger.info("webhook_stub", webhook_event=event, payload=payload)
 
 
 @router.post("", response_model=SSHKeyResponse, status_code=status.HTTP_201_CREATED)
