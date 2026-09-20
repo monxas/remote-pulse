@@ -35,14 +35,12 @@
     testId,
   }: Props = $props();
 
-  // Local state so the input doesn't flicker between keystrokes — we debounce
-  // the URL update to keep router churn off the keyboard hot path. We
-  // initialise to `''` and let the effect below mirror `value` in once
-  // the component is mounted (avoids the `state_referenced_locally` warn).
-  let local = $state('');
-  $effect(() => {
-    local = value;
-  });
+  // Local copy so the input doesn't flicker between keystrokes — we debounce
+  // the URL update to keep router churn off the keyboard hot path. A writable
+  // `$derived` mirrors `value` without the `state_referenced_locally` warning
+  // and still accepts the local assignments in onInput/reset below; it also
+  // renders the incoming `value` on first paint instead of an empty box.
+  let local = $derived(value);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
