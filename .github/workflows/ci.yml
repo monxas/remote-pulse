@@ -57,7 +57,12 @@ jobs:
         working-directory: server
     services:
       postgres:
-        image: postgres:16
+        # Must ship TimescaleDB: migration 001 runs
+        # `CREATE EXTENSION IF NOT EXISTS timescaledb` and the dashboard
+        # queries call `time_bucket()`. Plain `postgres:16` made
+        # `alembic upgrade head` fail with 'extension "timescaledb" is not
+        # available'. Matches production (LXC 280: PG 16.15 + TimescaleDB 2.27.1).
+        image: timescale/timescaledb:latest-pg16
         env:
           POSTGRES_PASSWORD: testpass
           POSTGRES_DB: remote_pulse_test
