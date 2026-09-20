@@ -44,6 +44,14 @@ jobs:
   lint-and-test-server:
     name: Server
     runs-on: ubuntu-latest
+    # Hoisted to job level: `rp_server.config` builds `Settings()` at import
+    # time, and it requires JWT_SECRET (min 32 chars) as well as POSTGRES_URL.
+    # Only POSTGRES_URL was ever set, so `alembic upgrade head` and both pytest
+    # steps would have died on a pydantic ValidationError -- invisible until now
+    # because the job always failed earlier, at `ruff check`.
+    env:
+      POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
+      JWT_SECRET: ci-only-not-a-real-secret-0123456789abcdef
     defaults:
       run:
         working-directory: server
@@ -76,18 +84,12 @@ jobs:
         run: uv run ruff check .
 
       - name: Alembic upgrade
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run alembic upgrade head
 
       - name: Pytest (full suite)
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run pytest -v
 
       - name: Pytest (Postgres-only — audit log immutability)
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run pytest -v -m postgres
 
   secrets-scan:

@@ -58,8 +58,13 @@ async def test_rustdesk_detect_macos_app_bundle(monkeypatch):
 
     real_exists = Path.exists
 
+    macos_bundle = Path("/Applications/RustDesk.app")
+
     def fake_exists(self):
-        if str(self) == "/Applications/RustDesk.app":
+        # Compare as Path, not str: on Windows `str(Path("/Applications/..."))`
+        # renders with backslashes, so the old string equality never matched and
+        # this test failed on the windows-latest leg of the matrix.
+        if self == macos_bundle:
             return True
         return real_exists(self)
 
