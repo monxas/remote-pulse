@@ -36,8 +36,41 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.14.0",
     "pyinstaller>=6.0.0",
-    "ruff>=0.4.0",
+    # PINNED, deliberately. `ruff>=0.4.0` resolved to whatever was newest at CI
+    # time, so when ruff widened its *default* rule selection the Agent job went
+    # red on code nobody had touched. A linter that can fail a build is part of
+    # the build: it gets an exact version, bumped on purpose via Dependabot.
+    "ruff==0.16.8",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Spelled out on purpose. With no `select`, ruff applies its own defaults, and
+# those defaults are a moving target across releases -- that is exactly how this
+# repo ended up with 237 lint findings without a single source commit. An
+# explicit list means `ruff check` only changes when we change it.
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort -- import ordering
+    "UP",     # pyupgrade
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+    "RUF100", # unused noqa directives
+]
+# Not enabled yet -- each needs a code-review pass, not a mechanical fix, and
+# silently auto-"fixing" them would be worse than leaving them visible:
+#   ASYNC220/221/230  blocking subprocess + open() calls inside async defs
+#                     (src/rp/installers/*) -- these really do stall the event
+#                     loop and should be moved to asyncio/threads.
+#   PLW1510           subprocess.run() without check= -- swallows failures.
+#   BLE001            42 blind `except Exception` handlers.
+#   SIM117, RUF059    nesting / unused unpacked vars -- cosmetic, noisy diff.
+# Tracked separately so they do not get lost behind a green check.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

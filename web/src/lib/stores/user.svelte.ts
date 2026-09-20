@@ -37,7 +37,8 @@ function createUserStore() {
       if (value.user_role === 'admin') return true;
       const perms = value.permissions ?? [];
       return perms.some(
-        (p) => p.action === action && (p.scope === '*' || (scope !== undefined && p.scope === scope)),
+        (p) =>
+          p.action === action && (p.scope === '*' || (scope !== undefined && p.scope === scope)),
       );
     },
   };

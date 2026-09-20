@@ -7,7 +7,7 @@ This demonstrates the agent flow without requiring a real server.
 import asyncio
 
 from rp.metrics import MetricsCollector
-from rp.platform_detect import get_platform_info, get_host_fingerprint
+from rp.platform_detect import get_host_fingerprint, get_platform_info
 
 
 def example_platform_detection():
@@ -43,9 +43,7 @@ def example_metrics_collection():
     if metrics["load_1m"] is not None:
         print(f"Load Average (1m): {metrics['load_1m']:.2f}")
 
-    print(
-        f"Uptime: {metrics['uptime_s'] // 3600}h {(metrics['uptime_s'] % 3600) // 60}m"
-    )
+    print(f"Uptime: {metrics['uptime_s'] // 3600}h {(metrics['uptime_s'] % 3600) // 60}m")
     print()
 
 

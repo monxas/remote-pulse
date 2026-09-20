@@ -21,7 +21,6 @@ from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import AuditEvent, Group, User
 
-
 # --------------------------------------------------------------------------- #
 # Helpers (mirrored from test_dash_settings.py, kept local to keep this file
 # self-contained — they're tiny and the duplication isn't worth a shared

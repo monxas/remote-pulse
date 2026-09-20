@@ -16,20 +16,11 @@ The fixtures are reused from ``test_dash_phase2.py`` via direct imports.
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from rp_server.deps import current_user
-from rp_server.main import app
-from rp_server.models import AuditEvent as AuditEventRow
-from rp_server.models import Enrollment, User
-from rp_server.routers import commands as commands_router
-from rp_server.routers import dash_commands as dash_commands_router
-
 from test_dash_phase2 import (
     _clear_user_override,
     _make_command,
@@ -37,6 +28,10 @@ from test_dash_phase2 import (
     _make_user,
     _override_user,
 )
+
+from rp_server.models import AuditEvent as AuditEventRow
+from rp_server.routers import commands as commands_router
+from rp_server.routers import dash_commands as dash_commands_router
 
 
 @pytest.fixture(autouse=True)
@@ -209,7 +204,7 @@ async def test_date_range_from_ts_to_ts(
 ) -> None:
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="dr-host", group="prod")
-    base = datetime.now(timezone.utc).replace(microsecond=0)
+    base = datetime.now(UTC).replace(microsecond=0)
     # Three commands across a known timeline.
     await _make_command(test_db, host=host, issued_at=base - timedelta(hours=3))
     await _make_command(test_db, host=host, issued_at=base - timedelta(hours=2))
@@ -235,8 +230,8 @@ async def test_from_ts_not_less_than_to_ts_is_422(
 ) -> None:
     admin = await _make_user(test_db, role="admin")
     _override_user(admin)
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    earlier = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace(
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    earlier = (datetime.now(UTC) - timedelta(hours=1)).isoformat().replace(
         "+00:00", "Z"
     )
     try:
@@ -261,7 +256,7 @@ async def test_combined_actor_action_date(
 ) -> None:
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="combo-host", group="prod")
-    base = datetime.now(timezone.utc).replace(microsecond=0)
+    base = datetime.now(UTC).replace(microsecond=0)
     await _make_command(
         test_db, host=host, issued_by="alice@x", issued_at=base - timedelta(hours=2)
     )
@@ -296,7 +291,7 @@ async def test_offset_pagination_and_total(
 ) -> None:
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="off-host", group="prod")
-    base = datetime.now(timezone.utc)
+    base = datetime.now(UTC)
     for i in range(7):
         await _make_command(test_db, host=host, issued_at=base - timedelta(minutes=i))
     _override_user(admin)

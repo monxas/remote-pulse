@@ -5,20 +5,20 @@ import structlog
 
 from rp import __version__
 from rp.commands.compat import compat_cmd
-from rp.commands.install import install
-from rp.commands.register import register
-from rp.commands.heartbeat import heartbeat
-from rp.commands.status import status
-from rp.commands.version import version
-from rp.commands.uninstall import uninstall
 from rp.commands.dash import dash
-from rp.commands.local import local
-from rp.commands.keys import keys
-from rp.commands.ssh import ssh
-from rp.commands.screen import screen
 from rp.commands.exec import exec_
-from rp.commands.upgrade import upgrade
+from rp.commands.heartbeat import heartbeat
+from rp.commands.install import install
 from rp.commands.install_screen import install_screen
+from rp.commands.keys import keys
+from rp.commands.local import local
+from rp.commands.register import register
+from rp.commands.screen import screen
+from rp.commands.ssh import ssh
+from rp.commands.status import status
+from rp.commands.uninstall import uninstall
+from rp.commands.upgrade import upgrade
+from rp.commands.version import version
 
 # Configure structured logging
 structlog.configure(
@@ -41,7 +41,6 @@ def main():
 
     Universal connectivity, health monitoring, and remote control agent.
     """
-    pass
 
 
 # Register commands

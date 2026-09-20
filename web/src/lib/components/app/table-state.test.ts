@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  applyTableState,
-  compareValues,
-  nextSortState,
-} from './table-state.svelte';
+import { applyTableState, compareValues, nextSortState } from './table-state.svelte';
 
 type Row = { name: string; count: number; desc: string | null };
 

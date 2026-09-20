@@ -6,11 +6,11 @@ consults local flags/whitelists before executing commands.
 Mitigates server compromise (ADR-0008 review C3).
 """
 
+import fnmatch
 import time
 from enum import StrEnum
 from pathlib import Path
-from typing import Optional
-import fnmatch
+
 import structlog
 
 logger = structlog.get_logger()
@@ -41,7 +41,7 @@ class LocalPolicy:
 
     POLICY_DIR = Path("/etc/rp")
 
-    def __init__(self, policy_dir: Optional[Path] = None):
+    def __init__(self, policy_dir: Path | None = None):
         """Initialize policy engine.
 
         Args:
@@ -49,9 +49,7 @@ class LocalPolicy:
         """
         self.policy_dir = policy_dir or self.POLICY_DIR
 
-    def evaluate(
-        self, command_type: str, payload: dict, group: str
-    ) -> tuple[CommandDecision, str]:
+    def evaluate(self, command_type: str, payload: dict, group: str) -> tuple[CommandDecision, str]:
         """Evaluate command against local policy.
 
         Args:
@@ -162,9 +160,7 @@ class LocalPolicy:
             f"service_restart denied: {service_name} not in /etc/rp/restart-whitelist",
         )
 
-    def _eval_file_read(
-        self, payload: dict, is_sensitive: bool
-    ) -> tuple[CommandDecision, str]:
+    def _eval_file_read(self, payload: dict, is_sensitive: bool) -> tuple[CommandDecision, str]:
         """Evaluate file_read command."""
         path = payload.get("path", "")
 
@@ -194,9 +190,7 @@ class LocalPolicy:
             f"file_read denied: {path} not in /etc/rp/read-allowlist",
         )
 
-    def _eval_file_write(
-        self, payload: dict, is_sensitive: bool
-    ) -> tuple[CommandDecision, str]:
+    def _eval_file_write(self, payload: dict, is_sensitive: bool) -> tuple[CommandDecision, str]:
         """Evaluate file_write command."""
         path = payload.get("path", "")
 
@@ -231,8 +225,7 @@ class LocalPolicy:
             )
 
         if not any(
-            resolved == prefix or _is_relative_to(resolved, prefix)
-            for prefix in safe_prefixes
+            resolved == prefix or _is_relative_to(resolved, prefix) for prefix in safe_prefixes
         ):
             return (
                 CommandDecision.REQUIRE_APPROVAL,
@@ -265,7 +258,8 @@ class LocalPolicy:
         if claimed_sha != stored_sha:
             return (
                 CommandDecision.DENY,
-                f"ssh_keys_sync denied: SHA256 mismatch (expected {stored_sha[:8]}..., got {claimed_sha[:8]}...)",
+                f"ssh_keys_sync denied: SHA256 mismatch "
+                f"(expected {stored_sha[:8]}..., got {claimed_sha[:8]}...)",
             )
 
         return (CommandDecision.ALLOW, "ssh_keys_sync allowed: SHA256 verified")
@@ -285,13 +279,15 @@ class LocalPolicy:
             if target_major != current_major:
                 return (
                     CommandDecision.REQUIRE_APPROVAL,
-                    f"agent_upgrade requires approval: major version change {current_version} -> {target_version}",
+                    f"agent_upgrade requires approval: major version change "
+                    f"{current_version} -> {target_version}",
                 )
 
         except (ValueError, IndexError):
             return (
                 CommandDecision.DENY,
-                f"agent_upgrade denied: invalid version format (current={current_version}, target={target_version})",
+                f"agent_upgrade denied: invalid version format "
+                f"(current={current_version}, target={target_version})",
             )
 
         return (
@@ -343,9 +339,7 @@ class LocalPolicy:
         try:
             lines = file_path.read_text().splitlines()
             return [
-                line.strip()
-                for line in lines
-                if line.strip() and not line.strip().startswith("#")
+                line.strip() for line in lines if line.strip() and not line.strip().startswith("#")
             ]
         except OSError as e:
             logger.warning("failed to read file", path=str(file_path), error=str(e))
@@ -391,15 +385,13 @@ class TelegramApprovalRequest:
         Raises:
             NotImplementedError: Will be implemented in F4-6
         """
-        raise NotImplementedError(
-            "Telegram approval flow not yet implemented (ticket F4-6)"
-        )
+        raise NotImplementedError("Telegram approval flow not yet implemented (ticket F4-6)")
 
 
 # Policy file management helpers
 
 
-def ensure_policy_dir(policy_dir: Optional[Path] = None) -> Path:
+def ensure_policy_dir(policy_dir: Path | None = None) -> Path:
     """Ensure policy directory exists.
 
     Args:
@@ -414,7 +406,7 @@ def ensure_policy_dir(policy_dir: Optional[Path] = None) -> Path:
 
 
 def touch_flag(
-    flag_name: str, policy_dir: Optional[Path] = None, ttl_hours: Optional[int] = None
+    flag_name: str, policy_dir: Path | None = None, ttl_hours: int | None = None
 ) -> Path:
     """Touch a flag file (create or update mtime).
 
@@ -434,7 +426,7 @@ def touch_flag(
     return flag_path
 
 
-def remove_flag(flag_name: str, policy_dir: Optional[Path] = None) -> bool:
+def remove_flag(flag_name: str, policy_dir: Path | None = None) -> bool:
     """Remove a flag file.
 
     Args:
@@ -455,9 +447,7 @@ def remove_flag(flag_name: str, policy_dir: Optional[Path] = None) -> bool:
     return False
 
 
-def add_to_whitelist(
-    whitelist_name: str, item: str, policy_dir: Optional[Path] = None
-) -> None:
+def add_to_whitelist(whitelist_name: str, item: str, policy_dir: Path | None = None) -> None:
     """Add item to whitelist file.
 
     Args:
@@ -480,9 +470,7 @@ def add_to_whitelist(
         logger.debug("item already in whitelist", whitelist=whitelist_name, item=item)
 
 
-def remove_from_whitelist(
-    whitelist_name: str, item: str, policy_dir: Optional[Path] = None
-) -> bool:
+def remove_from_whitelist(whitelist_name: str, item: str, policy_dir: Path | None = None) -> bool:
     """Remove item from whitelist file.
 
     Args:
@@ -509,7 +497,7 @@ def remove_from_whitelist(
     return False
 
 
-def show_whitelist(whitelist_name: str, policy_dir: Optional[Path] = None) -> list[str]:
+def show_whitelist(whitelist_name: str, policy_dir: Path | None = None) -> list[str]:
     """Show whitelist contents.
 
     Args:
@@ -532,7 +520,7 @@ def show_whitelist(whitelist_name: str, policy_dir: Optional[Path] = None) -> li
     ]
 
 
-def get_flag_status(flag_name: str, policy_dir: Optional[Path] = None) -> dict:
+def get_flag_status(flag_name: str, policy_dir: Path | None = None) -> dict:
     """Get flag file status.
 
     Args:

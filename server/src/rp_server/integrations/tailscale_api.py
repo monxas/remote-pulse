@@ -41,25 +41,21 @@ class TailscaleAuthKeyResponse(BaseModel):
 class TailscaleAPIError(Exception):
     """Base exception for Tailscale API errors."""
 
-    pass
 
 
 class TailscaleAuthenticationError(TailscaleAPIError):
     """Raised when API key is invalid (401)."""
 
-    pass
 
 
 class TailscalePermissionError(TailscaleAPIError):
     """Raised when API key lacks required scope (403)."""
 
-    pass
 
 
 class TailscaleValidationError(TailscaleAPIError):
     """Raised when request payload is invalid (422)."""
 
-    pass
 
 
 class TailscaleAPIClient:

@@ -13,7 +13,7 @@ testcontainer which is beyond this slice.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import AuditEvent, Command, Heartbeat, Host, User
-
 
 # --------------------------------------------------------------------------- #
 # Auth + DB helpers (mirror test_dash_api.py)
@@ -75,7 +74,7 @@ async def _make_host(
     group: str | None = "prod",
     last_seen_s_ago: int | None = 10,
 ) -> Host:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_seen = (
         now - timedelta(seconds=last_seen_s_ago) if last_seen_s_ago is not None else None
     )
@@ -103,7 +102,7 @@ async def _make_command(
     completed: bool = True,
 ) -> Command:
     if issued_at is None:
-        issued_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        issued_at = datetime.now(UTC) - timedelta(hours=1)
     cmd = Command(
         host_id=host_id,
         issued_by="admin@stats.local",
@@ -131,7 +130,7 @@ async def _make_heartbeats(
 
     Used by uptime tests — the endpoint counts distinct 1-minute buckets.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for i in range(count):
         hb = Heartbeat(
             host_id=host_id,
@@ -246,7 +245,7 @@ async def test_stats_commands_success_rate_and_by_type(
     """Commands roll-up: total / succeeded / failed / pending + by_type buckets."""
     admin = await _make_admin(test_db)
     host = await _make_host(test_db, hostname="h-cmds")
-    issued = datetime.now(timezone.utc) - timedelta(hours=2)
+    issued = datetime.now(UTC) - timedelta(hours=2)
     await _make_command(test_db, host_id=host.id, exit_code=0, issued_at=issued)
     await _make_command(test_db, host_id=host.id, exit_code=0, issued_at=issued)
     await _make_command(
@@ -278,7 +277,8 @@ async def test_stats_uptime_per_host(client: AsyncClient, test_db: AsyncSession)
     """Per-host uptime ratio derived from distinct 1-minute heartbeat buckets."""
     admin = await _make_admin(test_db)
     host_a = await _make_host(test_db, hostname="alpha")
-    host_b = await _make_host(test_db, hostname="bravo")
+    # Second host exists so the fleet denominator is 2; the handle is unused.
+    await _make_host(test_db, hostname="bravo")
     # 24h range = 1440 minutes. 60 minutes worth of heartbeats → ~4.17%.
     await _make_heartbeats(test_db, host_id=host_a.id, count=60)
     # No heartbeats for bravo → 0% uptime, 1440 downtime minutes.
@@ -305,7 +305,7 @@ async def test_stats_viewer_scoped_to_own_groups(
     viewer = await _make_viewer(test_db, groups=["family"])
     fam_host = await _make_host(test_db, hostname="fam-1", group="family")
     prod_host = await _make_host(test_db, hostname="prod-1", group="prod")
-    issued = datetime.now(timezone.utc) - timedelta(hours=1)
+    issued = datetime.now(UTC) - timedelta(hours=1)
     await _make_command(test_db, host_id=fam_host.id, exit_code=0, issued_at=issued)
     await _make_command(test_db, host_id=prod_host.id, exit_code=0, issued_at=issued)
     _override_user(viewer)

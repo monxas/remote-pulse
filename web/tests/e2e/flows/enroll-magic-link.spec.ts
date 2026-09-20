@@ -135,9 +135,7 @@ test.describe('flow: issue + revoke enroll magic-link', () => {
     await expect.poll(() => createCount).toBe(1);
     await expect(page.getByTestId('enroll-result-card')).toBeVisible();
     await expect(page.getByTestId('enroll-code-hero')).toContainText(issuedLink.code);
-    await expect(page.getByTestId('enroll-install-cmd')).toContainText(
-      '--code=K7M-X3F',
-    );
+    await expect(page.getByTestId('enroll-install-cmd')).toContainText('--code=K7M-X3F');
     await expect(page.getByTestId('enroll-copy-install')).toBeVisible();
     // Live countdown should render in m / m:ss form (e.g. "29m 59s" or "29m").
     await expect(page.getByTestId('enroll-countdown')).toContainText(/\d+m/);

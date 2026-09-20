@@ -1,6 +1,7 @@
 """Upgrade command - upgrade agent to new version or rollback."""
 
 import asyncio
+
 import click
 import structlog
 
@@ -14,9 +15,7 @@ logger = structlog.get_logger()
 @click.command()
 @click.argument("target_version", required=False)
 @click.option("--rollback", is_flag=True, help="Rollback to N-1 version")
-@click.option(
-    "--dry-run", is_flag=True, help="Show what would happen without executing"
-)
+@click.option("--dry-run", is_flag=True, help="Show what would happen without executing")
 def upgrade(target_version: str | None, rollback: bool, dry_run: bool):
     """Upgrade agent to a new version, or rollback to previous.
 
@@ -78,7 +77,8 @@ async def _upgrade_impl(target_version: str | None, rollback: bool, dry_run: boo
                 )
             else:
                 click.secho(
-                    f"✓ Upgrade successful: {result.old_version} → {result.new_version} ({result.duration_s:.1f}s)",
+                    f"✓ Upgrade successful: {result.old_version} → {result.new_version} "
+                    f"({result.duration_s:.1f}s)",
                     fg="green",
                 )
 

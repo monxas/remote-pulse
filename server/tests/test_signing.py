@@ -1,7 +1,7 @@
 """Tests for Ed25519 command signing."""
 
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -42,7 +42,7 @@ def test_sign_and_verify_roundtrip():
         command_id = "test-cmd-123"
         command_type = "exec_shell"
         payload = {"cmd": "echo hello", "timeout_s": 30}
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         # Sign
         signature = signing_key.sign_command(command_id, command_type, payload, expires_at)
@@ -66,7 +66,7 @@ def test_tampered_payload_rejected():
         command_id = "test-cmd-456"
         command_type = "exec_shell"
         payload = {"cmd": "echo hello"}
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         # Sign original
         signature = signing_key.sign_command(command_id, command_type, payload, expires_at)
@@ -92,7 +92,7 @@ def test_expired_signature_rejected():
         payload = {"cmd": "echo hello"}
 
         # Expires in the past
-        expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
+        expires_at = datetime.now(UTC) - timedelta(seconds=10)
 
         # Sign (note: signing doesn't check expiration, only verification does)
         signature = signing_key.sign_command(command_id, command_type, payload, expires_at)
@@ -122,7 +122,7 @@ def test_wrong_pubkey_rejected():
         command_id = "test-cmd-999"
         command_type = "exec_shell"
         payload = {"cmd": "echo hello"}
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         # Sign with key1
         signature = signing_key1.sign_command(command_id, command_type, payload, expires_at)
@@ -158,7 +158,7 @@ def test_canonical_json_ordering():
 
         command_id = "test-cmd-canonical"
         command_type = "exec_shell"
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         # Same payload, different key order
         payload1 = {"z": "last", "a": "first", "m": "middle"}

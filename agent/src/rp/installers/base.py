@@ -7,7 +7,6 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import structlog
 
@@ -31,11 +30,11 @@ class InstallResult:
 
     tool: str
     installed: bool
-    version: Optional[str] = None
-    method: Optional[str] = None
+    version: str | None = None
+    method: str | None = None
     skipped: bool = False
-    message: Optional[str] = None
-    config_path: Optional[Path] = None
+    message: str | None = None
+    config_path: Path | None = None
     extras: dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
@@ -57,8 +56,8 @@ async def run_subprocess(
     *,
     check: bool = True,
     capture: bool = True,
-    timeout: Optional[float] = None,
-    env: Optional[dict[str, str]] = None,
+    timeout: float | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, str, str]:
     """Run a subprocess with ``shell=False`` and return ``(rc, stdout, stderr)``.
 
@@ -75,7 +74,7 @@ async def run_subprocess(
     """
     logger.debug("subprocess_exec", args=args)
 
-    merged_env: Optional[dict[str, str]] = None
+    merged_env: dict[str, str] | None = None
     if env is not None:
         merged_env = {**os.environ, **env}
 
@@ -91,21 +90,17 @@ async def run_subprocess(
 
     try:
         stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         proc.kill()
         await proc.wait()
-        raise InstallerError(
-            f"Command timed out after {timeout}s: {' '.join(args)}"
-        ) from exc
+        raise InstallerError(f"Command timed out after {timeout}s: {' '.join(args)}") from exc
 
     stdout = stdout_b.decode("utf-8", errors="replace") if stdout_b else ""
     stderr = stderr_b.decode("utf-8", errors="replace") if stderr_b else ""
     rc = proc.returncode or 0
 
     if check and rc != 0:
-        raise InstallerError(
-            f"Command failed ({rc}): {' '.join(args)}\nstderr: {stderr.strip()}"
-        )
+        raise InstallerError(f"Command failed ({rc}): {' '.join(args)}\nstderr: {stderr.strip()}")
 
     return rc, stdout, stderr
 

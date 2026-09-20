@@ -130,13 +130,7 @@ class WebhookCreate(BaseModel):
             # don't try to be exhaustive; the admin owns this URL.
             tail = v[len("http://") :]
             host = tail.split("/", 1)[0].split(":", 1)[0]
-            if (
-                host == "localhost"
-                or host.startswith("127.")
-                or host.startswith("10.")
-                or host.startswith("192.168.")
-                or host.startswith("172.")
-            ):
+            if host == "localhost" or host.startswith(("127.", "10.", "192.168.", "172.")):
                 return v
         raise ValueError("url must be https (or http to localhost/RFC1918)")
 

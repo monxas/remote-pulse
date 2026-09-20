@@ -19,7 +19,6 @@ from rp.installers import rustdesk as rd_mod
 from rp.installers import sunshine as sun_mod
 from rp.installers import vnc as vnc_mod
 
-
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
@@ -59,8 +58,13 @@ async def test_rustdesk_detect_macos_app_bundle(monkeypatch):
 
     real_exists = Path.exists
 
+    macos_bundle = Path("/Applications/RustDesk.app")
+
     def fake_exists(self):
-        if str(self) == "/Applications/RustDesk.app":
+        # Compare as Path, not str: on Windows `str(Path("/Applications/..."))`
+        # renders with backslashes, so the old string equality never matched and
+        # this test failed on the windows-latest leg of the matrix.
+        if self == macos_bundle:
             return True
         return real_exists(self)
 
@@ -96,7 +100,7 @@ async def test_rustdesk_install_linux_deb(monkeypatch):
     monkeypatch.setattr(installer, "detect_version", AsyncMock(return_value="1.2.3"))
 
     fake_deb = MagicMock(spec=Path)
-    fake_deb.__str__ = lambda self: "/tmp/rd.deb"  # noqa: ARG005
+    fake_deb.__str__ = lambda self: "/tmp/rd.deb"
     monkeypatch.setattr(
         installer,
         "_fetch_release_asset",
@@ -284,9 +288,7 @@ async def test_sunshine_install_silent_success(monkeypatch, tmp_path):
 
     fake_installer = tmp_path / "sun.exe"
     fake_installer.write_bytes(b"")
-    monkeypatch.setattr(
-        installer, "_download_asset", AsyncMock(return_value=fake_installer)
-    )
+    monkeypatch.setattr(installer, "_download_asset", AsyncMock(return_value=fake_installer))
     monkeypatch.setattr(installer, "_verify_sha256", AsyncMock(return_value=None))
 
     captured: dict[str, Any] = {}

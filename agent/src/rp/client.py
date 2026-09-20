@@ -1,7 +1,8 @@
 """HTTP client for communicating with Remote-Pulse server."""
 
 import asyncio
-from typing import Any, Optional
+from datetime import UTC
+from typing import Any
 
 import httpx
 import structlog
@@ -25,7 +26,7 @@ class RPClient:
         """
         self.config = config
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._compat_handler = APICompatHandler(config.server_url)
 
     async def __aenter__(self):
@@ -50,7 +51,7 @@ class RPClient:
         self,
         method: str,
         path: str,
-        json: Optional[dict] = None,
+        json: dict | None = None,
         retry_count: int = 3,
     ) -> dict[str, Any]:
         """
@@ -114,8 +115,8 @@ class RPClient:
         token: str,
         hostname: str,
         host_fingerprint: str,
-        group: Optional[str] = None,
-        platform_info: Optional[dict] = None,
+        group: str | None = None,
+        platform_info: dict | None = None,
     ) -> dict[str, Any]:
         """
         Enroll host with server.
@@ -159,12 +160,12 @@ class RPClient:
         # at the top level — not nested under "metrics". Also convert
         # agent_ts from float seconds to ISO so Pydantic's datetime parser
         # accepts it.
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         flat_metrics = dict(metrics)
         if isinstance(flat_metrics.get("agent_ts"), (int, float)):
             flat_metrics["agent_ts"] = datetime.fromtimestamp(
-                flat_metrics["agent_ts"], tz=timezone.utc
+                flat_metrics["agent_ts"], tz=UTC
             ).isoformat()
 
         payload = {"host_id": self.config.host_id, **flat_metrics}
@@ -199,8 +200,7 @@ class RPClient:
             logger.warning("update_capabilities_failed", error=str(e), path=path)
             return {
                 "status": "warning",
-                "message": "Capabilities endpoint not available; "
-                "will resync on next heartbeat.",
+                "message": "Capabilities endpoint not available; will resync on next heartbeat.",
             }
 
     async def poll_commands(self) -> list[dict[str, Any]]:
@@ -235,9 +235,7 @@ class RPClient:
         ``stderr`` (str), ``duration_ms`` (int), ``agent_ts`` (ISO str),
         ``rejected_reason`` (str|None).
         """
-        path = (
-            f"/v1/agent/commands/{command_id}/result?host_id={self.config.host_id}"
-        )
+        path = f"/v1/agent/commands/{command_id}/result?host_id={self.config.host_id}"
         return await self._request("POST", path, json=result, retry_count=3)
 
     async def deregister(self) -> dict[str, Any]:

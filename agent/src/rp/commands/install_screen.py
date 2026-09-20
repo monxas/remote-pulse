@@ -11,7 +11,6 @@ with the existing F1 ``rp install`` command (agent enrollment).
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 import click
 import structlog
@@ -19,8 +18,8 @@ import structlog
 from rp.client import RPClient
 from rp.config import config_exists, load_config
 from rp.installers import (
-    InstallResult,
     InstallerError,
+    InstallResult,
     RustDeskInstaller,
     SunshineInstaller,
     VNCInstaller,
@@ -64,8 +63,8 @@ def install_screen():
 )
 def install_rustdesk_cmd(
     force: bool,
-    password: Optional[str],
-    tailscale_ip: Optional[str],
+    password: str | None,
+    tailscale_ip: str | None,
     skip_server_report: bool,
 ):
     """Install RustDesk client + configure Direct IP mode."""
@@ -82,8 +81,8 @@ def install_rustdesk_cmd(
 async def _install_rustdesk_async(
     *,
     force: bool,
-    password: Optional[str],
-    tailscale_ip: Optional[str],
+    password: str | None,
+    tailscale_ip: str | None,
     skip_server_report: bool,
 ) -> None:
     installer = RustDeskInstaller()
@@ -92,9 +91,7 @@ async def _install_rustdesk_async(
         _render_install_result(result)
 
         click.echo("Configuring Direct IP mode...")
-        cfg = await installer.configure_direct_ip(
-            password=password, tailscale_ip=tailscale_ip
-        )
+        cfg = await installer.configure_direct_ip(password=password, tailscale_ip=tailscale_ip)
         click.secho(
             f"  Direct IP configured, password saved to {cfg['config_path']}",
             fg="green",
@@ -126,7 +123,7 @@ async def _install_rustdesk_async(
 )
 def install_sunshine_cmd(
     force: bool,
-    tailscale_ip: Optional[str],
+    tailscale_ip: str | None,
     skip_server_report: bool,
 ):
     """Install Sunshine GameStream server (Windows GPU hosts only)."""
@@ -148,7 +145,7 @@ def install_sunshine_cmd(
 async def _install_sunshine_async(
     *,
     force: bool,
-    tailscale_ip: Optional[str],
+    tailscale_ip: str | None,
     skip_server_report: bool,
 ) -> None:
     installer = SunshineInstaller()
@@ -196,7 +193,7 @@ async def _install_sunshine_async(
 )
 def install_vnc_cmd(
     force: bool,
-    tailscale_ip: Optional[str],
+    tailscale_ip: str | None,
     port: int,
     skip_server_report: bool,
 ):
@@ -217,7 +214,7 @@ def install_vnc_cmd(
 async def _install_vnc_async(
     *,
     force: bool,
-    tailscale_ip: Optional[str],
+    tailscale_ip: str | None,
     port: int,
     skip_server_report: bool,
 ) -> None:
@@ -274,9 +271,7 @@ async def _status_async() -> None:
     click.echo(f"  {'Tool':<10} {'Installed':<12} {'Version'}")
     click.echo("  " + "-" * 36)
     for tool, installed, version in rows:
-        symbol = (
-            click.style("✓", fg="green") if installed else click.style("✗", fg="red")
-        )
+        symbol = click.style("✓", fg="green") if installed else click.style("✗", fg="red")
         flag = "yes" if installed else "no"
         click.echo(f"  {tool:<10} {symbol} {flag:<10} {version}")
 
@@ -323,7 +318,7 @@ async def _report_capabilities() -> None:
     try:
         async with RPClient(config) as client:
             resp = await client.update_capabilities(caps)
-    except Exception as exc:  # noqa: BLE001 — server breakage shouldn't fail install
+    except Exception as exc:
         logger.warning("report_capabilities_failed", error=str(exc))
         click.secho(f"  Skipping server report: {exc}", fg="yellow")
         return

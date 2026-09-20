@@ -3,13 +3,43 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from rp_server import compat as compat_module
 from rp_server.compat import (
+    SERVER_MIN_AGENT_VERSION,
     get_deprecation_reason,
     is_version_compatible,
     is_version_deprecated,
     semver_compare,
 )
 from rp_server.main import app
+
+
+@pytest.fixture
+def deprecate_0_0_x(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin a deprecated-version pattern for the tests that exercise the rule.
+
+    These tests used to read the real SERVER_DEPRECATED_AGENT_VERSIONS, which
+    was "0.0.x" when they were written and is now `[]` (0.0.x agents are long
+    retired). That made them assert on deployment config rather than on the
+    mechanism, so they broke the moment the list was emptied.
+    """
+    monkeypatch.setattr(compat_module, "SERVER_DEPRECATED_AGENT_VERSIONS", ["0.0.x"])
+
+
+@pytest.fixture
+def deprecate_current_minor(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Deprecate a version that is still >= SERVER_MIN_AGENT_VERSION.
+
+    "deprecated but still served" is only reachable for a version at or above
+    the hard minimum -- with min = 1.0.0 a "0.0.x" agent is rejected with 426
+    before the deprecation check is ever reached, which is why the old
+    middleware test used an impossible combination.
+    """
+    major, minor, _ = SERVER_MIN_AGENT_VERSION.split(".")
+    monkeypatch.setattr(
+        compat_module, "SERVER_DEPRECATED_AGENT_VERSIONS", [f"{major}.{minor}.x"]
+    )
+    return SERVER_MIN_AGENT_VERSION
 
 
 class TestSemverCompare:
@@ -53,25 +83,32 @@ class TestVersionCompatibility:
 class TestDeprecation:
     """Test deprecation checking."""
 
-    def test_wildcard_deprecation(self):
+    def test_wildcard_deprecation(self, deprecate_0_0_x):
         # "0.0.x" should match 0.0.1, 0.0.9, etc.
         assert is_version_deprecated("0.0.5")
         assert is_version_deprecated("0.0.9")
 
-    def test_exact_deprecation(self):
-        # Test exact match (if added to deprecated list)
-        # Note: Current list only has "0.0.x"
+    def test_exact_deprecation(self, deprecate_0_0_x):
+        # A version outside the configured pattern is not deprecated.
         assert not is_version_deprecated("0.1.0")
 
-    def test_not_deprecated(self):
+    def test_nothing_deprecated_by_default(self):
+        # Shipped config deprecates nothing; assert that explicitly instead of
+        # relying on it implicitly like the old tests did.
+        assert compat_module.SERVER_DEPRECATED_AGENT_VERSIONS == []
+        assert not is_version_deprecated("0.0.5")
+
+    def test_not_deprecated(self, deprecate_0_0_x):
         assert not is_version_deprecated("1.0.0")
         assert not is_version_deprecated("0.5.2")
 
-    def test_deprecation_reason(self):
+    def test_deprecation_reason(self, deprecate_0_0_x):
         reason = get_deprecation_reason("0.0.5")
         assert reason is not None
         assert "deprecated" in reason.lower()
-        assert "0.1.0" in reason  # Mentions min version
+        # The message quotes the live minimum rather than a literal "0.1.0",
+        # which is what the old assertion hardcoded.
+        assert SERVER_MIN_AGENT_VERSION in reason
 
         assert get_deprecation_reason("1.0.0") is None
 
@@ -92,19 +129,23 @@ class TestMiddleware:
         assert "Sec-RP-Server-Version" in response.headers
 
     def test_compatible_agent(self, client):
-        """Compatible agent version should work."""
+        """Compatible agent version should work.
+
+        Uses the live SERVER_MIN_AGENT_VERSION; the old literal "0.5.0" fell
+        below the minimum once it was raised to 1.0.0, so this became a 426.
+        """
         headers = {
-            "Sec-RP-Agent-Version": "0.5.0",
+            "Sec-RP-Agent-Version": SERVER_MIN_AGENT_VERSION,
             "Sec-RP-Min-Server": "0.1.0",
         }
         response = client.get("/v1/server/info", headers=headers)
         assert response.status_code == 200
         assert response.headers["Sec-RP-Deprecated"] == "false"
 
-    def test_deprecated_agent(self, client):
+    def test_deprecated_agent(self, client, deprecate_current_minor):
         """Deprecated agent should still work but receive warning."""
         headers = {
-            "Sec-RP-Agent-Version": "0.0.5",
+            "Sec-RP-Agent-Version": deprecate_current_minor,
             "Sec-RP-Min-Server": "0.1.0",
         }
         response = client.get("/v1/server/info", headers=headers)

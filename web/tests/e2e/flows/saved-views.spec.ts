@@ -79,9 +79,7 @@ test.describe('flow: saved views', () => {
 
     // Apply a filter manually so the switcher transitions to "Modified".
     await page.getByTestId('audit-action-prefix-filter').fill('host.');
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('action_prefix'))
-      .toBe('host.');
+    await expect.poll(() => new URL(page.url()).searchParams.get('action_prefix')).toBe('host.');
 
     // Open the switcher dropdown and start a "Save as".
     await page.getByTestId('saved-views-trigger').click();
@@ -109,9 +107,7 @@ test.describe('flow: saved views', () => {
     await expect(item).toBeVisible();
     await item.click();
 
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('action_prefix'))
-      .toBe('host.');
+    await expect.poll(() => new URL(page.url()).searchParams.get('action_prefix')).toBe('host.');
   });
 
   test('delete a custom view from the manage modal', async ({ page }) => {
@@ -137,10 +133,7 @@ test.describe('flow: saved views', () => {
     await expect(rows).toHaveCount(1);
 
     // Click the trash button on the row.
-    await page
-      .locator('[data-testid^="saved-views-delete-"]')
-      .first()
-      .click();
+    await page.locator('[data-testid^="saved-views-delete-"]').first().click();
     await expect(rows).toHaveCount(0);
 
     // localStorage should now hold an empty array.

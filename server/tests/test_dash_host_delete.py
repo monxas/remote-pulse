@@ -19,8 +19,7 @@ Covers:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -41,7 +40,6 @@ from rp_server.models import (
     User,
     UserPermission,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers (mirror style of test_user_permissions.py / test_dash_settings.py).
@@ -101,7 +99,7 @@ async def _make_host(
         group_name=group,
         capabilities={},
         extra={},
-        enrolled_at=datetime.now(timezone.utc),
+        enrolled_at=datetime.now(UTC),
     )
     db.add(h)
     await db.commit()
@@ -169,7 +167,7 @@ async def _seed_host_with_dependents(
     db.add(
         Heartbeat(
             host_id=host.id,
-            ts=datetime.now(timezone.utc),
+            ts=datetime.now(UTC),
             cpu_pct=1.0,
             mem_pct=2.0,
         )
@@ -177,7 +175,7 @@ async def _seed_host_with_dependents(
     db.add(
         MetricSample(
             host_id=host.id,
-            ts=datetime.now(timezone.utc),
+            ts=datetime.now(UTC),
             metric="cpu_per_core.0",
             value=42.0,
         )

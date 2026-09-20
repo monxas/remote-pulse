@@ -2,21 +2,22 @@
 
 import logging
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from rp_server import __version__
+from rp_server.audit_retention import retention_loop
 from rp_server.config import settings
 from rp_server.database import DbSession, async_session_factory, engine
 from rp_server.middleware.compat import APICompatMiddleware
-from rp_server.audit_retention import retention_loop
 from rp_server.routers import (
     admin,
     agent_commands,
@@ -41,7 +42,6 @@ from rp_server.routers import (
     metrics,
 )
 from rp_server.webhooks import WebhookDispatcher, set_dispatcher
-from starlette.middleware.sessions import SessionMiddleware
 
 # Configure structured logging
 structlog.configure(
@@ -205,8 +205,15 @@ app.include_router(hosts.router)
 app.include_router(metrics.router)
 app.include_router(keys.router)
 app.include_router(admin.router)
-app.include_router(commands.router)
+# approvals BEFORE commands, and it matters: both mount under /v1/admin, and
+# commands declares GET /commands/{command_id} while approvals declares the
+# literal GET /commands/pending-approval. Starlette matches in registration
+# order, so with commands first the literal route was shadowed by the path
+# parameter and GET /v1/admin/commands/pending-approval answered 422
+# ("pending-approval" is not a UUID) instead of ever reaching its handler.
+# Specific routes before parameterised ones.
 app.include_router(approvals.router)
+app.include_router(commands.router)
 # Phase 2.5 — agent execution loop (pull commands + post results).
 app.include_router(agent_commands.router)
 app.include_router(auth_oidc.router)  # OIDC login flow (PocketID)

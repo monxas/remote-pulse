@@ -19,14 +19,13 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import structlog
 
 from rp.installers.base import (
-    InstallResult,
     InstallerError,
+    InstallResult,
     ensure_rp_config_dir,
     run_subprocess,
     write_secure_toml,
@@ -49,15 +48,14 @@ class SunshineInstaller:
         InstallerError: When invoked on a non-Windows host.
     """
 
-    def __init__(self, *, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, *, http_client: httpx.AsyncClient | None = None) -> None:
         self._http_client = http_client
 
     @staticmethod
     def _ensure_windows() -> None:
         if get_os() != "windows":
             raise InstallerError(
-                "Sunshine install is only supported on Windows hosts. "
-                "Use RustDesk on Linux/macOS."
+                "Sunshine install is only supported on Windows hosts. Use RustDesk on Linux/macOS."
             )
 
     async def detect_installed(self) -> bool:
@@ -66,15 +64,13 @@ class SunshineInstaller:
             return False
         return Path("C:/Program Files/Sunshine/sunshine.exe").exists()
 
-    async def detect_version(self) -> Optional[str]:
+    async def detect_version(self) -> str | None:
         """Detect Sunshine version from binary metadata (best-effort)."""
         exe = Path("C:/Program Files/Sunshine/sunshine.exe")
         if not exe.exists():
             return None
         try:
-            _, stdout, _ = await run_subprocess(
-                [str(exe), "--version"], check=False, timeout=5
-            )
+            _, stdout, _ = await run_subprocess([str(exe), "--version"], check=False, timeout=5)
         except InstallerError:
             return None
         match = re.search(r"\d+\.\d+\.\d+", stdout)
@@ -85,9 +81,7 @@ class SunshineInstaller:
         """Detect Nvidia/Intel/AMD GPU (best-effort)."""
         return any(shutil.which(b) is not None for b in ("nvidia-smi", "vainfo"))
 
-    async def install(
-        self, force: bool = False, allow_no_gpu: bool = False
-    ) -> InstallResult:
+    async def install(self, force: bool = False, allow_no_gpu: bool = False) -> InstallResult:
         """Install Sunshine MSI silently.
 
         Args:
@@ -99,8 +93,7 @@ class SunshineInstaller:
 
         if not self._detect_gpu() and not allow_no_gpu:
             raise InstallerError(
-                "No GPU detected (nvidia-smi/vainfo missing). "
-                "Re-run with --force to override."
+                "No GPU detected (nvidia-smi/vainfo missing). Re-run with --force to override."
             )
 
         if not force and await self.detect_installed():
@@ -118,9 +111,7 @@ class SunshineInstaller:
         installer_path = await self._download_asset(asset["browser_download_url"])
         try:
             if sha_asset is not None:
-                await self._verify_sha256(
-                    installer_path, sha_asset["browser_download_url"]
-                )
+                await self._verify_sha256(installer_path, sha_asset["browser_download_url"])
             else:
                 logger.warning("sunshine_sha256_missing", asset=asset.get("name"))
 
@@ -129,9 +120,7 @@ class SunshineInstaller:
                 [str(installer_path), "/S"], check=False, timeout=600
             )
             if rc != 0:
-                raise InstallerError(
-                    f"Sunshine silent install failed (rc={rc}): {stderr.strip()}"
-                )
+                raise InstallerError(f"Sunshine silent install failed (rc={rc}): {stderr.strip()}")
         finally:
             installer_path.unlink(missing_ok=True)
 
@@ -144,9 +133,7 @@ class SunshineInstaller:
             message=f"Installed Sunshine {version} (silent)",
         )
 
-    async def configure(
-        self, *, tailscale_ip: Optional[str] = None
-    ) -> dict[str, object]:
+    async def configure(self, *, tailscale_ip: str | None = None) -> dict[str, object]:
         """Configure Sunshine admin UI + apps.json + firewall.
 
         Returns:
@@ -218,9 +205,7 @@ class SunshineInstaller:
             check=False,
             timeout=15,
         )
-        await run_subprocess(
-            ["sc", "start", "SunshineService"], check=False, timeout=15
-        )
+        await run_subprocess(["sc", "start", "SunshineService"], check=False, timeout=15)
 
     async def uninstall(self) -> None:
         """Best-effort uninstall via NSIS uninstaller."""
@@ -236,7 +221,7 @@ class SunshineInstaller:
 
     async def _fetch_installer_asset(
         self,
-    ) -> tuple[dict[str, object], Optional[dict[str, object]]]:
+    ) -> tuple[dict[str, object], dict[str, object] | None]:
         """Return (installer_asset, sha256_asset_or_none)."""
         client = self._http_client
         owns_client = client is None
@@ -251,8 +236,8 @@ class SunshineInstaller:
             if owns_client and client is not None:
                 await client.aclose()
 
-        installer: Optional[dict[str, object]] = None
-        sha: Optional[dict[str, object]] = None
+        installer: dict[str, object] | None = None
+        sha: dict[str, object] | None = None
         for asset in data.get("assets", []):
             name = str(asset.get("name", "")).lower()
             if name == "sunshine-windows-installer.exe":
@@ -311,8 +296,7 @@ class SunshineInstaller:
 
         if actual != expected_raw:
             raise InstallerError(
-                f"SHA256 mismatch for Sunshine installer: "
-                f"expected={expected_raw} actual={actual}"
+                f"SHA256 mismatch for Sunshine installer: expected={expected_raw} actual={actual}"
             )
         logger.info("sunshine_sha256_verified", sha256=actual)
 

@@ -143,9 +143,7 @@ export function createTableState<T>(
   // automatically. Must be called from a component setup that has a tracking
   // root (which is the only place `$derived` is allowed anyway).
   const sortKey = $derived(page.url.searchParams.get(SORT_KEY));
-  const sortDir = $derived(
-    (page.url.searchParams.get(DIR_KEY) as SortDir | null) ?? null,
-  );
+  const sortDir = $derived((page.url.searchParams.get(DIR_KEY) as SortDir | null) ?? null);
   const query = $derived(page.url.searchParams.get(QUERY_KEY) ?? '');
 
   const view = $derived.by(() =>

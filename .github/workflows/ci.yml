@@ -44,19 +44,39 @@ jobs:
   lint-and-test-server:
     name: Server
     runs-on: ubuntu-latest
+    # Hoisted to job level: `rp_server.config` builds `Settings()` at import
+    # time, and it requires JWT_SECRET (min 32 chars) as well as POSTGRES_URL.
+    # Only POSTGRES_URL was ever set, so `alembic upgrade head` and both pytest
+    # steps would have died on a pydantic ValidationError -- invisible until now
+    # because the job always failed earlier, at `ruff check`.
+    # `tests/conftest.py` pins POSTGRES_URL to test:test@localhost:5432/test in
+    # an autouse fixture, so that is the DSN the suite really uses no matter what
+    # the workflow exports. The service below is provisioned to match it, and
+    # alembic points at the same database so the tests that open their own
+    # engine (test_models_f4) find a migrated schema instead of
+    # InvalidPasswordError.
+    env:
+      POSTGRES_URL: postgresql+asyncpg://test:test@localhost:5432/test
+      JWT_SECRET: ci-only-not-a-real-secret-0123456789abcdef
     defaults:
       run:
         working-directory: server
     services:
       postgres:
-        image: postgres:16
+        # Must ship TimescaleDB: migration 001 runs
+        # `CREATE EXTENSION IF NOT EXISTS timescaledb` and the dashboard
+        # queries call `time_bucket()`. Plain `postgres:16` made
+        # `alembic upgrade head` fail with 'extension "timescaledb" is not
+        # available'. Matches production (LXC 280: PG 16.15 + TimescaleDB 2.27.1).
+        image: timescale/timescaledb:latest-pg16
         env:
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: remote_pulse_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test -d test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -76,18 +96,16 @@ jobs:
         run: uv run ruff check .
 
       - name: Alembic upgrade
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run alembic upgrade head
 
+      # `-m "not postgres"` deselects the tests that need a real Postgres via
+      # testcontainers; they run in the dedicated step below. Without it they ran
+      # twice, and the first run hit them against in-memory SQLite, which cannot
+      # do TRUNCATE or bind a UUID.
       - name: Pytest (full suite)
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
-        run: uv run pytest -v
+        run: uv run pytest -v -m "not postgres"
 
       - name: Pytest (Postgres-only — audit log immutability)
-        env:
-          POSTGRES_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/remote_pulse_test
         run: uv run pytest -v -m postgres
 
   secrets-scan:
@@ -97,13 +115,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Trufflehog full history
+      - name: Trufflehog scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ''
-          head: HEAD
-          extra_args: --only-verified --fail
+          # On a pull_request, diff against the PR's real merge base. Passing
+          # both explicitly keeps the range well-defined for bot PRs (Dependabot
+          # branches are created from main, so base.sha != head.sha always).
+          #
+          # On push to main we deliberately leave BOTH inputs empty: the action
+          # only enforces its "BASE and HEAD commits are the same -> exit 1"
+          # guard on the explicit-input path, so falling through to its
+          # event-based defaults (event.before..event.after, and full history
+          # when before == 000000) can never self-destruct.
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          # NOTE: the action's own docker invocation already hardcodes `--fail`.
+          # Repeating it here made trufflehog abort on every single run with
+          # "flag 'fail' cannot be repeated" — that, not BASE/HEAD, was why this
+          # job had been red since May.
+          extra_args: --only-verified
 
   security-scan:
     name: Security analysis (semgrep + bandit + safety)
@@ -124,30 +155,40 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
 
+      # `uv pip install` needs a virtualenv that nothing here ever created, so
+      # these steps died on "No virtual environment found". Bandit is a
+      # standalone AST linter that needs none of the project deps, so run it as
+      # a tool with `uvx` instead of trying to graft it into a project env.
       - name: Bandit scan (server)
         working-directory: server
-        run: |
-          uv python install 3.12
-          uv pip install bandit
-          uv run bandit -r src/ -ll -f json -o bandit-server.json || true
-          uv run bandit -r src/ -ll
+        run: uvx bandit@1.9.4 -r src/ -ll
 
+      # The agent carries 4 pre-existing findings, recorded in
+      # bandit-baseline.json so the job still fails on anything NEW (verified:
+      # adding an unrelated medium-severity finding exits 1):
+      #   B103  installers/base.py  chmod 0o750 on /etc/rp -- the secrets inside
+      #         are written 0600 by write_secure_toml(); 0o700 would be tighter
+      #         but changes installed perms on live hosts.
+      #   B104  installers/{rustdesk,sunshine,vnc}.py  `tailscale_ip or "0.0.0.0"`
+      #         -- remote-desktop services fall back to binding every interface
+      #         when no Tailscale IP is found. Deliberate, but a real exposure;
+      #         suppressing it inline would have hidden it, so it is listed here.
+      # Both need a decision from a human, not a lint fix.
       - name: Bandit scan (agent)
         working-directory: agent
-        run: |
-          uv python install 3.12
-          uv pip install bandit
-          uv run bandit -r src/ -ll -f json -o bandit-agent.json || true
-          uv run bandit -r src/ -ll
+        run: uvx bandit@1.9.4 -r src/ -ll -b bandit-baseline.json
 
+      # Non-blocking dependency audit (unchanged intent). `uv run safety` could
+      # never work either — safety is not a project dependency, so it failed to
+      # spawn and `|| true` silently swallowed it, making these steps no-ops.
       - name: Safety vulnerability check (server)
         working-directory: server
         run: |
           uv sync --all-extras --dev
-          uv pip list --format=json | uv run safety check --stdin || true
+          uv pip list --format=json | uvx safety check --stdin || true
 
       - name: Safety vulnerability check (agent)
         working-directory: agent
         run: |
           uv sync --all-extras --dev
-          uv pip list --format=json | uv run safety check --stdin || true
+          uv pip list --format=json | uvx safety check --stdin || true

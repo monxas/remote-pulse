@@ -2,13 +2,12 @@
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
 
 from rp_server.config import settings
-
 
 # --------------------------------------------------------------------------- #
 # Short enrollment codes
@@ -85,7 +84,7 @@ def create_enrollment_token(
         Tuple of (token_string, jti) where jti is the unique token identifier.
     """
     jti = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(hours=ttl_hours)
 
     payload: dict[str, Any] = {

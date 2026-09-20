@@ -25,7 +25,6 @@ logger = structlog.get_logger(__name__)
 @click.group()
 def keys():
     """SSH key lifecycle management."""
-    pass
 
 
 @keys.command()

@@ -32,7 +32,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -122,7 +122,7 @@ class AuditResponse(BaseModel):
 
 def _encode_cursor(ts: datetime, src: str, row_id: str) -> str:
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
     raw = json.dumps(
         {"ts": ts.isoformat(), "src": src, "id": row_id}, separators=(",", ":")
     )
@@ -135,7 +135,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, str, str]:
         data = json.loads(raw)
         ts = datetime.fromisoformat(data["ts"])
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
         return ts, str(data["src"]), str(data["id"])
     except (binascii.Error, ValueError, KeyError, TypeError) as exc:
         raise HTTPException(
@@ -528,7 +528,7 @@ async def _materialise_events(db, rows: list[Any]) -> list[AuditEvent]:
         events.append(
             AuditEvent(
                 id=f"{r.src}:{r.pk}",
-                ts=r.ts if r.ts.tzinfo else r.ts.replace(tzinfo=timezone.utc),
+                ts=r.ts if r.ts.tzinfo else r.ts.replace(tzinfo=UTC),
                 actor=r.actor or "system",
                 action=r.action,  # type: ignore[arg-type]
                 target_type=r.target_type,  # type: ignore[arg-type]
@@ -678,7 +678,7 @@ async def list_audit_events(
 
 
 def _export_filename(fmt: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return f"audit-export-{ts}.{fmt}"
 
 

@@ -1,13 +1,20 @@
 """Tests for SSH key lifecycle endpoints (F4)."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 
 from rp_server.models import Group, Host, SSHKey
 from rp_server.routers.keys import compute_ssh_fingerprint
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(as_tailnet):
+    """routers/keys.py gates every endpoint on `tailscale_identity` /
+    `tailscale_identity_optional`, added after this module was written.
+    Unauthenticated behaviour is covered by test_tailscale_identity.py."""
 
 
 @pytest.fixture
@@ -115,12 +122,18 @@ class TestRegisterKey:
     async def test_register_key_fingerprint_mismatch(
         self, client: AsyncClient, test_host, test_group
     ):
-        """Invalid fingerprint returns 400."""
+        """A well-formed fingerprint that doesn't match the pubkey returns 400.
+
+        The fingerprint must still satisfy the schema pattern
+        (``^SHA256:[A-Za-z0-9+/]{43}$``) to reach the handler's mismatch check.
+        The previous value was only 38 chars, so pydantic rejected it with 422
+        and the 400 branch this test exists to cover was never exercised.
+        """
         payload = {
             "host_id": str(test_host.id),
             "user_name": "root",
             "pubkey": SAMPLE_PUBKEY,
-            "fingerprint": "SHA256:wrongfingerprint1234567890123456789012",
+            "fingerprint": "SHA256:" + "A" * 43,
             "algorithm": "ed25519",
         }
 
@@ -152,7 +165,7 @@ class TestRegisterKey:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
             revoked_reason="test revocation",
         )
         db_session.add(key)
@@ -226,7 +239,7 @@ class TestListKeys:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -245,7 +258,7 @@ class TestListKeys:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -293,7 +306,7 @@ class TestRevokeKey:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -378,14 +391,17 @@ class TestDistributeKeys:
             algorithm="ed25519",
         )
         # Revoked key
-        key2_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBbXBlZjbZ8W6F9Yj1xCRZcqI5TlJvJ8Xp5A1pR8yO7X revoked"
+        key2_pubkey = (
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBbXBlZjbZ8W6F9Yj1xCRZcqI5TlJvJ8Xp5A1pR8yO7X"
+            " revoked"
+        )
         key2 = SSHKey(
             host_id=host.id,
             user_name="root",
             pubkey=key2_pubkey,
             fingerprint=compute_ssh_fingerprint(key2_pubkey),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add_all([key1, key2])
         await db_session.commit()

@@ -33,7 +33,13 @@ class EnrollRequest(BaseModel):
         max_length=32,
     )
     hostname: str = Field(min_length=1, max_length=255)
-    group: str = Field(default="default", max_length=100)
+    # Default is None, NOT "default". enroll.py does
+    # `group_name=request.group or token_group`, so a literal "default" here was
+    # always truthy and the fallback to the enrollment token's own group was
+    # dead code: an agent enrolling without an explicit `--group` silently
+    # landed in "default" even when its token had been issued for another
+    # group -- and group membership is what drives host ACL filtering.
+    group: str | None = Field(default=None, max_length=100)
     host_fingerprint: str = Field(
         description="Host hardware fingerprint (e.g. machine-id or MAC)",
         min_length=1,
@@ -211,7 +217,6 @@ class GroupBase(BaseModel):
 class GroupCreate(GroupBase):
     """Group creation request."""
 
-    pass
 
 
 class GroupResponse(GroupBase):

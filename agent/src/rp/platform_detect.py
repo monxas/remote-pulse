@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 import structlog
 
@@ -31,7 +30,7 @@ def get_arch() -> str:
     return machine
 
 
-def get_distro() -> Optional[str]:
+def get_distro() -> str | None:
     """Get distribution name and version."""
     os_type = get_os()
 
@@ -104,9 +103,7 @@ def get_host_fingerprint() -> str:
         elif os_type == "windows":
             import winreg
 
-            key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography"
-            )
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
             guid, _ = winreg.QueryValueEx(key, "MachineGuid")
             winreg.CloseKey(key)
             return hashlib.sha256(guid.encode()).hexdigest()
@@ -190,7 +187,7 @@ def detect_screen_capabilities() -> dict[str, any]:
     return caps
 
 
-def _read_rustdesk_password() -> Optional[str]:
+def _read_rustdesk_password() -> str | None:
     """Read RustDesk password from config if available."""
     try:
         config_path = Path("/etc/rp/rustdesk.toml")
@@ -238,6 +235,8 @@ def get_platform_info() -> dict[str, any]:
         "distro": get_distro(),
         "kernel": get_kernel(),
         "fqdn": get_fqdn(),
-        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "python_version": (
+            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        ),
         "capabilities": detect_capabilities(),
     }

@@ -45,9 +45,20 @@ class APICompatMiddleware(BaseHTTPMiddleware):
         # Always add server version headers to response
         response = None
 
-        # Skip version checks for specific endpoints (health, root, docs, /metrics)
-        skip_paths = ["/health", "/", "/docs", "/openapi.json", "/metrics"]
-        if any(request.url.path.startswith(p) for p in skip_paths):
+        # Skip version checks for endpoints that are not part of the agent
+        # protocol.
+        #
+        # NOTE: "/" has to be matched *exactly*. It used to sit in this list
+        # and be compared with str.startswith(), and every path starts with
+        # "/" -- so this entire middleware short-circuited on every single
+        # request and none of the version negotiation below ever ran. Agents
+        # older than SERVER_MIN_AGENT_VERSION were never rejected, the
+        # "server too old for agent" 426 never fired, and no deprecation
+        # header was ever emitted.
+        skip_exact = {"/", "/health", "/openapi.json"}
+        skip_prefixes = ("/docs", "/redoc", "/metrics")
+        path = request.url.path
+        if path in skip_exact or path.startswith(skip_prefixes):
             response = await call_next(request)
             self._add_server_headers(response)
             return response
@@ -55,7 +66,8 @@ class APICompatMiddleware(BaseHTTPMiddleware):
         # Extract agent version from headers
         agent_version = request.headers.get("Sec-RP-Agent-Version")
         agent_min_server = request.headers.get("Sec-RP-Min-Server")
-        # agent_features = request.headers.get("Sec-RP-Features", "").split(",")  # TODO: Use for feature negotiation
+        # Feature negotiation is not wired up yet; when it is, the agent's
+        # advertised feature list arrives in the "Sec-RP-Features" header.
 
         # If headers missing, allow request (backward compat with bootstrap/old agents)
         if not agent_version:
@@ -104,7 +116,8 @@ class APICompatMiddleware(BaseHTTPMiddleware):
             return Response(
                 content=(
                     f'{{"error": "agent_version_too_old", '
-                    f'"detail": "Agent {agent_version} < server minimum {SERVER_MIN_AGENT_VERSION}. '
+                    f'"detail": "Agent {agent_version} < server minimum '
+                    f'{SERVER_MIN_AGENT_VERSION}. '
                     f'Agent upgrade required.", '
                     f'"required": ">={SERVER_MIN_AGENT_VERSION}"}}'
                 ),

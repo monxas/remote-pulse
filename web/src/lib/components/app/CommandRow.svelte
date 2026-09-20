@@ -43,7 +43,11 @@
   const isInFlight = $derived(IN_FLIGHT_STATUSES.has(command.status));
 </script>
 
-<li class="rounded-lg border border-border-default bg-elevated" data-testid="command-row" data-command-id={command.id}>
+<li
+  class="rounded-lg border border-border-default bg-elevated"
+  data-testid="command-row"
+  data-command-id={command.id}
+>
   <button
     type="button"
     data-testid="command-row-toggle"

@@ -66,8 +66,12 @@ class TelegramApprovalWebhook:
             "issued_by": command.issued_by,
             "issued_at": command.issued_at.isoformat(),
             "approval_token": str(approval_token),
-            "approval_url_accept": f"{self.server_public_url}/v1/admin/commands/approve/{approval_token}",
-            "approval_url_reject": f"{self.server_public_url}/v1/admin/commands/reject/{approval_token}",
+            "approval_url_accept": (
+                f"{self.server_public_url}/v1/admin/commands/approve/{approval_token}"
+            ),
+            "approval_url_reject": (
+                f"{self.server_public_url}/v1/admin/commands/reject/{approval_token}"
+            ),
             "expires_at": expires_at.isoformat(),
         }
 

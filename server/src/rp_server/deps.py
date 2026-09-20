@@ -4,11 +4,11 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel, EmailStr, HttpUrl, ValidationError
 from sqlalchemy import select, update
 
 from rp_server.config import settings
@@ -64,8 +64,8 @@ def _maybe_lighthouse_bypass_user(x_rp_test_auth: str | None):
         role="admin",
         accessible_groups=["*"],
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        last_login_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        last_login_at=datetime.now(UTC),
     )
     logger.info("Lighthouse bypass auth accepted (TEST/CI only)")
     return user
@@ -113,12 +113,22 @@ async def tailscale_identity(
                 node_id = part.strip().split("=", 1)[1]
                 break
 
-    return TailscaleIdentity(
-        login=tailscale_user_login,
-        name=tailscale_user_name,
-        node_id=node_id,
-        profile_pic=tailscale_user_profile_pic if tailscale_user_profile_pic else None,
-    )
+    try:
+        return TailscaleIdentity(
+            login=tailscale_user_login,
+            name=tailscale_user_name,
+            node_id=node_id,
+            profile_pic=tailscale_user_profile_pic if tailscale_user_profile_pic else None,
+        )
+    except ValidationError as exc:
+        # A syntactically invalid Tailscale-User-Login (EmailStr) used to let a
+        # raw pydantic ValidationError escape the dependency, which FastAPI
+        # turns into an unhandled 500. A malformed identity is an
+        # authentication failure, not a server fault.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Tailscale identity headers",
+        ) from exc
 
 
 async def tailscale_identity_optional(
@@ -146,12 +156,19 @@ async def tailscale_identity_optional(
                 node_id = part.strip().split("=", 1)[1]
                 break
 
-    return TailscaleIdentity(
-        login=tailscale_user_login,
-        name=tailscale_user_name,
-        node_id=node_id,
-        profile_pic=tailscale_user_profile_pic if tailscale_user_profile_pic else None,
-    )
+    try:
+        return TailscaleIdentity(
+            login=tailscale_user_login,
+            name=tailscale_user_name,
+            node_id=node_id,
+            profile_pic=tailscale_user_profile_pic if tailscale_user_profile_pic else None,
+        )
+    except ValidationError:
+        # Same crash as in the strict variant above. This one is the "optional"
+        # dependency, so an unparseable identity degrades to "no identity"
+        # rather than 401, and the endpoint decides what to do.
+        logger.warning("Discarding malformed Tailscale identity headers")
+        return None
 
 
 async def current_user(
@@ -306,7 +323,7 @@ async def current_user(
             name=x_forwarded_preferred_username,
             role="viewer",
             accessible_groups=[],  # Admin must grant groups
-            last_login_at=datetime.now(timezone.utc),
+            last_login_at=datetime.now(UTC),
         )
         db.add(user)
         await db.commit()
@@ -318,7 +335,7 @@ async def current_user(
             user.name = x_forwarded_preferred_username or user.name
         # Update last login timestamp
         stmt = (
-            update(User).where(User.id == user.id).values(last_login_at=datetime.now(timezone.utc))
+            update(User).where(User.id == user.id).values(last_login_at=datetime.now(UTC))
         )
         await db.execute(stmt)
         await db.commit()

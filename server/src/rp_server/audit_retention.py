@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select, update
@@ -139,7 +139,7 @@ async def update_config(
         row.enabled = enabled
 
     row.updated_by = actor
-    row.updated_at = datetime.now(timezone.utc)
+    row.updated_at = datetime.now(UTC)
     await db.flush()
     return row
 
@@ -172,7 +172,7 @@ async def purge_old_audit_events(
         return 0
 
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     cutoff = now - timedelta(days=config.retention_days)
 
     # DELETE … RETURNING id so we can count what actually got removed
@@ -248,7 +248,8 @@ async def retention_loop(
     the boot sequence room to settle before we touch the DB; tests
     override it to 0 to keep them fast.
 
-    A failure in the purge is logged + counted (``rp_audit_retention_purge_total{result="failure"}``)
+    A failure in the purge is logged + counted
+    (``rp_audit_retention_purge_total{result="failure"}``)
     but never escapes the loop — losing a purge cycle is recoverable
     (the next cycle will catch up), but crashing the task would mean
     the loop silently dies for the rest of the process lifetime.

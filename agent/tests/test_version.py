@@ -19,17 +19,12 @@ import pytest
 from rp import __version__
 from rp.metrics import MetricsCollector
 
-
 # Matches X.Y.Z with optional pre-release/build (PEP 440 / SemVer flavoured).
-SEMVER_PATTERN = re.compile(
-    r"^\d+\.\d+\.\d+([-+][0-9A-Za-z.\-]+)?$"
-)
+SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+([-+][0-9A-Za-z.\-]+)?$")
 
 # Tokens that historically leaked into agent_version because they were
 # the git ref/branch passed to install.sh, not the package version.
-GIT_REF_BLOCKLIST = frozenset(
-    {"main", "master", "head", "latest", "develop", "dev", "trunk", ""}
-)
+GIT_REF_BLOCKLIST = frozenset({"main", "master", "head", "latest", "develop", "dev", "trunk", ""})
 
 
 def test_version_is_semver():
@@ -56,9 +51,7 @@ def test_version_matches_pyproject():
     Without this, bumping one and forgetting the other lets the agent
     install with version A while heartbeats report version B.
     """
-    pyproject_path = (
-        Path(__file__).resolve().parent.parent / "pyproject.toml"
-    )
+    pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
     with pyproject_path.open("rb") as f:
         data = tomllib.load(f)
     pyproject_version = data["project"]["version"]
@@ -90,9 +83,7 @@ def test_heartbeat_metrics_report_semver():
     )
 
 
-@pytest.mark.parametrize(
-    "bad_value", ["main", "master", "HEAD", "latest", "develop"]
-)
+@pytest.mark.parametrize("bad_value", ["main", "master", "HEAD", "latest", "develop"])
 def test_blocklist_rejects_known_git_refs(bad_value):
     """Sanity check the blocklist itself catches the historical regressions."""
     assert bad_value.lower() in GIT_REF_BLOCKLIST

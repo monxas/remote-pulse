@@ -7,9 +7,10 @@ Create Date: 2026-05-25
 F8-4: Canary deploy system with auto-rollback for agent upgrades.
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+
+from alembic import op
 
 # revision identifiers
 revision = "006"

@@ -19,8 +19,7 @@ import asyncio
 import signal
 import sys
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import structlog
 
@@ -39,7 +38,7 @@ class HeartbeatDaemon:
         self.running = False
         self.config = load_config()
         self.collector = MetricsCollector()
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     def _setup_signal_handlers(self):
         """Setup graceful shutdown on SIGTERM/SIGINT."""
@@ -190,11 +189,11 @@ class HeartbeatDaemon:
         client: RPClient,
         command_id: str,
         *,
-        exit_code: Optional[int],
+        exit_code: int | None,
         stdout: str,
         stderr: str,
         duration_ms: int,
-        rejected_reason: Optional[str],
+        rejected_reason: str | None,
     ) -> None:
         """POST a result, logging but swallowing transport errors.
 
@@ -211,7 +210,7 @@ class HeartbeatDaemon:
                     "stdout": stdout,
                     "stderr": stderr,
                     "duration_ms": duration_ms,
-                    "agent_ts": datetime.now(timezone.utc).isoformat(),
+                    "agent_ts": datetime.now(UTC).isoformat(),
                     "rejected_reason": rejected_reason,
                 },
             )
@@ -261,7 +260,7 @@ class HeartbeatDaemon:
             self._task.cancel()
 
 
-async def run_once(config_path: Optional[str] = None):
+async def run_once(config_path: str | None = None):
     """
     Send single heartbeat and exit.
 

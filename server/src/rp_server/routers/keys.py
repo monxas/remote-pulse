@@ -3,7 +3,7 @@
 import base64
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
@@ -73,8 +73,14 @@ async def trigger_webhook(event: str, payload: dict) -> None:
     Note:
         No-op if webhook URL not configured. Real implementation will use httpx.
     """
-    # TODO: Implement webhook trigger when n8n endpoint configured
-    logger.info("webhook_stub", event=event, payload=payload)
+    # Not yet implemented; will POST to the n8n endpoint once configured.
+    #
+    # NOTE: the kwarg must not be called `event`. structlog's
+    # BoundLogger.info(event, **kw) already binds the first positional
+    # parameter to that name, so `logger.info("webhook_stub", event=event)`
+    # raised TypeError: got multiple values for argument 'event' -- on every
+    # call, i.e. on every key register / re-register / revoke.
+    logger.info("webhook_stub", webhook_event=event, payload=payload)
 
 
 @router.post("", response_model=SSHKeyResponse, status_code=status.HTTP_201_CREATED)
@@ -98,7 +104,8 @@ async def register_ssh_key(
         Registered SSH key response
 
     Raises:
-        HTTPException: 404 if host not found, 409 if key already registered, 400 if fingerprint mismatch
+        HTTPException: 404 if host not found, 409 if key already registered,
+            400 if fingerprint mismatch
     """
     logger.info(
         "register_ssh_key_request",
@@ -222,7 +229,15 @@ async def list_ssh_keys(
     return [SSHKeyResponse.model_validate(key) for key in keys]
 
 
-@router.delete("/{fingerprint}", response_model=SSHKeyResponse)
+# `:path` is load-bearing. An SSH SHA256 fingerprint is base64, so it very
+# often contains "/" (e.g. SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU).
+# With a plain `{fingerprint}` the router only captured up to the first slash,
+# so revoking such a key answered 404 and the key stayed active. The agent
+# (`rp keys rotate` -> DELETE /v1/keys/{old_fingerprint}) sends the fingerprint
+# unencoded and swallows the failure as a warning, so rotation silently left the
+# old key valid. This is the only DELETE route on the router, so the greedy
+# converter is unambiguous.
+@router.delete("/{fingerprint:path}", response_model=SSHKeyResponse)
 async def revoke_ssh_key(
     fingerprint: str,
     reason: Annotated[str, Query(min_length=1)],
@@ -265,7 +280,7 @@ async def revoke_ssh_key(
         )
 
     # Mark as revoked
-    key.revoked_at = datetime.now(timezone.utc)
+    key.revoked_at = datetime.now(UTC)
     key.revoked_reason = reason
     await db.commit()
     await db.refresh(key)
@@ -322,7 +337,7 @@ async def distribute_keys(
             "group": group,
             "content": "",
             "host_count": 0,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
     # Get all active SSH keys for these hosts
@@ -347,7 +362,7 @@ async def distribute_keys(
         "content": content,
         "host_count": len(hosts),
         "key_count": len(keys),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 

@@ -28,7 +28,7 @@ the ``current_user`` dep is swapped at app level which propagates through
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -115,7 +115,7 @@ async def _make_host(db: AsyncSession, *, hostname: str, group: str) -> Host:
         group_name=group,
         capabilities={},
         extra={},
-        enrolled_at=datetime.now(timezone.utc),
+        enrolled_at=datetime.now(UTC),
     )
     db.add(h)
     await db.commit()
@@ -476,7 +476,7 @@ async def _make_pending_command(
     issued_by: str = "admin@test.local",
 ) -> Command:
     """Insert a Command in the 'awaiting approval' state for the given host."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cmd = Command(
         host_id=host.id,
         issued_by=issued_by,

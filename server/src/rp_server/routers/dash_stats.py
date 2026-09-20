@@ -30,7 +30,7 @@ Endpoint
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -216,7 +216,7 @@ async def stats(
             detail=f"Invalid range '{range_param}'; must be one of {sorted(RANGE_DURATIONS)}",
         )
     window = RANGE_DURATIONS[range_param]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - window
     range_seconds = window.total_seconds()
     range_minutes = max(1, int(range_seconds // 60))
@@ -412,7 +412,8 @@ async def stats(
                     date(issued_at) AS day,
                     COUNT(*) AS issued,
                     SUM(CASE WHEN exit_code = 0 THEN 1 ELSE 0 END) AS succeeded,
-                    SUM(CASE WHEN exit_code IS NOT NULL AND exit_code <> 0 THEN 1 ELSE 0 END) AS failed
+                    SUM(CASE WHEN exit_code IS NOT NULL AND exit_code <> 0
+                             THEN 1 ELSE 0 END) AS failed
                 FROM commands
                 WHERE issued_at >= :start_time
                 GROUP BY day

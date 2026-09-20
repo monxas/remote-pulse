@@ -106,9 +106,7 @@ class HostDetail(Container):
         else:
             last_seen_widget.update("Last seen: never")
 
-    def update_sparklines(
-        self, series: dict[str, list[tuple[datetime, float]]]
-    ) -> None:
+    def update_sparklines(self, series: dict[str, list[tuple[datetime, float]]]) -> None:
         """
         Update sparklines with new data.
 

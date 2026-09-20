@@ -19,7 +19,6 @@ from rp.commands.runner import (
     execute_remote_command,
 )
 
-
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="shell runner is POSIX-only in Phase 2.5"
 )
@@ -40,9 +39,7 @@ def _cmd(command_type: str = "shell", payload: dict | None = None) -> RemoteComm
 
 
 async def test_shell_exit_zero_captures_stdout() -> None:
-    result = await execute_remote_command(
-        _cmd(payload={"cmd": "echo hello"})
-    )
+    result = await execute_remote_command(_cmd(payload={"cmd": "echo hello"}))
     assert isinstance(result, CommandResult)
     assert result.ack is True
     assert result.exit_code == 0
@@ -51,9 +48,7 @@ async def test_shell_exit_zero_captures_stdout() -> None:
 
 
 async def test_shell_non_zero_exit_captures_stderr() -> None:
-    result = await execute_remote_command(
-        _cmd(payload={"cmd": "echo oops 1>&2; exit 7"})
-    )
+    result = await execute_remote_command(_cmd(payload={"cmd": "echo oops 1>&2; exit 7"}))
     assert result.ack is True
     assert result.exit_code == 7
     assert "oops" in (result.stderr or "")
@@ -64,9 +59,7 @@ async def test_shell_non_zero_exit_captures_stderr() -> None:
 
 
 async def test_shell_timeout_returns_rejected_reason() -> None:
-    result = await execute_remote_command(
-        _cmd(payload={"cmd": "sleep 5", "timeout_s": 1})
-    )
+    result = await execute_remote_command(_cmd(payload={"cmd": "sleep 5", "timeout_s": 1}))
     assert result.ack is True
     assert result.exit_code is None
     assert result.rejected_reason == "timeout"
@@ -132,9 +125,7 @@ async def test_shell_env_is_sanitised() -> None:
 # ---- unsupported command types -------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "command_type", ["reboot", "ssh_rotate", "apt_update", "exec_script"]
-)
+@pytest.mark.parametrize("command_type", ["reboot", "ssh_rotate", "apt_update", "exec_script"])
 async def test_unsupported_command_type_rejected(command_type: str) -> None:
     result = await execute_remote_command(_cmd(command_type=command_type))
     assert result.ack is False

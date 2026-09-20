@@ -9,12 +9,6 @@ import json
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from rp_server.deps import current_user
-from rp_server.main import app
-from rp_server.routers import commands as commands_router
-from rp_server.routers import dash_commands as dash_commands_router
-
 from test_dash_phase2 import (
     _clear_user_override,
     _make_command,
@@ -22,6 +16,9 @@ from test_dash_phase2 import (
     _make_user,
     _override_user,
 )
+
+from rp_server.routers import commands as commands_router
+from rp_server.routers import dash_commands as dash_commands_router
 
 
 @pytest.fixture(autouse=True)

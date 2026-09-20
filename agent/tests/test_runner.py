@@ -14,6 +14,8 @@ the dashboard to show.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from rp.commands.runner import RemoteCommand, execute_remote_command
@@ -48,14 +50,22 @@ async def test_runner_rejects_pkg_install() -> None:
 
 @pytest.mark.asyncio
 async def test_runner_rejects_screen_open() -> None:
-    result = await execute_remote_command(
-        _cmd("screen_open", {"protocol": "rustdesk"})
-    )
+    result = await execute_remote_command(_cmd("screen_open", {"protocol": "rustdesk"}))
     assert result.ack is False
     assert "not implemented" in (result.rejected_reason or "")
     assert "screen_open" in (result.rejected_reason or "")
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason=(
+        "shell exec is POSIX-only: _execute_shell() hardcodes ['/bin/sh', '-c', ...] "
+        "and a POSIX PATH with no Windows branch, so this fails with WinError 2. "
+        "Skipped rather than papered over -- the limitation is real and needs a "
+        "design decision (cmd.exe vs PowerShell) plus a re-review of the "
+        "sanitised-environment guarantee, not a test tweak."
+    ),
+)
 @pytest.mark.asyncio
 async def test_runner_executes_shell_type() -> None:
     """The one type we do implement actually runs."""

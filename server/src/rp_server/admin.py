@@ -74,13 +74,11 @@ def load_groups_config() -> dict[str, Any]:
 @click.group()
 def cli():
     """Remote-Pulse server admin CLI."""
-    pass
 
 
 @cli.group()
 def groups():
     """Group management commands."""
-    pass
 
 
 @groups.command()
@@ -161,7 +159,6 @@ def list_groups():
 @cli.group()
 def keys():
     """SSH key management commands."""
-    pass
 
 
 @keys.command("list")

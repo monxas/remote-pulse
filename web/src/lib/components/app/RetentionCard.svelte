@@ -237,7 +237,9 @@
     </DialogHeader>
     <div class="space-y-2 px-1">
       <label class="block text-sm">
-        <span class="mb-1 block">Type <code class="font-mono font-semibold">DELETE</code> to confirm:</span>
+        <span class="mb-1 block"
+          >Type <code class="font-mono font-semibold">DELETE</code> to confirm:</span
+        >
         <input
           type="text"
           class="w-full rounded border border-border-default bg-base px-2 py-1.5 font-mono text-sm focus:border-danger focus:outline-none"

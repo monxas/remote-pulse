@@ -1,7 +1,6 @@
 """SSH command with Tailscale SSH preferred and classic fallback."""
 
 import asyncio
-from typing import Optional
 
 import click
 import structlog
@@ -28,8 +27,8 @@ def ssh(
     ctx: click.Context,
     target: str,
     remote_cmd: tuple[str, ...],
-    user: Optional[str],
-    port: Optional[int],
+    user: str | None,
+    port: int | None,
     force_classic: bool,
 ):
     """
@@ -52,8 +51,8 @@ def ssh(
 async def _ssh_async(
     target: str,
     remote_cmd: tuple[str, ...],
-    user: Optional[str],
-    port: Optional[int],
+    user: str | None,
+    port: int | None,
     force_classic: bool,
 ):
     """Async SSH wrapper execution."""

@@ -1,7 +1,7 @@
 """Metrics endpoints for sparkline data and available series."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -31,6 +31,59 @@ WINDOW_BUCKET_MAP: dict[str, tuple[int, int]] = {
 
 # Heartbeat metrics available from the heartbeats table
 HEARTBEAT_METRICS = ["cpu_pct", "mem_pct", "load_1m", "uptime_s"]
+
+
+async def _fetch_bucketed_metric(
+    db: DbSession,
+    *,
+    host_id: UUID,
+    metric: str,
+    bucket_seconds: int,
+    start_time: datetime,
+    end_time: datetime,
+) -> list[tuple[datetime, float]]:
+    """Average one heartbeat metric into TimescaleDB time buckets.
+
+    Extracted from the handler so tests can substitute it: ``time_bucket()`` is
+    a TimescaleDB function and the unit-test session is in-memory SQLite, which
+    fails the whole statement with "no such function: time_bucket". This mirrors
+    ``_patch_sparkline_helpers`` in test_dash_api.py, which stubs the equivalent
+    dash_api helpers for the same reason.
+    """
+    # Column name `metric` is identifier-safe + whitelisted by the caller;
+    # interpolated only into column position (not value). avg() over NULL skips
+    # rows naturally.
+    query = text(
+        f"""
+        SELECT
+            time_bucket(:bucket_interval, ts) AS bucket,
+            avg({metric}) AS avg_value
+        FROM heartbeats
+        WHERE host_id = :host_id
+            AND ts >= :start_time
+            AND ts <= :end_time
+            AND {metric} IS NOT NULL
+        GROUP BY bucket
+        ORDER BY bucket ASC
+        """  # nosec B608 - metric name is whitelisted + identifier-checked by caller; all values are bound params
+    )
+
+    result = await db.execute(
+        query,
+        {
+            # asyncpg INTERVAL codec expects datetime.timedelta, not str
+            "bucket_interval": timedelta(seconds=bucket_seconds),
+            "host_id": host_id,
+            "start_time": start_time,
+            "end_time": end_time,
+        },
+    )
+
+    return [
+        (row.bucket, float(row.avg_value))
+        for row in result.fetchall()
+        if row.avg_value is not None
+    ]
 
 
 @router.get("/{host_id}/sparkline", response_model=SparklineResponse)
@@ -89,7 +142,7 @@ async def get_sparkline_data(
     window_seconds, bucket_seconds = WINDOW_BUCKET_MAP[window]
 
     # Calculate start time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start_time = now - timedelta(seconds=window_seconds)
 
     # Collect series data
@@ -111,41 +164,14 @@ async def get_sparkline_data(
             logger.error("Rejected non-identifier metric name", extra={"metric": metric})
             continue
 
-        # Query heartbeats with time_bucket aggregation.
-        # Column name `metric` is identifier-safe + whitelisted; interpolated
-        # only into column position (not value). avg() over NULL skips rows naturally.
-        query = text(
-            f"""
-            SELECT
-                time_bucket(:bucket_interval, ts) AS bucket,
-                avg({metric}) AS avg_value
-            FROM heartbeats
-            WHERE host_id = :host_id
-                AND ts >= :start_time
-                AND ts <= :end_time
-                AND {metric} IS NOT NULL
-            GROUP BY bucket
-            ORDER BY bucket ASC
-            """
+        points = await _fetch_bucketed_metric(
+            db,
+            host_id=host_id,
+            metric=metric,
+            bucket_seconds=bucket_seconds,
+            start_time=start_time,
+            end_time=now,
         )
-
-        result = await db.execute(
-            query,
-            {
-                # asyncpg INTERVAL codec expects datetime.timedelta, not str
-                "bucket_interval": timedelta(seconds=bucket_seconds),
-                "host_id": host_id,
-                "start_time": start_time,
-                "end_time": now,
-            },
-        )
-
-        rows = result.fetchall()
-
-        # Convert to (timestamp, value) tuples
-        points: list[tuple[datetime, float]] = [
-            (row.bucket, float(row.avg_value)) for row in rows if row.avg_value is not None
-        ]
 
         series_data.append(
             SparklineSeries(

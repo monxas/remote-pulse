@@ -30,7 +30,7 @@ import binascii
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -223,7 +223,7 @@ def _to_summary(cmd: Command, host: Host) -> CommandSummary:
 def _encode_cursor(issued_at: datetime, cmd_id: uuid.UUID) -> str:
     """Opaque base64 cursor over ``(issued_at, id)`` — the list ordering key."""
     if issued_at.tzinfo is None:
-        issued_at = issued_at.replace(tzinfo=timezone.utc)
+        issued_at = issued_at.replace(tzinfo=UTC)
     raw = json.dumps({"ts": issued_at.isoformat(), "id": str(cmd_id)}, separators=(",", ":"))
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
 
@@ -235,7 +235,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         data = json.loads(raw)
         ts = datetime.fromisoformat(data["ts"])
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
         return ts, uuid.UUID(data["id"])
     except (binascii.Error, ValueError, KeyError, TypeError) as exc:
         raise HTTPException(
@@ -283,7 +283,7 @@ def _filter_status(stmt, status_value: str):
         )
     if status_value == "canceled":
         # No explicit "canceled" state in current schema. Reserved for future.
-        return stmt.where(False)  # noqa: FBT003 — intentional empty result
+        return stmt.where(False)
     return stmt
 
 
@@ -296,7 +296,7 @@ def _scope_to_user_groups(stmt, user: User):
     if user.role == "admin":
         return stmt
     if not user.accessible_groups:
-        return stmt.where(False)  # noqa: FBT003
+        return stmt.where(False)
     return stmt.join(Host, Command.host_id == Host.id).where(
         Host.group_name.in_(user.accessible_groups)
     )
@@ -414,7 +414,7 @@ async def _create_one_command(
 ) -> Command:
     """Insert + sign one command row, handling the approval policy."""
     command_id = uuid.uuid4()
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=request.expires_in_s)
+    expires_at = datetime.now(UTC) + timedelta(seconds=request.expires_in_s)
 
     payload = dict(request.command_payload or {})
     if request.reason and "reason" not in payload:
@@ -428,7 +428,7 @@ async def _create_one_command(
         expires_at=expires_at,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     approval_token = uuid.uuid4() if requires_approval else None
     approval_requested_at = now if requires_approval else None
 
@@ -533,7 +533,7 @@ async def issue_command(
 
     # Re-load with host rows for response shape
     summaries: list[CommandSummary] = []
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     for cmd in created:
         host = by_id[cmd.host_id]
         summaries.append(_to_summary(cmd, host))
@@ -638,7 +638,7 @@ async def retry_command(
     await db.commit()
     await db.refresh(cmd)
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     fire_and_forget(
         "command.issued",
         {
@@ -774,7 +774,7 @@ async def _resolve_approval(
             detail="Command already approved",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if decision == "approved":
         # Atomic claim — guard against double-clicks / race with Telegram path.
         stmt = (
@@ -845,7 +845,7 @@ async def approve_via_dash(
             "resolved_by": user.email,
             "reason": body.reason,
             "group_name": host.group_name,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
     fire_and_forget(
@@ -855,7 +855,7 @@ async def approve_via_dash(
             "host_id": str(cmd.host_id),
             "group_name": host.group_name,
             "status": "approved",
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -887,7 +887,7 @@ async def reject_via_dash(
             "resolved_by": user.email,
             "reason": body.reason,
             "group_name": host.group_name,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
     fire_and_forget(
@@ -897,7 +897,7 @@ async def reject_via_dash(
             "host_id": str(cmd.host_id),
             "group_name": host.group_name,
             "status": "rejected",
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
 

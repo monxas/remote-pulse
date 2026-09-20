@@ -33,18 +33,10 @@ def test_install_screen_status_prints_table(runner, monkeypatch):
     async def fake_version(_self):
         return None
 
-    monkeypatch.setattr(
-        "rp.installers.rustdesk.RustDeskInstaller.detect_installed", fake_detect
-    )
-    monkeypatch.setattr(
-        "rp.installers.rustdesk.RustDeskInstaller.detect_version", fake_version
-    )
-    monkeypatch.setattr(
-        "rp.installers.sunshine.SunshineInstaller.detect_installed", fake_detect
-    )
-    monkeypatch.setattr(
-        "rp.installers.sunshine.SunshineInstaller.detect_version", fake_version
-    )
+    monkeypatch.setattr("rp.installers.rustdesk.RustDeskInstaller.detect_installed", fake_detect)
+    monkeypatch.setattr("rp.installers.rustdesk.RustDeskInstaller.detect_version", fake_version)
+    monkeypatch.setattr("rp.installers.sunshine.SunshineInstaller.detect_installed", fake_detect)
+    monkeypatch.setattr("rp.installers.sunshine.SunshineInstaller.detect_version", fake_version)
     monkeypatch.setattr("rp.installers.vnc.VNCInstaller.detect_installed", fake_detect)
 
     result = runner.invoke(main, ["status"])
@@ -76,9 +68,7 @@ def test_install_screen_rustdesk_force_idempotent(runner, monkeypatch):
     )
 
     monkeypatch.setattr(cmd_mod.RustDeskInstaller, "install", install_mock)
-    monkeypatch.setattr(
-        cmd_mod.RustDeskInstaller, "configure_direct_ip", configure_mock
-    )
+    monkeypatch.setattr(cmd_mod.RustDeskInstaller, "configure_direct_ip", configure_mock)
 
     result = runner.invoke(
         main,

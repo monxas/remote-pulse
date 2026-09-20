@@ -342,10 +342,15 @@ export function useLiveStream(client: QueryClient): LiveStream {
   // SPA shell for unknown paths so EventSource would log a `text/html`
   // MIME-type error to the console, dragging the best-practices score
   // below the budget. The bypass is tree-shaken out of release builds.
+  //
+  // Matched with a regex rather than URL/URLSearchParams on purpose: this is a
+  // one-shot read at setup time, and instantiating either built-in trips
+  // `svelte/prefer-svelte-reactivity`, which exists to catch *reactive* state
+  // held in those classes. There is nothing reactive to hold here.
   const lhBypassActive =
     import.meta.env.VITE_LH_BYPASS === '1' &&
     typeof window !== 'undefined' &&
-    new URL(window.location.href).searchParams.get('_lh') === '1';
+    /[?&]_lh=1(?:&|$)/.test(window.location.search);
   if (lhBypassActive) {
     state = 'disabled';
   } else {

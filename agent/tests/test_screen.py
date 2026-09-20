@@ -1,7 +1,8 @@
 """Tests for screen sharing capabilities (F6)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from rp.screen import (
     HostResolver,
@@ -105,9 +106,7 @@ async def test_rustdesk_launcher_success():
 
     launcher = RustDeskLauncher()
 
-    with patch.object(
-        launcher, "_find_rustdesk_binary", return_value="/usr/bin/rustdesk"
-    ):
+    with patch.object(launcher, "_find_rustdesk_binary", return_value="/usr/bin/rustdesk"):
         with patch("subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.wait.return_value = 0
@@ -157,9 +156,7 @@ async def test_rustdesk_launcher_no_password():
 
     launcher = RustDeskLauncher()
 
-    with patch.object(
-        launcher, "_find_rustdesk_binary", return_value="/usr/bin/rustdesk"
-    ):
+    with patch.object(launcher, "_find_rustdesk_binary", return_value="/usr/bin/rustdesk"):
         with pytest.raises(ValueError, match="no rustdesk_password capability"):
             await launcher.launch(host)
 
@@ -177,9 +174,7 @@ async def test_sunshine_launcher_success():
 
     launcher = SunshineLauncher()
 
-    with patch.object(
-        launcher, "_find_moonlight_binary", return_value="/usr/bin/moonlight"
-    ):
+    with patch.object(launcher, "_find_moonlight_binary", return_value="/usr/bin/moonlight"):
         with patch("subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.wait.return_value = 0

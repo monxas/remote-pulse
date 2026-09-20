@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rp.upgrade import AgentUpgrader, UpgradeResult, RollbackResult
+from rp import __version__
+from rp.upgrade import AgentUpgrader, RollbackResult, UpgradeResult
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def test_get_versions_no_prev(upgrader, tmp_path):
     """Test get_versions when no previous version exists."""
     with patch("rp.upgrade.PREV_BIN", tmp_path / "rp-prev"):
         versions = upgrader.get_versions()
-        assert versions["current"] == "0.1.0"  # From __version__
+        assert versions["current"] == __version__
         assert versions["previous"] is None
         assert isinstance(versions["available_versions"], list)
 
@@ -52,7 +53,7 @@ def test_get_versions_with_prev(upgrader, tmp_path):
 
     with patch("rp.upgrade.PREV_BIN", prev_symlink):
         versions = upgrader.get_versions()
-        assert versions["current"] == "0.1.0"
+        assert versions["current"] == __version__
         assert versions["previous"] == "0.0.9"
 
 
@@ -62,11 +63,33 @@ async def test_upgrade_dry_run(upgrader):
     result = await upgrader.upgrade_to("0.2.0", dry_run=True)
 
     assert isinstance(result, UpgradeResult)
-    assert result.old_version == "0.1.0"
+    assert result.old_version == __version__
     assert result.new_version == "0.2.0"
     assert result.success is True
     assert result.rollback is False
     assert len(result.errors) == 0
+
+
+@pytest.mark.asyncio
+async def test_upgrade_dry_run_touches_no_directories(upgrader, tmp_path):
+    """A dry run must not create BIN_DIR / STATE_DIR.
+
+    Regression guard: `upgrade_to()` used to mkdir both before checking the
+    dry_run flag, so `rp upgrade --dry-run` created /opt/rp/bin and /var/lib/rp
+    as a side effect (and blew up as a non-root user).
+    """
+    bin_dir = tmp_path / "bin"
+    state_dir = tmp_path / "state"
+
+    with (
+        patch("rp.upgrade.BIN_DIR", bin_dir),
+        patch("rp.upgrade.STATE_DIR", state_dir),
+    ):
+        result = await upgrader.upgrade_to("0.2.0", dry_run=True)
+
+    assert result.success is True
+    assert not bin_dir.exists()
+    assert not state_dir.exists()
 
 
 @pytest.mark.asyncio
@@ -83,14 +106,10 @@ async def test_download_binary_checksum_mismatch(upgrader):
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
-        mock_client.get = AsyncMock(
-            side_effect=[mock_response_binary, mock_response_checksum]
-        )
+        mock_client.get = AsyncMock(side_effect=[mock_response_binary, mock_response_checksum])
         mock_client_cls.return_value = mock_client
 
-        binary_path, checksum_ok = await upgrader._download_binary(
-            "0.2.0", "rp-linux-x86_64"
-        )
+        binary_path, checksum_ok = await upgrader._download_binary("0.2.0", "rp-linux-x86_64")
 
         assert binary_path.exists()
         assert checksum_ok is False  # Checksum should not match
@@ -138,7 +157,7 @@ async def test_rollback_with_prev(upgrader, tmp_path, mock_client):
         result = await upgrader.rollback(reason="test")
 
         assert isinstance(result, RollbackResult)
-        assert result.from_version == "0.1.0"
+        assert result.from_version == __version__
         assert result.to_version == "0.0.9"
         # Rollback may partially succeed even if service restart fails
         # so we just check structure

@@ -4,16 +4,16 @@ Implements defense-in-depth human-in-the-loop approval flow via n8n + Telegram.
 Commands requiring approval are held until admin responds via Telegram inline buttons.
 """
 
-import hmac
 import hashlib
+import hmac
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, and_, update
+from sqlalchemy import and_, select, update
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin, require_operator_or_admin
@@ -153,12 +153,29 @@ async def request_approval(
 
     # Generate approval token
     approval_token = uuid.uuid4()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    requested_at = datetime.now(UTC)
+    expires_at = requested_at + timedelta(minutes=5)
 
-    # Update command (NOTE: this is OK despite __setattr__ guard because
-    # we're updating before first commit completes in transaction)
-    command.approval_token = approval_token
-    command.approval_requested_at = datetime.now(timezone.utc)
+    # Write through Core UPDATE, like approve_command() below. The old code
+    # assigned the ORM attributes directly with a comment claiming that was
+    # "OK despite the __setattr__ guard because we're updating before first
+    # commit completes" -- which was wrong: `command` was just SELECTed, so its
+    # instance state is `persistent` and Command.__setattr__ raises
+    # RuntimeError("Cannot modify Command after commit"). This endpoint
+    # therefore returned 500 every single time it was called.
+    #
+    # The `approval_token IS NULL` guard also makes the 409 above TOCTOU-safe:
+    # two concurrent requests can both pass the SELECT, only one updates a row.
+    stmt = (
+        update(Command)
+        .where(and_(Command.id == command_id, Command.approval_token.is_(None)))
+        .values(approval_token=approval_token, approval_requested_at=requested_at)
+    )
+    if (await db.execute(stmt)).rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approval already requested for this command",
+        )
 
     await db.commit()
 
@@ -174,7 +191,7 @@ async def request_approval(
         {
             "approval_id": str(approval_token),
             "command_id": str(command_id),
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -213,7 +230,7 @@ async def approve_command(
     # Atomic claim: clear token + mark approved in single UPDATE with WHERE
     # guard (TOCTOU-safe). Only the first request wins; subsequent requests
     # for same token observe rowcount=0.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ttl_cutoff = now - timedelta(seconds=300)  # 5min TTL per ADR §13
 
     stmt = (
@@ -338,8 +355,8 @@ async def reject_command(
 
     # Check expiration
     if command.approval_requested_at:
-        age = datetime.now(timezone.utc) - command.approval_requested_at.replace(
-            tzinfo=timezone.utc
+        age = datetime.now(UTC) - command.approval_requested_at.replace(
+            tzinfo=UTC
         )
         if age.total_seconds() > 300:
             raise HTTPException(
@@ -347,11 +364,19 @@ async def reject_command(
                 detail="Approval token expired",
             )
 
-    # Mark rejected
+    # Mark rejected. Core UPDATE for the same reason as request_approval():
+    # `command` came out of a SELECT, so direct attribute assignment tripped
+    # Command.__setattr__ and made this endpoint return 500 unconditionally.
     reason = payload.reason or "rejected by admin via Telegram"
-    command.rejected_reason = f"telegram_reject:{payload.approver_id}:{reason}"
-    command.approval_responded_at = datetime.now(timezone.utc)
-    command.approval_token = None
+    await db.execute(
+        update(Command)
+        .where(Command.id == command.id)
+        .values(
+            rejected_reason=f"telegram_reject:{payload.approver_id}:{reason}",
+            approval_responded_at=datetime.now(UTC),
+            approval_token=None,  # single-use
+        )
+    )
 
     await db.commit()
 
@@ -364,7 +389,7 @@ async def reject_command(
     )
 
     # ADR-0009 Phase 1: SSE notification (status transition)
-    _now_iso = datetime.now(timezone.utc).isoformat()
+    _now_iso = datetime.now(UTC).isoformat()
     fire_and_forget(
         "command.status_change",
         {

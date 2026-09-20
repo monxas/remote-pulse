@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import Field, HttpUrl, PostgresDsn, SecretStr
+from pydantic import Field, PostgresDsn, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

@@ -1,8 +1,10 @@
 """Tests for agent-side API compatibility handler."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from rp import __version__
 from rp.compat import APICompatHandler, IncompatibleVersionError
 
 
@@ -21,7 +23,7 @@ class TestAPICompatHandler:
         assert "Sec-RP-Agent-Version" in result
         assert "Sec-RP-Min-Server" in result
         assert "Sec-RP-Features" in result
-        assert result["Sec-RP-Agent-Version"] == "0.1.0"
+        assert result["Sec-RP-Agent-Version"] == __version__
 
     def test_is_version_compatible(self, handler):
         """Test semver comparison."""

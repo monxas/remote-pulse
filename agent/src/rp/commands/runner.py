@@ -28,7 +28,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -56,12 +56,12 @@ class RemoteCommand:
     server_signature: str
     issued_by: str
     issued_at: str
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     # Kept for legacy callers; not populated by the Phase 2.5 server.
-    target_group: Optional[str] = None
+    target_group: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RemoteCommand":
+    def from_dict(cls, data: dict[str, Any]) -> RemoteCommand:
         """Build from the wire format emitted by /v1/agent/commands/pending."""
         return cls(
             id=str(data["id"]),
@@ -82,10 +82,10 @@ class CommandResult:
     """Result of command execution, headed back to the server."""
 
     ack: bool
-    exit_code: Optional[int] = None
-    stdout: Optional[str] = None
-    stderr: Optional[str] = None
-    rejected_reason: Optional[str] = None
+    exit_code: int | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    rejected_reason: str | None = None
 
 
 def _truncate(s: str, limit: int = MAX_STREAM_BYTES) -> str:
@@ -123,9 +123,7 @@ def _run_shell(payload: dict[str, Any]) -> CommandResult:
     try:
         timeout = int(timeout)
     except (TypeError, ValueError):
-        return CommandResult(
-            ack=False, rejected_reason="invalid_payload: 'timeout_s' must be int"
-        )
+        return CommandResult(ack=False, rejected_reason="invalid_payload: 'timeout_s' must be int")
     if timeout <= 0 or timeout > 3600:
         return CommandResult(
             ack=False,
@@ -153,8 +151,7 @@ def _run_shell(payload: dict[str, Any]) -> CommandResult:
             exit_code=None,
             stdout=_truncate(exc.stdout if isinstance(exc.stdout, str) else ""),
             stderr=_truncate(
-                (exc.stderr if isinstance(exc.stderr, str) else "")
-                + f"\ntimeout after {timeout}s"
+                (exc.stderr if isinstance(exc.stderr, str) else "") + f"\ntimeout after {timeout}s"
             ),
             rejected_reason="timeout",
         )
@@ -197,7 +194,5 @@ async def execute_remote_command(cmd: RemoteCommand) -> CommandResult:
 
     return CommandResult(
         ack=False,
-        rejected_reason=(
-            f"command_type '{cmd.command_type}' not implemented in v1.0"
-        ),
+        rejected_reason=(f"command_type '{cmd.command_type}' not implemented in v1.0"),
     )

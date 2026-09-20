@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -149,7 +149,7 @@ async def sparkline_data_json(
     window_seconds = window_map.get(window, 300)
     bucket_seconds = max(window_seconds // 60, 1)
 
-    start_time = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    start_time = datetime.now(UTC) - timedelta(seconds=window_seconds)
 
     uplot_data: list = []
     timestamps: list[int] = []
@@ -172,7 +172,7 @@ async def sparkline_data_json(
                 AND {metric} IS NOT NULL
             GROUP BY bucket
             ORDER BY bucket ASC
-            """
+            """  # nosec B608 - metric name is whitelisted + identifier-checked above; all values are bound params
         )
 
         result = await db.execute(

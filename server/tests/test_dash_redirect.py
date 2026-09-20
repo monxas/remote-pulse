@@ -16,7 +16,7 @@ tests in this suite (``test_dash_api.py``).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import Host, User
-
 
 # --------------------------------------------------------------------------- #
 # Helpers (mirrors test_dash_api.py — kept local to avoid cross-test imports)
@@ -64,7 +63,7 @@ async def _make_host(db: AsyncSession, *, hostname: str, group: str = "prod") ->
         arch="x86_64",
         agent_version="1.0.0",
         group_name=group,
-        last_seen_at=datetime.now(timezone.utc) - timedelta(seconds=10),
+        last_seen_at=datetime.now(UTC) - timedelta(seconds=10),
     )
     db.add(host)
     await db.commit()

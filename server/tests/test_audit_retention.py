@@ -14,7 +14,7 @@ Covers:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -31,7 +31,6 @@ from rp_server.audit_retention import (
 from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import AuditEvent, AuditRetentionConfig, User
-
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -127,7 +126,7 @@ async def test_update_config_persists_and_rejects_out_of_range(
 
 async def test_purge_deletes_only_old_rows(test_db: AsyncSession) -> None:
     """Rows older than retention_days vanish; newer rows survive."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await get_config(test_db)
     await update_config(test_db, actor="t", retention_days=30)
     await test_db.commit()
@@ -144,7 +143,7 @@ async def test_purge_deletes_only_old_rows(test_db: AsyncSession) -> None:
 
 
 async def test_purge_respects_enabled_false(test_db: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await get_config(test_db)
     await update_config(test_db, actor="t", retention_days=30, enabled=False)
     await test_db.commit()
@@ -160,7 +159,7 @@ async def test_purge_respects_enabled_false(test_db: AsyncSession) -> None:
 
 
 async def test_purge_updates_book_keeping(test_db: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await get_config(test_db)
     await update_config(test_db, actor="t", retention_days=10)
     await test_db.commit()
@@ -180,7 +179,7 @@ async def test_purge_updates_book_keeping(test_db: AsyncSession) -> None:
 
 async def test_purge_with_no_old_events_is_a_noop(test_db: AsyncSession) -> None:
     """Edge: empty / all-fresh table — still updates last_purge_at."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await get_config(test_db)
     await test_db.commit()
 
@@ -327,7 +326,7 @@ async def test_purge_now_runs_and_emits_audit(
     test_db: AsyncSession,
 ) -> None:
     admin = await _make_user(test_db, role="admin")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Seed: shorten policy so the test event qualifies for purge.
     await get_config(test_db)

@@ -5,13 +5,13 @@ Commands stored in immutable audit log, agents poll for pending.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from rp_server.database import DbSession
 from rp_server.deps import require_admin, require_operator_or_admin
@@ -126,7 +126,7 @@ async def create_command(
 
     # Generate command ID and expiration
     command_id = uuid.uuid4()
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=request.expires_in_s)
+    expires_at = datetime.now(UTC) + timedelta(seconds=request.expires_in_s)
 
     # Sign command
     signing_key = get_signing_key()
@@ -172,7 +172,7 @@ async def create_command(
             "group_name": host.group_name,
             "command_type": request.command_type,
             "issued_by": issued_by,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -325,7 +325,7 @@ async def initiate_canary_upgrade(
     # Issue signed upgrade command to canary host
     signing_key = get_signing_key()
     command_id = uuid.uuid4()
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=300)
+    expires_at = datetime.now(UTC) + timedelta(seconds=300)
 
     payload = {
         "target_version": request.target_version,

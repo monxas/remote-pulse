@@ -1,12 +1,10 @@
 """Tests for TUI dashboard."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from textual.widgets import DataTable
-
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 from rp.dash.app import RemotePulseApp
 from rp.dash.widgets import HostDetail, HostList, SparklineWidget
@@ -62,7 +60,7 @@ async def test_host_list_renders_mock_data():
                     "agent_version": "0.1.0",
                     "group_name": "prod",
                     "enrolled_at": "2025-05-25T10:00:00Z",
-                    "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                    "last_seen_at": datetime.now(UTC).isoformat(),
                 },
                 {
                     "id": "22222222-2222-2222-2222-222222222222",
@@ -103,7 +101,7 @@ async def test_sparkline_widget_accepts_data():
             sparkline = app.query_one("#spark-cpu", SparklineWidget)
 
             # Mock data points
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             points = [
                 (now, 10.0),
                 (now, 20.0),
@@ -142,13 +140,11 @@ async def test_host_detail_updates():
                 "id": "11111111-1111-1111-1111-111111111111",
                 "hostname": "test-host",
                 "group_name": "prod",
-                "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                "last_seen_at": datetime.now(UTC).isoformat(),
                 "recent_heartbeats": [],
             }
 
-            host_detail.update_host_info(
-                "11111111-1111-1111-1111-111111111111", mock_detail
-            )
+            host_detail.update_host_info("11111111-1111-1111-1111-111111111111", mock_detail)
             await pilot.pause()
 
             # Check that hostname is displayed
@@ -187,7 +183,7 @@ async def test_sparkline_clear():
             sparkline = app.query_one("#spark-mem", SparklineWidget)
 
             # Add data
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             points = [(now, 50.0), (now, 60.0)]
             sparkline.update_data(points)
             await pilot.pause()

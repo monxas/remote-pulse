@@ -3,13 +3,12 @@
 import socket
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import httpx
 import structlog
 
-from rp.config import AgentConfig, save_config, DEFAULT_CONFIG_PATH
+from rp.config import DEFAULT_CONFIG_PATH, AgentConfig, save_config
 from rp.platform_detect import get_host_fingerprint, get_platform_info
 
 logger = structlog.get_logger()
@@ -24,9 +23,9 @@ logger = structlog.get_logger()
 def install(
     token: str,
     server: str,
-    hostname: Optional[str],
-    group: Optional[str],
-    config_path: Optional[str],
+    hostname: str | None,
+    group: str | None,
+    config_path: str | None,
 ):
     """
     Install and register Remote-Pulse agent.

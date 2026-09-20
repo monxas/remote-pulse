@@ -1,10 +1,11 @@
 """Enrollment endpoint for agent onboarding."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
 from jose import JWTError
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -22,7 +23,6 @@ from rp_server.integrations.tailscale_api import (
 from rp_server.models import Enrollment, Host
 from rp_server.schemas import AgentConfig, EnrollRequest, EnrollResponse
 from rp_server.signing import ServerSigningKey
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["enrollment"])
@@ -138,12 +138,12 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
             detail="Enrollment token has been exhausted",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # SQLite (test fixture) returns naive datetimes for TIMESTAMP columns even
     # when inserted as tz-aware; Postgres returns aware. Normalize both sides.
     expires_at = enrollment.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at < now:
         from rp_server.metrics_exporter import record_enroll_failure
 
@@ -205,7 +205,10 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
                 expiry_seconds=settings.tailscale_authkey_expiry_seconds,
                 tags=[group_tag],
                 # Tailscale rejects ':' and '+' in descriptions, so use a safe format.
-                description=f"rp enroll {host.hostname} {datetime.now(timezone.utc).strftime('%Y-%m-%d %H%M%S UTC')}",
+                description=(
+                    f"rp enroll {host.hostname} "
+                    f"{datetime.now(UTC).strftime('%Y-%m-%d %H%M%S UTC')}"
+                ),
             )
 
             tailscale_authkey = ts_response.key
@@ -347,7 +350,10 @@ async def reauth_agent(request: ReauthRequest, db: DbSession) -> ReauthResponse:
                 preauthorized=True,
                 expiry_seconds=settings.tailscale_authkey_expiry_seconds,
                 tags=[group_tag],
-                description=f"rp reauth {host.hostname} {datetime.now(timezone.utc).strftime('%Y-%m-%d %H%M%S UTC')}",
+                description=(
+                    f"rp reauth {host.hostname} "
+                    f"{datetime.now(UTC).strftime('%Y-%m-%d %H%M%S UTC')}"
+                ),
             )
 
             tailscale_authkey = ts_response.key
