@@ -31,7 +31,7 @@ without a destructive ``DELETE``.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from urllib.parse import urlparse
 
@@ -50,7 +50,6 @@ from rp_server.database import DbSession
 from rp_server.deps import current_user, require_admin
 from rp_server.models import Enrollment, User
 from rp_server.permissions import user_has_permission
-
 
 # Default TTL for new short-code links: 5 minutes. The legacy CLI / Telegram
 # code path still defaults to the historical 24h via
@@ -342,7 +341,7 @@ async def create_enroll_link(
         max_uses=payload.max_uses,
     )
 
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
+    expires_at = datetime.now(UTC) + timedelta(minutes=ttl_minutes)
 
     # Retry loop: the partial unique index on ``short_code`` rejects an
     # insert if another active row already has the same canonical code.
@@ -459,7 +458,7 @@ async def list_enroll_links(
     revocation works by collapsing those two columns, soft-revoked rows
     disappear here automatically.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Note: ``used_count < max_uses`` is the same predicate the consume path
     # uses in routers/enroll.py, so what the UI sees matches what would
@@ -550,7 +549,7 @@ async def revoke_enroll_link(
             ),
         )
 
-    enrollment.expires_at = datetime.now(timezone.utc)
+    enrollment.expires_at = datetime.now(UTC)
     enrollment.used_count = enrollment.max_uses
     await db.commit()
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import delete, text, update
@@ -120,7 +120,7 @@ async def test_approval_expiry_window_atomic(test_db):
         command_payload={},
         server_signature="x",
         approval_token=token,
-        approval_requested_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        approval_requested_at=datetime.now(UTC) - timedelta(minutes=10),
         human_approved=False,
     )
     test_db.add(cmd)
@@ -131,7 +131,7 @@ async def test_approval_expiry_window_atomic(test_db):
         .where(
             Command.approval_token == token,
             Command.human_approved.is_(False),
-            Command.approval_requested_at >= datetime.now(timezone.utc) - timedelta(seconds=300),
+            Command.approval_requested_at >= datetime.now(UTC) - timedelta(seconds=300),
         )
         .values(human_approved=True, approved_by="telegram:test")
         .returning(Command.id)
@@ -151,7 +151,7 @@ async def test_approval_token_atomic_single_winner(test_db):
         command_payload={},
         server_signature="x",
         approval_token=token,
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
         human_approved=False,
     )
     test_db.add(cmd)

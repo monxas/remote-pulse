@@ -1,20 +1,21 @@
 """Local policy management commands."""
 
+import json
 import os
 import sys
-import json
+
 import click
 import structlog
 
 from rp.local_policy import (
-    LocalPolicy,
     CommandDecision,
-    touch_flag,
-    remove_flag,
+    LocalPolicy,
     add_to_whitelist,
+    get_flag_status,
+    remove_flag,
     remove_from_whitelist,
     show_whitelist,
-    get_flag_status,
+    touch_flag,
 )
 
 logger = structlog.get_logger()
@@ -56,7 +57,6 @@ def local():
     Local-approval flags and whitelists provide additional security layer
     beyond server authentication. See ADR-0008 review C3.
     """
-    pass
 
 
 @local.command()
@@ -78,11 +78,7 @@ def status(group: str):
     if exec_status["exists"]:
         expired = exec_status["expired"]
         age_hrs = exec_status["age_hours"]
-        value = (
-            f"ACTIVE ({age_hrs:.1f}h old)"
-            if not expired
-            else f"EXPIRED ({age_hrs:.1f}h old)"
-        )
+        value = f"ACTIVE ({age_hrs:.1f}h old)" if not expired else f"EXPIRED ({age_hrs:.1f}h old)"
         click.echo(_format_status_line("allow-remote-exec", value, not expired))
     else:
         click.echo(_format_status_line("allow-remote-exec", "NOT SET", False))
@@ -91,11 +87,7 @@ def status(group: str):
     if write_status["exists"]:
         expired = write_status["expired"]
         age_hrs = write_status["age_hours"]
-        value = (
-            f"ACTIVE ({age_hrs:.1f}h old)"
-            if not expired
-            else f"EXPIRED ({age_hrs:.1f}h old)"
-        )
+        value = f"ACTIVE ({age_hrs:.1f}h old)" if not expired else f"EXPIRED ({age_hrs:.1f}h old)"
         click.echo(_format_status_line("allow-remote-write", value, not expired))
     else:
         click.echo(_format_status_line("allow-remote-write", "NOT SET", False))
@@ -104,11 +96,7 @@ def status(group: str):
     click.echo("\nWhitelists:")
     restart_items = show_whitelist("restart-whitelist")
     if restart_items:
-        click.echo(
-            _format_status_line(
-                "restart-whitelist", f"{len(restart_items)} services", True
-            )
-        )
+        click.echo(_format_status_line("restart-whitelist", f"{len(restart_items)} services", True))
         for item in restart_items[:5]:
             click.echo(f"      - {item}")
         if len(restart_items) > 5:
@@ -118,9 +106,7 @@ def status(group: str):
 
     read_items = show_whitelist("read-allowlist")
     if read_items:
-        click.echo(
-            _format_status_line("read-allowlist", f"{len(read_items)} patterns", True)
-        )
+        click.echo(_format_status_line("read-allowlist", f"{len(read_items)} patterns", True))
         for item in read_items[:5]:
             click.echo(f"      - {item}")
         if len(read_items) > 5:
@@ -146,9 +132,7 @@ def allow_exec(ttl: str):
         if ttl.endswith("h"):
             ttl_hours = int(ttl[:-1])
         else:
-            click.secho(
-                f"Invalid TTL format: {ttl} (use format: 24h)", fg="red", err=True
-            )
+            click.secho(f"Invalid TTL format: {ttl} (use format: 24h)", fg="red", err=True)
             sys.exit(1)
     except ValueError:
         click.secho(f"Invalid TTL format: {ttl}", fg="red", err=True)
@@ -214,15 +198,12 @@ def approve_write(ttl: str, path: str):
     else:
         click.echo(f"Remote write enabled (TTL: {ttl})")
 
-    click.echo(
-        "  Note: Paths outside /etc/rp/ and /opt/rp/ still require Telegram approval"
-    )
+    click.echo("  Note: Paths outside /etc/rp/ and /opt/rp/ still require Telegram approval")
 
 
 @local.group(name="whitelist")
 def whitelist():
     """Manage service/path whitelists."""
-    pass
 
 
 @whitelist.command(name="add")

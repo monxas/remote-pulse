@@ -1,6 +1,6 @@
 """Tests for screen capabilities detection in platform_detect."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from rp.platform_detect import detect_screen_capabilities
 
@@ -63,9 +63,7 @@ def test_detect_sunshine_windows(mock_which, mock_get_os):
 def test_detect_vnc_linux(mock_which, mock_get_os):
     """Test VNC detection on Linux."""
     mock_get_os.return_value = "linux"
-    mock_which.side_effect = lambda x: (
-        "/usr/bin/vncserver" if x == "vncserver" else None
-    )
+    mock_which.side_effect = lambda x: "/usr/bin/vncserver" if x == "vncserver" else None
 
     caps = detect_screen_capabilities()
 

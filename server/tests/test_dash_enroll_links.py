@@ -17,7 +17,7 @@ against our seeded fixture user.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -220,7 +220,7 @@ async def _seed_enrollment(
         token_jti=str(uuid.uuid4()),
         issued_by=issued_by,
         group_name=group,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=ttl_hours),
+        expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
         max_uses=max_uses,
         used_count=used_count,
     )
@@ -242,7 +242,7 @@ async def test_list_filters_out_expired_and_exhausted(
         token_jti=str(uuid.uuid4()),
         issued_by="seed@test.local",
         group_name="beta",
-        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
         max_uses=1,
         used_count=0,
     )
@@ -295,8 +295,8 @@ async def test_revoke_link_makes_it_disappear_from_listing(
         # SQLite drops the timezone on round-trip; normalise both sides.
         expires_at = target.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        assert expires_at <= datetime.now(timezone.utc) + timedelta(seconds=1)
+            expires_at = expires_at.replace(tzinfo=UTC)
+        assert expires_at <= datetime.now(UTC) + timedelta(seconds=1)
     finally:
         _clear_user_override()
 

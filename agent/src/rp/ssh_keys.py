@@ -186,9 +186,7 @@ async def sync_authorized_keys(client: Any, host_id: uuid.UUID) -> bool:
     # Write atomically
     await _atomic_write(MANAGED_KEYS_PATH, new_content)
 
-    logger.info(
-        "authorized_keys_updated", sha256=new_sha256, path=str(MANAGED_KEYS_PATH)
-    )
+    logger.info("authorized_keys_updated", sha256=new_sha256, path=str(MANAGED_KEYS_PATH))
     return True
 
 
@@ -247,9 +245,7 @@ async def configure_sshd_authorized_keys_d() -> bool:
     current_content = sshd_config.read_text()
 
     # Check if already configured
-    target_line = (
-        "AuthorizedKeysFile .ssh/authorized_keys /etc/rp/authorized_keys.d/managed"
-    )
+    target_line = "AuthorizedKeysFile .ssh/authorized_keys /etc/rp/authorized_keys.d/managed"
     if target_line in current_content:
         logger.info("sshd_already_configured")
         return False

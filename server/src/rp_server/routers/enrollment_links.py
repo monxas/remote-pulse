@@ -5,7 +5,7 @@ with QR codes for easy agent onboarding.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
 
@@ -67,14 +67,14 @@ async def generate_enrollment_link(
     """
     # Generate JWT with embedded group + hostname hint
     jti = str(uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=request_data.ttl_hours)
+    expires_at = datetime.now(UTC) + timedelta(hours=request_data.ttl_hours)
 
     # NOTE: claim names must match the validator in routers/enroll.py:
     # it expects `group_name` (not `group`) and `issued_by`.
     payload = {
         "jti": jti,
         "iss": "remote-pulse-server",
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expires_at,
         "group_name": request_data.group,
         "issued_by": user.email,

@@ -1,7 +1,7 @@
 """Main TUI application for Remote-Pulse dashboard."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import structlog
@@ -177,7 +177,7 @@ class RemotePulseApp(App):
     async def _fetch_hosts(self) -> None:
         """Fetch host list from server."""
         hosts = await self.api_client.list_hosts()
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         self.post_message(HostsRefreshed(hosts=hosts, timestamp=timestamp))
 
     async def _fetch_host_detail(self, host_id: str) -> None:
@@ -234,19 +234,13 @@ class RemotePulseApp(App):
         self.run_worker(self._fetch_hosts(), exclusive=False)
 
         if self._selected_host_id:
-            self.run_worker(
-                self._fetch_host_detail(self._selected_host_id), exclusive=False
-            )
-            self.run_worker(
-                self._fetch_sparklines(self._selected_host_id), exclusive=False
-            )
+            self.run_worker(self._fetch_host_detail(self._selected_host_id), exclusive=False)
+            self.run_worker(self._fetch_sparklines(self._selected_host_id), exclusive=False)
 
     def action_help(self) -> None:
         """Show help screen."""
         # TODO F3: Implement modal help screen
-        self.notify(
-            "Help: q=quit r=refresh w=window s=series c=ssh e=exec", title="Keybindings"
-        )
+        self.notify("Help: q=quit r=refresh w=window s=series c=ssh e=exec", title="Keybindings")
 
     def action_change_window(self) -> None:
         """Change sparkline time window."""
@@ -260,16 +254,12 @@ class RemotePulseApp(App):
 
         # Refresh sparklines with new window
         if self._selected_host_id:
-            self.run_worker(
-                self._fetch_sparklines(self._selected_host_id), exclusive=False
-            )
+            self.run_worker(self._fetch_sparklines(self._selected_host_id), exclusive=False)
 
     def action_change_series(self) -> None:
         """Change active sparkline series."""
         # TODO F3: Implement series selector modal
-        self.notify(
-            "Series filter not yet implemented", severity="warning", title="TODO"
-        )
+        self.notify("Series filter not yet implemented", severity="warning", title="TODO")
 
     def action_connect_ssh(self) -> None:
         """Connect SSH to selected host."""

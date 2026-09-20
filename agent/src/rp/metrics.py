@@ -106,9 +106,7 @@ class MetricsCollector:
         # Per-core CPU
         try:
             per_cpu = psutil.cpu_percent(interval=0.5, percpu=True)
-            metrics["cpu_per_core"] = {
-                f"core_{i}": pct for i, pct in enumerate(per_cpu)
-            }
+            metrics["cpu_per_core"] = {f"core_{i}": pct for i, pct in enumerate(per_cpu)}
         except Exception as e:
             logger.warning("failed to collect per-core cpu", error=str(e))
 

@@ -36,9 +36,7 @@ class HostDetailRefreshed(Message):
 class SparklineDataReady(Message):
     """Emitted when sparkline data is fetched."""
 
-    def __init__(
-        self, host_id: str, series: dict[str, list[tuple[datetime, float]]]
-    ) -> None:
+    def __init__(self, host_id: str, series: dict[str, list[tuple[datetime, float]]]) -> None:
         self.host_id = host_id
         self.series = series
         super().__init__()

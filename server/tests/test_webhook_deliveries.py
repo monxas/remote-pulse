@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -27,7 +27,6 @@ from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import AuditEvent, User, Webhook
 from rp_server.webhooks import get_dispatcher, set_dispatcher
-
 
 # --------------------------------------------------------------------------- #
 # Test plumbing — kept minimal and self-contained so this file stands alone
@@ -94,7 +93,7 @@ def _make_delivery_entry(
     return {
         "delivery_id": delivery_id or str(uuid.uuid4()),
         "event": event,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "status_code": status_code,
         "error": None if success else f"HTTP {status_code}",
         "attempt": 1 if success else 4,

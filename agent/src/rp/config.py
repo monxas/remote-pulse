@@ -2,11 +2,11 @@
 
 import os
 import sys
+import tomllib
 from pathlib import Path
-from typing import Optional
 
-from pydantic import BaseModel, Field
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
 
@@ -30,10 +30,10 @@ class AgentConfig(BaseModel):
     # cheap to do because the server response is small and only returns rows
     # in a narrow approved-but-not-completed window.
     command_poll_interval_s: int = Field(default=5, ge=1, le=300)
-    group: Optional[str] = None
+    group: str | None = None
 
 
-def load_config(config_path: Optional[Path] = None) -> AgentConfig:
+def load_config(config_path: Path | None = None) -> AgentConfig:
     """
     Load configuration from TOML file.
 
@@ -51,21 +51,14 @@ def load_config(config_path: Optional[Path] = None) -> AgentConfig:
         config_path = DEFAULT_CONFIG_PATH
 
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Config file not found: {config_path}. Run 'rp install' first."
-        )
+        raise FileNotFoundError(f"Config file not found: {config_path}. Run 'rp install' first.")
 
     logger.debug("loading config", path=str(config_path))
 
-    # Use stdlib tomllib (Python 3.11+)
-    if sys.version_info >= (3, 11):
-        import tomllib
-
-        with open(config_path, "rb") as f:
-            data = tomllib.load(f)
-    else:
-        # Fallback for 3.10 (though we require 3.12+)
-        raise RuntimeError("Python 3.11+ required")
+    # stdlib tomllib: the project is `requires-python = ">=3.12"`, so the old
+    # `if sys.version_info >= (3, 11)` guard could never take its else branch.
+    with open(config_path, "rb") as f:
+        data = tomllib.load(f)
 
     # Allow env var overrides for testing
     if "RP_SERVER_URL" in os.environ:
@@ -77,7 +70,7 @@ def load_config(config_path: Optional[Path] = None) -> AgentConfig:
         raise ValueError(f"Invalid config: {e}")
 
 
-def save_config(config: AgentConfig, config_path: Optional[Path] = None) -> None:
+def save_config(config: AgentConfig, config_path: Path | None = None) -> None:
     """
     Save configuration to TOML file.
 

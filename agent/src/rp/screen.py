@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -78,9 +78,7 @@ class HostResolver:
 
         if len(matches) > 1:
             hostnames = [h["hostname"] for h in matches]
-            raise ValueError(
-                f"Ambiguous target '{target}' matches: {', '.join(hostnames)}"
-            )
+            raise ValueError(f"Ambiguous target '{target}' matches: {', '.join(hostnames)}")
 
         host = matches[0]
 
@@ -115,7 +113,7 @@ class HostResolver:
 class RustDeskLauncher:
     """Launch local RustDesk client connected to remote host."""
 
-    async def launch(self, host: ResolvedHost, password: Optional[str] = None) -> int:
+    async def launch(self, host: ResolvedHost, password: str | None = None) -> int:
         """
         Spawn local RustDesk client connected via Direct IP to host.
 
@@ -140,9 +138,7 @@ class RustDeskLauncher:
             password = host.capabilities.get("rustdesk_password")
 
         if not password:
-            raise ValueError(
-                f"Host '{host.hostname}' has no rustdesk_password capability"
-            )
+            raise ValueError(f"Host '{host.hostname}' has no rustdesk_password capability")
 
         logger.info(
             "launching_rustdesk",
@@ -165,7 +161,7 @@ class RustDeskLauncher:
         # Wait for process (blocking)
         return proc.wait()
 
-    def _find_rustdesk_binary(self) -> Optional[str]:
+    def _find_rustdesk_binary(self) -> str | None:
         """Find RustDesk binary path for current platform."""
         # Try standard path first
         if binary := shutil.which("rustdesk"):
@@ -234,7 +230,7 @@ class SunshineLauncher:
 
         return proc.wait()
 
-    def _find_moonlight_binary(self) -> Optional[str]:
+    def _find_moonlight_binary(self) -> str | None:
         """Find Moonlight binary path for current platform."""
         # Try moonlight CLI first
         for name in ["moonlight", "moonlight-qt"]:
@@ -293,9 +289,7 @@ class VNCLauncher:
 
         # VNC connection string: ip:port or ip::port depending on client
         vnc_addr = (
-            f"{host.tailscale_ip}::{port}"
-            if "tiger" in vnc_bin
-            else f"{host.tailscale_ip}:{port}"
+            f"{host.tailscale_ip}::{port}" if "tiger" in vnc_bin else f"{host.tailscale_ip}:{port}"
         )
 
         args = [vnc_bin, vnc_addr]
@@ -310,7 +304,7 @@ class VNCLauncher:
 
         return proc.wait()
 
-    def _find_vnc_viewer(self) -> Optional[str]:
+    def _find_vnc_viewer(self) -> str | None:
         """Find VNC viewer binary."""
         for name in ["vncviewer", "tigervnc", "remmina"]:
             if binary := shutil.which(name):

@@ -1,12 +1,11 @@
 """Pytest fixtures for async testing."""
 
 import asyncio
-import os
-from collections.abc import AsyncGenerator, Generator
-from datetime import datetime, timedelta, timezone
-
 import json as _json
+import os
 import uuid as _uuid
+from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -26,22 +25,22 @@ from sqlalchemy.ext.compiler import compiles
 
 
 @compiles(JSONB, "sqlite")  # type: ignore[no-redef]
-def _compile_jsonb_sqlite(element, compiler, **kw):  # noqa: ARG001
+def _compile_jsonb_sqlite(element, compiler, **kw):
     return "JSON"
 
 
 @compiles(ARRAY, "sqlite")  # type: ignore[no-redef]
-def _compile_array_sqlite(element, compiler, **kw):  # noqa: ARG001
+def _compile_array_sqlite(element, compiler, **kw):
     return "JSON"
 
 
 @compiles(UUID, "sqlite")  # type: ignore[no-redef]
-def _compile_uuid_sqlite(element, compiler, **kw):  # noqa: ARG001
+def _compile_uuid_sqlite(element, compiler, **kw):
     return "VARCHAR(36)"
 
 
 @compiles(TIMESTAMP, "sqlite")  # type: ignore[no-redef]
-def _compile_timestamp_sqlite(element, compiler, **kw):  # noqa: ARG001
+def _compile_timestamp_sqlite(element, compiler, **kw):
     return "TIMESTAMP"
 
 
@@ -163,16 +162,16 @@ def _install_sqlite_python_defaults() -> None:
                 col.default = ColumnDefault(lambda: _uuid.uuid4())
             elif "now()" in txt:
                 col.server_default = None
-                col.default = ColumnDefault(lambda: datetime.now(timezone.utc))
+                col.default = ColumnDefault(lambda: datetime.now(UTC))
             elif "::jsonb" in txt and "{}" in txt:
                 col.server_default = None
-                col.default = ColumnDefault(lambda: {})
+                col.default = ColumnDefault(dict)
             elif "::jsonb" in txt and "[]" in txt:
                 col.server_default = None
-                col.default = ColumnDefault(lambda: [])
+                col.default = ColumnDefault(list)
             elif "array[" in txt:
                 col.server_default = None
-                col.default = ColumnDefault(lambda: [])
+                col.default = ColumnDefault(list)
 
 
 _install_sqlite_python_defaults()
@@ -221,7 +220,7 @@ async def test_db() -> AsyncGenerator[AsyncSession, None]:
     from sqlalchemy import event as _sa_event
 
     @_sa_event.listens_for(engine.sync_engine, "connect")
-    def _enable_sqlite_fks(dbapi_conn, _):  # noqa: ANN001
+    def _enable_sqlite_fks(dbapi_conn, _):
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
@@ -275,7 +274,7 @@ async def enrollment_token(test_db: AsyncSession) -> str:
         token_jti=jti,
         issued_by="pytest",
         group_name="test-group",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         max_uses=1,
         used_count=0,
     )

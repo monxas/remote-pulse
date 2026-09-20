@@ -7,7 +7,7 @@ import click
 import structlog
 
 from rp.config import config_exists
-from rp.daemon import run_once, main_daemon
+from rp.daemon import main_daemon, run_once
 
 logger = structlog.get_logger()
 

@@ -55,7 +55,8 @@ class APICompatMiddleware(BaseHTTPMiddleware):
         # Extract agent version from headers
         agent_version = request.headers.get("Sec-RP-Agent-Version")
         agent_min_server = request.headers.get("Sec-RP-Min-Server")
-        # agent_features = request.headers.get("Sec-RP-Features", "").split(",")  # TODO: Use for feature negotiation
+        # Feature negotiation is not wired up yet; when it is, the agent's
+        # advertised feature list arrives in the "Sec-RP-Features" header.
 
         # If headers missing, allow request (backward compat with bootstrap/old agents)
         if not agent_version:
@@ -104,7 +105,8 @@ class APICompatMiddleware(BaseHTTPMiddleware):
             return Response(
                 content=(
                     f'{{"error": "agent_version_too_old", '
-                    f'"detail": "Agent {agent_version} < server minimum {SERVER_MIN_AGENT_VERSION}. '
+                    f'"detail": "Agent {agent_version} < server minimum '
+                    f'{SERVER_MIN_AGENT_VERSION}. '
                     f'Agent upgrade required.", '
                     f'"required": ">={SERVER_MIN_AGENT_VERSION}"}}'
                 ),

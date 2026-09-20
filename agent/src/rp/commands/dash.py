@@ -22,7 +22,7 @@ def dash(server: str | None) -> None:
     Interactive dashboard with host list, sparklines, and live updates.
     Press '?' for help, 'q' to quit.
     """
-    from rp.config import load_config, DEFAULT_CONFIG_PATH
+    from rp.config import DEFAULT_CONFIG_PATH, load_config
     from rp.dash.app import run_dashboard
 
     # Determine server URL

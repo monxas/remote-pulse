@@ -1,6 +1,6 @@
 """Host list widget with status indicators."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -60,7 +60,7 @@ class HostList(Container):
         table = self.query_one(DataTable)
         table.clear()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for host in self._hosts:
             hostname = host.get("hostname", "unknown")

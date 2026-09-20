@@ -65,4 +65,3 @@ async def test_enroll_rate_limit_429_integration():
 
     Expected output: First 10 return 400/401, 11th returns 429.
     """
-    pass

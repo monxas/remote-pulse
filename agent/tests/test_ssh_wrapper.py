@@ -1,10 +1,11 @@
 """Tests for SSH wrapper with Tailscale SSH preferred (F6)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from rp.ssh_wrapper import SSHWrapper
+import pytest
+
 from rp.screen import ResolvedHost
+from rp.ssh_wrapper import SSHWrapper
 
 
 @pytest.fixture

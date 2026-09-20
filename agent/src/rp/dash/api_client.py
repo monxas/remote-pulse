@@ -106,9 +106,7 @@ class AsyncAPIClient:
 
         # Try dedicated sparkline endpoint first (F3 target)
         try:
-            logger.debug(
-                "fetching sparkline", host_id=host_id, metrics=metrics, window=window
-            )
+            logger.debug("fetching sparkline", host_id=host_id, metrics=metrics, window=window)
 
             params = {"window": window}
             for metric in metrics:

@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 
 from rp import __version__
-from rp.config import config_exists, load_config, DEFAULT_CONFIG_PATH
+from rp.config import DEFAULT_CONFIG_PATH, config_exists, load_config
 from rp.platform_detect import get_platform_info
 
 

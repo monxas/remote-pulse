@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from rp_server.models import Host, CanaryDeploy, Command
+from rp_server.models import CanaryDeploy, Command, Host
 
 
 @pytest.fixture

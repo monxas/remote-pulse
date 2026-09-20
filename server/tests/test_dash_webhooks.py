@@ -18,7 +18,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -33,13 +33,11 @@ from rp_server.webhooks import (
     AUTO_DISABLE_AFTER,
     MAX_ATTEMPTS,
     TEST_EVENT_TYPE,
-    RETRY_BACKOFF_SECONDS,
     WebhookDispatcher,
     _event_matches_filter,
     _group_matches_filter,
     compute_signature,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -523,7 +521,8 @@ async def test_real_bus_event_triggers_delivery(
     monkeypatch.setattr(
         "rp_server.webhooks.RETRY_BACKOFF_SECONDS", (0.0, 0.0, 0.0, 0.0)
     )
-    w = await _make_webhook(test_db, event_filter=["command."])
+    # The webhook must exist for dispatch to pick it up; the handle is unused.
+    await _make_webhook(test_db, event_filter=["command."])
 
     transport = _RecordingTransport(responses=[200])
     http = httpx.AsyncClient(transport=transport)
@@ -565,7 +564,7 @@ async def test_deliveries_endpoint_returns_history(
         {
             "delivery_id": str(uuid.uuid4()),
             "event": "command.issued",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status_code": 200,
             "error": None,
             "attempt": 1,
@@ -574,7 +573,7 @@ async def test_deliveries_endpoint_returns_history(
         {
             "delivery_id": str(uuid.uuid4()),
             "event": "host.heartbeat",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status_code": 502,
             "error": "HTTP 502",
             "attempt": 4,
@@ -602,6 +601,7 @@ async def test_audit_rows_emitted_on_crud(
 ) -> None:
     """Create/update/delete/test should each emit an audit_events row."""
     from sqlalchemy import select
+
     from rp_server.models import AuditEvent
 
     admin = await _make_user(test_db, role="admin")
@@ -632,6 +632,7 @@ async def test_audit_rows_emitted_on_crud(
             .all()
         )
         actions = {r.action for r in rows}
-        assert {"webhook.created", "webhook.updated", "webhook.tested", "webhook.deleted"} <= actions
+        expected = {"webhook.created", "webhook.updated", "webhook.tested", "webhook.deleted"}
+        assert expected <= actions
     finally:
         _clear()

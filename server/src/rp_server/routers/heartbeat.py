@@ -1,7 +1,7 @@
 """Heartbeat endpoint for agent health reporting."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 from rp_server.database import DbSession
 from rp_server.deps import TailscaleIdentity, tailscale_identity_optional
 from rp_server.events import fire_and_forget
-from rp_server.models import AgentVersion, Heartbeat, Host, CanaryDeploy
+from rp_server.models import AgentVersion, CanaryDeploy, Heartbeat, Host
 from rp_server.schemas import (
     HeartbeatRequest,
     HeartbeatResponse,
@@ -54,7 +54,7 @@ async def receive_heartbeat(
             detail=f"Host {request.host_id} not found",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # ADR-0009 Phase 1: detect status transitions BEFORE we update last_seen_at
     # so we can emit host.status_change events. Thresholds match dash_api.py:
@@ -63,7 +63,7 @@ async def receive_heartbeat(
     if host.last_seen_at is not None:
         last_seen = host.last_seen_at
         if last_seen.tzinfo is None:
-            last_seen = last_seen.replace(tzinfo=timezone.utc)
+            last_seen = last_seen.replace(tzinfo=UTC)
         age = (now - last_seen).total_seconds()
         if age <= 60:
             prev_status = "online"
@@ -183,7 +183,7 @@ async def agent_self_check_report(
         canary = result.scalar_one_or_none()
 
         if canary and canary.state == "pending":
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             if request.status == "ok":
                 # Self-check passed, transition to observing
@@ -249,7 +249,7 @@ async def version_handshake(
         agent_version=agent_version,
         api_compat_min=api_compat_min,
         api_compat_max=api_compat_max,
-        last_check=datetime.now(timezone.utc),
+        last_check=datetime.now(UTC),
     )
     db.merge(agent_ver)
     await db.commit()
@@ -288,7 +288,7 @@ async def report_rollback(
             agent_version=to_version,
             api_compat_min="0.1.0",  # Stub
             api_compat_max="1.0.0",  # Stub
-            last_check=datetime.now(timezone.utc),
+            last_check=datetime.now(UTC),
         )
         db.merge(agent_ver)
         await db.commit()

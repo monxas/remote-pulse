@@ -1,7 +1,7 @@
 """Tests for SSH key lifecycle endpoints (F4)."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -152,7 +152,7 @@ class TestRegisterKey:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
             revoked_reason="test revocation",
         )
         db_session.add(key)
@@ -226,7 +226,7 @@ class TestListKeys:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -245,7 +245,7 @@ class TestListKeys:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -293,7 +293,7 @@ class TestRevokeKey:
             pubkey=SAMPLE_PUBKEY,
             fingerprint=compute_ssh_fingerprint(SAMPLE_PUBKEY),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add(key)
         await db_session.commit()
@@ -378,14 +378,17 @@ class TestDistributeKeys:
             algorithm="ed25519",
         )
         # Revoked key
-        key2_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBbXBlZjbZ8W6F9Yj1xCRZcqI5TlJvJ8Xp5A1pR8yO7X revoked"
+        key2_pubkey = (
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBbXBlZjbZ8W6F9Yj1xCRZcqI5TlJvJ8Xp5A1pR8yO7X"
+            " revoked"
+        )
         key2 = SSHKey(
             host_id=host.id,
             user_name="root",
             pubkey=key2_pubkey,
             fingerprint=compute_ssh_fingerprint(key2_pubkey),
             algorithm="ed25519",
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
         )
         db_session.add_all([key1, key2])
         await db_session.commit()

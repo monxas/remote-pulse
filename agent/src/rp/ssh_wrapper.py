@@ -5,7 +5,7 @@ Tries Tailscale SSH first, falls back to classic SSH with managed keys.
 
 import shutil
 import subprocess
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -31,9 +31,9 @@ class SSHWrapper:
     async def connect(
         self,
         target: str,
-        command: Optional[list[str]] = None,
-        user: Optional[str] = None,
-        port: Optional[int] = None,
+        command: list[str] | None = None,
+        user: str | None = None,
+        port: int | None = None,
         force_classic: bool = False,
     ) -> int:
         """
@@ -108,8 +108,8 @@ class SSHWrapper:
     async def _tailscale_ssh(
         self,
         resolved: ResolvedHost,
-        command: Optional[list[str]] = None,
-        user: Optional[str] = None,
+        command: list[str] | None = None,
+        user: str | None = None,
     ) -> int:
         """
         Execute SSH via Tailscale SSH.
@@ -144,9 +144,9 @@ class SSHWrapper:
     async def _classic_ssh(
         self,
         resolved: ResolvedHost,
-        command: Optional[list[str]] = None,
-        user: Optional[str] = None,
-        port: Optional[int] = None,
+        command: list[str] | None = None,
+        user: str | None = None,
+        port: int | None = None,
     ) -> int:
         """
         Execute SSH via classic OpenSSH with managed key.

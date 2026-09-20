@@ -9,7 +9,7 @@ import click
 import structlog
 
 from rp.client import RPClient
-from rp.config import config_exists, load_config, DEFAULT_CONFIG_PATH, get_state_dir
+from rp.config import DEFAULT_CONFIG_PATH, config_exists, get_state_dir, load_config
 
 logger = structlog.get_logger()
 
@@ -53,9 +53,7 @@ def uninstall(confirm: bool, config_path: str):
 
     # Confirm
     if not confirm:
-        click.echo(
-            "This will uninstall the Remote-Pulse agent and remove all configuration."
-        )
+        click.echo("This will uninstall the Remote-Pulse agent and remove all configuration.")
         click.echo(f"Host ID: {config.host_id if config else 'unknown'}")
         click.echo()
         if not click.confirm("Continue with uninstall?"):
@@ -67,9 +65,7 @@ def uninstall(confirm: bool, config_path: str):
     # Step 1: Stop daemon (best effort, systemd-specific)
     click.echo("  Stopping daemon...")
     # Note: F1 doesn't implement systemd unit, just note it
-    click.echo(
-        "  (If running as systemd service, stop it with: systemctl stop remote-pulse)"
-    )
+    click.echo("  (If running as systemd service, stop it with: systemctl stop remote-pulse)")
 
     # Step 2: Deregister from server
     if config:

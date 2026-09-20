@@ -1,11 +1,12 @@
 """Tests for Prometheus /metrics endpoint."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rp_server.models import Enrollment, Heartbeat, Host
-from datetime import datetime, timedelta, timezone
 
 
 @pytest.mark.asyncio
@@ -51,7 +52,7 @@ async def test_metrics_after_enroll_and_heartbeat(
         token_jti=payload["jti"],
         issued_by="test-user",
         group_name="test-group",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         max_uses=5,
         used_count=0,
     )
@@ -78,7 +79,7 @@ async def test_metrics_after_enroll_and_heartbeat(
         "/v1/heartbeat",
         json={
             "host_id": host_id,
-            "agent_ts": datetime.now(timezone.utc).isoformat(),
+            "agent_ts": datetime.now(UTC).isoformat(),
             "cpu_pct": 45.2,
             "mem_pct": 67.8,
             "load_1m": 1.23,
@@ -107,7 +108,7 @@ async def test_metrics_after_enroll_and_heartbeat(
 @pytest.mark.asyncio
 async def test_metrics_multiple_hosts(client: AsyncClient, db_session: AsyncSession):
     """Test metrics correctly report multiple hosts with distinct labels."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create two hosts
     host1 = Host(

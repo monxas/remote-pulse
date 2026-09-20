@@ -20,8 +20,7 @@ the in-memory SQLite ``test_db`` fixture from ``conftest.py``).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -33,7 +32,6 @@ from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import Command, Enrollment, Host, User, UserPermission
 from rp_server.permissions import ALLOWED_ACTIONS
-
 
 # --------------------------------------------------------------------------- #
 # Signing key isolation (mirror test_dash_phase2 / test_user_permissions)
@@ -121,7 +119,7 @@ async def _make_host(db: AsyncSession, *, hostname: str, group: str) -> Host:
         group_name=group,
         capabilities={},
         extra={},
-        enrolled_at=datetime.now(timezone.utc),
+        enrolled_at=datetime.now(UTC),
     )
     db.add(h)
     await db.commit()
@@ -139,7 +137,7 @@ async def _make_pending_command(db: AsyncSession, *, host: Host) -> Command:
         server_signature="sig-stub",
         human_approved=False,
         approval_token=uuid.uuid4(),
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
     )
     db.add(cmd)
     await db.commit()
@@ -168,7 +166,7 @@ async def _seed_enrollment(
         token_jti=str(uuid.uuid4()),
         issued_by="seed@test.local",
         group_name=group,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=12),
+        expires_at=datetime.now(UTC) + timedelta(hours=12),
         max_uses=3,
         used_count=0,
     )

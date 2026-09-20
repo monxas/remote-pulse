@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -28,7 +28,6 @@ from rp_server.events import event_bus
 from rp_server.main import app
 from rp_server.models import Host, User
 from rp_server.routers import dash_api
-
 
 # --------------------------------------------------------------------------- #
 # Auth + DB helpers
@@ -83,7 +82,7 @@ async def _make_host(
     group: str | None = "prod",
     last_seen_s_ago: int | None = None,
 ) -> Host:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_seen = (
         now - timedelta(seconds=last_seen_s_ago) if last_seen_s_ago is not None else None
     )
@@ -609,7 +608,7 @@ async def test_sse_endpoint_streams_events(
             )
             try:
                 await asyncio.wait_for(reader_task, timeout=3.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 reader_task.cancel()
                 pytest.fail(
                     f"SSE event not received in time. Buffer: {received_events!r}"

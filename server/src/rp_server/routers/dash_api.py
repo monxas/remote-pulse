@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -194,7 +194,7 @@ def _classify_status(
     # Both timestamps are tz-aware in the codebase, but defensive normalisation
     # keeps us robust to a future SQLite-backed test that drops tzinfo.
     if last_seen_at.tzinfo is None:
-        last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        last_seen_at = last_seen_at.replace(tzinfo=UTC)
     age_s = (now - last_seen_at).total_seconds()
     if age_s <= ONLINE_THRESHOLD_S:
         return "online"
@@ -208,7 +208,7 @@ def _seconds_ago(last_seen_at: datetime | None, now: datetime) -> int | None:
     if last_seen_at is None:
         return None
     if last_seen_at.tzinfo is None:
-        last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        last_seen_at = last_seen_at.replace(tzinfo=UTC)
     return max(0, int((now - last_seen_at).total_seconds()))
 
 
@@ -257,7 +257,7 @@ async def overview(
     user: Annotated[User, Depends(current_user)],
 ) -> OverviewResponse:
     """Fleet roll-up: counts per status + pending approvals + 24h delta."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     online_cutoff = now - timedelta(seconds=ONLINE_THRESHOLD_S)
     stale_cutoff = now - timedelta(seconds=STALE_THRESHOLD_S)
 
@@ -463,7 +463,7 @@ async def list_hosts_enriched(
         )
     window_s = SPARKLINE_WINDOWS[window]
     bucket_s = max(window_s // SPARKLINE_BUCKETS, 1)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Base host query, scoped by ACL
     stmt = select(Host).order_by(Host.hostname)
@@ -577,7 +577,7 @@ async def host_timeseries(
             detail="Host not found or access denied",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start_time = now - timedelta(seconds=window_s)
 
     # Heartbeat-resident metrics get bucketed in one query each. We could
@@ -603,7 +603,7 @@ async def host_timeseries(
               AND ts >= :start_time
             GROUP BY bucket
             ORDER BY bucket ASC
-            """  # noqa: S608 — metrics whitelisted above
+            """  # nosec B608 - metric names are whitelisted + identifier-checked above; all values are bound params
         )
         result = await db.execute(
             query,

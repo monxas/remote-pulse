@@ -15,7 +15,7 @@ itself wraps ``current_user``, this propagates correctly.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import Group, Host, User
-
 
 # --------------------------------------------------------------------------- #
 # Auth helpers
@@ -84,7 +83,7 @@ async def _make_host(db: AsyncSession, *, hostname: str, group: str) -> Host:
         group_name=group,
         capabilities={},
         extra={},
-        enrolled_at=datetime.now(timezone.utc),
+        enrolled_at=datetime.now(UTC),
     )
     db.add(h)
     await db.commit()

@@ -19,7 +19,6 @@ from rp.installers import rustdesk as rd_mod
 from rp.installers import sunshine as sun_mod
 from rp.installers import vnc as vnc_mod
 
-
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
@@ -96,7 +95,7 @@ async def test_rustdesk_install_linux_deb(monkeypatch):
     monkeypatch.setattr(installer, "detect_version", AsyncMock(return_value="1.2.3"))
 
     fake_deb = MagicMock(spec=Path)
-    fake_deb.__str__ = lambda self: "/tmp/rd.deb"  # noqa: ARG005
+    fake_deb.__str__ = lambda self: "/tmp/rd.deb"
     monkeypatch.setattr(
         installer,
         "_fetch_release_asset",
@@ -284,9 +283,7 @@ async def test_sunshine_install_silent_success(monkeypatch, tmp_path):
 
     fake_installer = tmp_path / "sun.exe"
     fake_installer.write_bytes(b"")
-    monkeypatch.setattr(
-        installer, "_download_asset", AsyncMock(return_value=fake_installer)
-    )
+    monkeypatch.setattr(installer, "_download_asset", AsyncMock(return_value=fake_installer))
     monkeypatch.setattr(installer, "_verify_sha256", AsyncMock(return_value=None))
 
     captured: dict[str, Any] = {}

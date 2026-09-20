@@ -69,8 +69,9 @@ async def test_multi_user_filtering_admin_sees_all(client: AsyncClient, db_sessi
     await db_session.commit()
 
     # Query as admin via API (using hosts list endpoint with web auth)
-    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
     from sqlalchemy import select
+
+    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
 
     stmt = select(Host)
     filtered_stmt = filter_hosts_by_user_groups(stmt, admin)
@@ -113,8 +114,9 @@ async def test_multi_user_filtering_viewer_sees_only_accessible(client: AsyncCli
     await db_session.commit()
 
     # Query as viewer
-    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
     from sqlalchemy import select
+
+    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
 
     stmt = select(Host)
     filtered_stmt = filter_hosts_by_user_groups(stmt, viewer)
@@ -151,8 +153,9 @@ async def test_multi_user_filtering_no_groups_sees_nothing(client: AsyncClient, 
     await db_session.commit()
 
     # Query as no-group user
-    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
     from sqlalchemy import select
+
+    from rp_server.middleware.group_filter import filter_hosts_by_user_groups
 
     stmt = select(Host)
     filtered_stmt = filter_hosts_by_user_groups(stmt, user)

@@ -45,9 +45,7 @@ def exec_(
     asyncio.run(_exec_async(target, remote_cmd, timeout, parallel))
 
 
-async def _exec_async(
-    target: str, remote_cmd: tuple[str, ...], timeout: int, parallel: bool
-):
+async def _exec_async(target: str, remote_cmd: tuple[str, ...], timeout: int, parallel: bool):
     """Async exec implementation."""
     try:
         # Load config
@@ -76,9 +74,7 @@ async def _exec_async(
                 command_id = data.get("command_id")
 
                 click.echo(f"Command submitted: {command_id}")
-                click.echo(
-                    f"Status: {data.get('status', 'pending')} (check logs for execution)"
-                )
+                click.echo(f"Status: {data.get('status', 'pending')} (check logs for execution)")
 
                 # For prod/iarq groups, mention approval required
                 if target.startswith("@") and target in ["@prod", "@iarq"]:
@@ -92,12 +88,11 @@ async def _exec_async(
                 # Check if endpoint not available (F4-4 not deployed yet)
                 if "404" in str(e) or "not found" in str(e).lower():
                     click.echo(
-                        "Error: Remote exec requires F4-4 (signed commands) + F4-6 (approval) endpoints.",
+                        "Error: Remote exec requires F4-4 (signed commands) "
+                        "+ F4-6 (approval) endpoints.",
                         err=True,
                     )
-                    click.echo(
-                        "These features are not yet deployed on the server.", err=True
-                    )
+                    click.echo("These features are not yet deployed on the server.", err=True)
                     raise SystemExit(1)
 
                 raise

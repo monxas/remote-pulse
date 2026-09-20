@@ -211,7 +211,6 @@ class GroupBase(BaseModel):
 class GroupCreate(GroupBase):
     """Group creation request."""
 
-    pass
 
 
 class GroupResponse(GroupBase):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rp_server.events import event_bus
 from rp_server.models import Command, Host
-
 
 # ---- Local fixtures (this file owns its setup, no reliance on broken
 # ``db_session`` alias from test_approvals.py) -------------------------------
@@ -136,7 +135,7 @@ async def test_pending_excludes_unapproved_with_token(
         host=host_a,
         human_approved=False,
         approval_token=uuid.uuid4(),
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
     )
 
     resp = await client.get(f"/v1/agent/commands/pending?host_id={host_a.id}")
@@ -161,7 +160,7 @@ async def test_pending_excludes_completed(
     client: AsyncClient, test_db: AsyncSession, host_a: Host
 ) -> None:
     await _make_command(
-        test_db, host=host_a, human_approved=True, completed_at=datetime.now(timezone.utc)
+        test_db, host=host_a, human_approved=True, completed_at=datetime.now(UTC)
     )
 
     resp = await client.get(f"/v1/agent/commands/pending?host_id={host_a.id}")
@@ -172,7 +171,7 @@ async def test_pending_excludes_completed(
 async def test_pending_excludes_stale(
     client: AsyncClient, test_db: AsyncSession, host_a: Host
 ) -> None:
-    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    stale = datetime.now(UTC) - timedelta(hours=2)
     await _make_command(test_db, host=host_a, human_approved=True, issued_at=stale)
 
     resp = await client.get(f"/v1/agent/commands/pending?host_id={host_a.id}")
@@ -222,7 +221,7 @@ def _result_body(**overrides) -> dict:
         "stdout": "hello\n",
         "stderr": "",
         "duration_ms": 12,
-        "agent_ts": datetime.now(timezone.utc).isoformat(),
+        "agent_ts": datetime.now(UTC).isoformat(),
     }
     body.update(overrides)
     return body
@@ -315,7 +314,7 @@ async def test_result_fires_status_change_event(
 
     try:
         await asyncio.wait_for(collector, timeout=1.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         collector.cancel()
         pytest.fail("expected command.status_change event was not published")
 

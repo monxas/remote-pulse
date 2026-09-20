@@ -64,9 +64,7 @@ async def _screen_async(target: str, protocol: str, no_wait: bool):
             click.echo(f"Resolving host '{target}'...")
             resolved = await resolver.resolve(target)
 
-            click.echo(
-                f"Connecting to {resolved.hostname} ({resolved.tailscale_ip})..."
-            )
+            click.echo(f"Connecting to {resolved.hostname} ({resolved.tailscale_ip})...")
 
             # Determine protocol
             if protocol == "auto":
@@ -80,9 +78,7 @@ async def _screen_async(target: str, protocol: str, no_wait: bool):
             exit_code = await _launch_client(selected_protocol, resolved)
 
             if no_wait:
-                click.echo(
-                    f"Screen client launched in background (protocol: {selected_protocol})"
-                )
+                click.echo(f"Screen client launched in background (protocol: {selected_protocol})")
                 raise SystemExit(0)
 
             # Wait for client exit

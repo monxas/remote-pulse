@@ -17,7 +17,7 @@ The fixtures piggy-back on the existing ``client`` / ``test_db`` /
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -36,7 +36,6 @@ from rp_server.config import settings
 from rp_server.deps import current_user
 from rp_server.main import app
 from rp_server.models import Enrollment, User
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures (mirror test_dash_enroll_links)
@@ -165,13 +164,13 @@ async def test_create_link_default_ttl_is_5_minutes(
     admin = await _make_admin(test_db)
     _override_user(admin)
     try:
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         r = await client.post("/v1/dash/enroll/links", json={"group_name": "default"})
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         assert r.status_code == 201
         expires_at = datetime.fromisoformat(r.json()["expires_at"].replace("Z", "+00:00"))
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
         # Tolerance: 4m55s .. 5m05s.
         assert before + timedelta(minutes=4, seconds=55) <= expires_at
         assert expires_at <= after + timedelta(minutes=5, seconds=5)
@@ -244,7 +243,7 @@ async def _seed_code(
         short_code=code,
         issued_by="seed@test.local",
         group_name=group,
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
+        expires_at=datetime.now(UTC) + timedelta(minutes=ttl_minutes),
         max_uses=max_uses,
         used_count=used_count,
     )

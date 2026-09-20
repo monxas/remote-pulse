@@ -7,17 +7,17 @@ local policy enforcement (ADR-0008 §13).
 
 import hashlib
 import json
-import structlog
 from base64 import b64decode, b64encode
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import structlog
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
-from cryptography.hazmat.primitives import serialization
 
 logger = structlog.get_logger()
 

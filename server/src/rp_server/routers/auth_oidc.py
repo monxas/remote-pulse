@@ -18,7 +18,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import httpx
@@ -148,7 +148,7 @@ async def callback(request: Request, db: DbSession):
             name=name,
             role="viewer",
             accessible_groups=[],
-            last_login_at=datetime.now(timezone.utc),
+            last_login_at=datetime.now(UTC),
         )
         db.add(user)
     else:
@@ -156,7 +156,7 @@ async def callback(request: Request, db: DbSession):
             user.pocketid_sub = sub
         if name:
             user.name = name
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(user)
 
@@ -231,6 +231,7 @@ async def me(request: Request, db: DbSession):
     permissions: list[dict[str, str]] = []
     if user_id and user_role != "admin":
         from sqlalchemy import select as _select
+
         from rp_server.models import UserPermission
 
         stmt = _select(UserPermission.action, UserPermission.scope).where(

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -95,7 +95,7 @@ async def _make_host(
     group: str | None = "prod",
     last_seen_s_ago: int | None = None,
 ) -> Host:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_seen = (
         now - timedelta(seconds=last_seen_s_ago) if last_seen_s_ago is not None else None
     )
@@ -171,7 +171,7 @@ async def test_commands_list_returns_summaries(
     cmd = await _make_command(
         test_db,
         host=host,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(UTC),
         exit_code=0,
     )
     _override_user(admin)
@@ -198,7 +198,7 @@ async def test_commands_list_cursor_pagination(
     """Walking the cursor returns every command exactly once, newest-first."""
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="paginate-host", group="prod")
-    base = datetime.now(timezone.utc)
+    base = datetime.now(UTC)
     ids: list[str] = []
     for i in range(5):
         cmd = await _make_command(
@@ -240,8 +240,8 @@ async def test_commands_list_filters_status_and_host(
     admin = await _make_user(test_db, role="admin")
     h1 = await _make_host(test_db, hostname="h1", group="prod")
     h2 = await _make_host(test_db, hostname="h2", group="prod")
-    await _make_command(test_db, host=h1, completed_at=datetime.now(timezone.utc), exit_code=0)
-    await _make_command(test_db, host=h1, completed_at=datetime.now(timezone.utc), exit_code=1)
+    await _make_command(test_db, host=h1, completed_at=datetime.now(UTC), exit_code=0)
+    await _make_command(test_db, host=h1, completed_at=datetime.now(UTC), exit_code=1)
     await _make_command(test_db, host=h2)
     _override_user(admin)
     try:
@@ -420,7 +420,7 @@ async def test_retry_creates_new_command_same_payload(
         host=host,
         command_type="apt_update",
         payload={"packages": ["nginx"]},
-        completed_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(UTC),
         exit_code=1,
     )
     _override_user(admin)
@@ -450,7 +450,7 @@ async def test_pending_approvals_visible_only_to_acl(
     viewer = await _make_user(test_db, role="viewer", groups=["family"])
     prod_host = await _make_host(test_db, hostname="prod-h", group="prod")
     fam_host = await _make_host(test_db, hostname="fam-h", group="family")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await _make_command(
         test_db,
         host=prod_host,
@@ -488,7 +488,7 @@ async def test_approve_marks_command_and_emits_event(
         host=host,
         human_approved=False,
         approval_token=uuid.uuid4(),
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
     )
 
     received: list[tuple[str, dict[str, Any]]] = []
@@ -533,7 +533,7 @@ async def test_reject_marks_command_and_emits_event(
         host=host,
         human_approved=False,
         approval_token=uuid.uuid4(),
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
     )
 
     received: list[tuple[str, dict[str, Any]]] = []
@@ -577,7 +577,7 @@ async def test_approve_twice_is_conflict(
         host=host,
         human_approved=False,
         approval_token=uuid.uuid4(),
-        approval_requested_at=datetime.now(timezone.utc),
+        approval_requested_at=datetime.now(UTC),
     )
     _override_user(admin)
     try:
@@ -647,7 +647,7 @@ async def test_audit_covers_all_sources(
     """Synthesised timeline includes events from every source table."""
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="audit-host", group="prod")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # command.issued + command.completed (success)
     await _make_command(
         test_db,
@@ -745,7 +745,7 @@ async def test_audit_cursor_pagination(
     """Walking the cursor yields each event exactly once."""
     admin = await _make_user(test_db, role="admin")
     host = await _make_host(test_db, hostname="cur-host", group="prod")
-    base = datetime.now(timezone.utc)
+    base = datetime.now(UTC)
     for i in range(6):
         await _make_command(test_db, host=host, issued_at=base - timedelta(minutes=i))
     _override_user(admin)

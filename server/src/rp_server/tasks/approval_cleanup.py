@@ -4,10 +4,10 @@ F4-6: Auto-rejects commands with approval_token older than TTL (default 5min).
 Runs every 1 minute as background task in server.
 """
 
-import structlog
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, and_
+import structlog
+from sqlalchemy import and_, select
 
 from rp_server.database import get_async_session
 from rp_server.models import Command
@@ -27,7 +27,7 @@ async def cleanup_expired_approvals(ttl_minutes: int = 5) -> int:
     Returns:
         Number of commands auto-rejected
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)
+    cutoff = datetime.now(UTC) - timedelta(minutes=ttl_minutes)
 
     async with get_async_session() as db:
         # Find expired pending approvals
@@ -58,8 +58,8 @@ async def cleanup_expired_approvals(ttl_minutes: int = 5) -> int:
                 command_id=str(command.id),
                 command_type=command.command_type,
                 age_minutes=(
-                    datetime.now(timezone.utc)
-                    - command.approval_requested_at.replace(tzinfo=timezone.utc)
+                    datetime.now(UTC)
+                    - command.approval_requested_at.replace(tzinfo=UTC)
                 ).total_seconds()
                 / 60,
             )

@@ -4,7 +4,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -64,8 +64,8 @@ def _maybe_lighthouse_bypass_user(x_rp_test_auth: str | None):
         role="admin",
         accessible_groups=["*"],
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        last_login_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        last_login_at=datetime.now(UTC),
     )
     logger.info("Lighthouse bypass auth accepted (TEST/CI only)")
     return user
@@ -306,7 +306,7 @@ async def current_user(
             name=x_forwarded_preferred_username,
             role="viewer",
             accessible_groups=[],  # Admin must grant groups
-            last_login_at=datetime.now(timezone.utc),
+            last_login_at=datetime.now(UTC),
         )
         db.add(user)
         await db.commit()
@@ -318,7 +318,7 @@ async def current_user(
             user.name = x_forwarded_preferred_username or user.name
         # Update last login timestamp
         stmt = (
-            update(User).where(User.id == user.id).values(last_login_at=datetime.now(timezone.utc))
+            update(User).where(User.id == user.id).values(last_login_at=datetime.now(UTC))
         )
         await db.execute(stmt)
         await db.commit()

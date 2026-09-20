@@ -1,7 +1,7 @@
 """Tests for Telegram approval flow endpoints (F4-6)."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -159,7 +159,7 @@ class TestApproveCommand:
         command = result.scalar_one()
 
         # Set to 6 minutes ago (past 5min TTL)
-        command.approval_requested_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+        command.approval_requested_at = datetime.now(UTC) - timedelta(minutes=6)
         await db_session.commit()
 
         # Try to approve
@@ -322,4 +322,3 @@ class TestWebhookIntegration:
         # TODO: This test requires integration in commands.py router
         # which calls TelegramApprovalWebhook.fire_approval_request()
         # Placeholder for now, will be implemented when commands.py is updated
-        pass

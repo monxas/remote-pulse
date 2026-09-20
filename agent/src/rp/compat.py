@@ -48,8 +48,6 @@ class ServerInfo:
 class IncompatibleVersionError(Exception):
     """Raised when agent-server version compatibility check fails."""
 
-    pass
-
 
 class APICompatHandler:
     """Manages agent-server version handshake and compatibility."""
@@ -104,18 +102,14 @@ class APICompatHandler:
             deprecated_agent_versions=data.get("deprecated_agent_versions", []),
             features=data.get("features", []),
             tailscale_ssh_supported=data.get("tailscale_ssh_supported", False),
-            rustdesk_direct_ip_supported=data.get(
-                "rustdesk_direct_ip_supported", False
-            ),
+            rustdesk_direct_ip_supported=data.get("rustdesk_direct_ip_supported", False),
             sunshine_supported=data.get("sunshine_supported", False),
             max_metrics_window=data.get("max_metrics_window", "1y"),
             metrics_retention_policy=data.get("metrics_retention_policy", {}),
         )
 
         # Check if server is too old for this agent
-        if not self._is_version_compatible(
-            server_info.server_version, AGENT_MIN_SERVER_VERSION
-        ):
+        if not self._is_version_compatible(server_info.server_version, AGENT_MIN_SERVER_VERSION):
             msg = (
                 f"Server version {server_info.server_version} is older than "
                 f"agent minimum {AGENT_MIN_SERVER_VERSION}. Server upgrade required."
@@ -124,9 +118,7 @@ class APICompatHandler:
             raise IncompatibleVersionError(msg)
 
         # Check if agent is too old for server
-        if not self._is_version_compatible(
-            AGENT_VERSION, server_info.min_agent_version
-        ):
+        if not self._is_version_compatible(AGENT_VERSION, server_info.min_agent_version):
             msg = (
                 f"Agent version {AGENT_VERSION} is older than "
                 f"server minimum {server_info.min_agent_version}. Agent upgrade required."
@@ -135,9 +127,7 @@ class APICompatHandler:
             raise IncompatibleVersionError(msg)
 
         # Check for deprecation (warn but allow)
-        if self._is_version_deprecated(
-            AGENT_VERSION, server_info.deprecated_agent_versions
-        ):
+        if self._is_version_deprecated(AGENT_VERSION, server_info.deprecated_agent_versions):
             logger.warning(
                 "Agent version is deprecated",
                 agent_version=AGENT_VERSION,
@@ -195,9 +185,7 @@ class APICompatHandler:
         """
         deprecated = response.headers.get("Sec-RP-Deprecated", "false")
         if deprecated.lower() == "true":
-            reason = response.headers.get(
-                "Sec-RP-Deprecated-Reason", "Agent version deprecated"
-            )
+            reason = response.headers.get("Sec-RP-Deprecated-Reason", "Agent version deprecated")
             logger.warning("Server flagged agent as deprecated", reason=reason)
 
         server_version = response.headers.get("Sec-RP-Server-Version")

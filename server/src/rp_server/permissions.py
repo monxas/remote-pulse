@@ -55,7 +55,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rp_server.models import User, UserPermission
 
-
 # Canonical list of actions the UI is allowed to grant. Kept tight on
 # purpose: every new action should land alongside the enforcement that
 # consumes it, otherwise it's just dead config.

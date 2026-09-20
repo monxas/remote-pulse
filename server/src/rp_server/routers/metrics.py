@@ -1,7 +1,7 @@
 """Metrics endpoints for sparkline data and available series."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -89,7 +89,7 @@ async def get_sparkline_data(
     window_seconds, bucket_seconds = WINDOW_BUCKET_MAP[window]
 
     # Calculate start time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start_time = now - timedelta(seconds=window_seconds)
 
     # Collect series data
@@ -126,7 +126,7 @@ async def get_sparkline_data(
                 AND {metric} IS NOT NULL
             GROUP BY bucket
             ORDER BY bucket ASC
-            """
+            """  # nosec B608 - metric name is whitelisted + identifier-checked above; all values are bound params
         )
 
         result = await db.execute(

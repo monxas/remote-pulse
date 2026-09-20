@@ -22,14 +22,13 @@ import secrets
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import structlog
 
 from rp.installers.base import (
-    InstallResult,
     InstallerError,
+    InstallResult,
     ensure_rp_config_dir,
     run_subprocess,
     write_secure_toml,
@@ -47,7 +46,7 @@ RUSTDESK_CONFIG_FILENAME = "rustdesk.toml"
 class RustDeskInstaller:
     """Cross-OS RustDesk client installer + configurator."""
 
-    def __init__(self, *, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, *, http_client: httpx.AsyncClient | None = None) -> None:
         self._http_client = http_client
 
     async def detect_installed(self) -> bool:
@@ -62,7 +61,7 @@ class RustDeskInstaller:
             return Path("C:/Program Files/RustDesk/rustdesk.exe").exists()
         return False
 
-    async def detect_version(self) -> Optional[str]:
+    async def detect_version(self) -> str | None:
         """Return ``rustdesk --version`` output (best-effort)."""
         binary = shutil.which("rustdesk")
         if not binary and get_os() == "macos":
@@ -72,9 +71,7 @@ class RustDeskInstaller:
             return None
 
         try:
-            _, stdout, _ = await run_subprocess(
-                [binary, "--version"], check=False, timeout=5
-            )
+            _, stdout, _ = await run_subprocess([binary, "--version"], check=False, timeout=5)
         except InstallerError:
             return None
         match = re.search(r"\d+\.\d+\.\d+", stdout)
@@ -152,9 +149,7 @@ class RustDeskInstaller:
         rpm_path = await self._download_asset(asset["browser_download_url"])
         try:
             installer = "dnf" if shutil.which("dnf") else "yum"
-            await run_subprocess(
-                [installer, "install", "-y", str(rpm_path)], check=True
-            )
+            await run_subprocess([installer, "install", "-y", str(rpm_path)], check=True)
         finally:
             rpm_path.unlink(missing_ok=True)
 
@@ -208,8 +203,7 @@ class RustDeskInstaller:
     async def _install_windows(self, force: bool) -> InstallResult:
         if not shutil.which("winget"):
             raise InstallerError(
-                "Windows install requires winget. Install App Installer "
-                "from the Microsoft Store."
+                "Windows install requires winget. Install App Installer from the Microsoft Store."
             )
         args = [
             "winget",
@@ -239,8 +233,8 @@ class RustDeskInstaller:
 
     async def configure_direct_ip(
         self,
-        password: Optional[str] = None,
-        tailscale_ip: Optional[str] = None,
+        password: str | None = None,
+        tailscale_ip: str | None = None,
     ) -> dict[str, object]:
         """Configure Direct IP mode + bind to Tailscale interface only.
 
@@ -258,9 +252,7 @@ class RustDeskInstaller:
         if password is None:
             password = secrets.token_urlsafe(32)
         if len(password) < 16:
-            raise InstallerError(
-                "Password must be at least 16 chars for Direct IP mode."
-            )
+            raise InstallerError("Password must be at least 16 chars for Direct IP mode.")
 
         bind_addr = tailscale_ip or "0.0.0.0"
         version = await self.detect_version() or "unknown"
@@ -295,9 +287,7 @@ class RustDeskInstaller:
             "config_path": str(rp_config_path),
         }
 
-    async def _patch_rustdesk_native_config(
-        self, password: str, bind_addr: str
-    ) -> None:
+    async def _patch_rustdesk_native_config(self, password: str, bind_addr: str) -> None:
         """Patch RustDesk's own TOML (RustDesk2.toml) for Direct IP."""
         candidates: list[Path] = []
         home = Path.home()
@@ -307,11 +297,7 @@ class RustDeskInstaller:
             candidates.append(home / ".config" / "rustdesk" / "RustDesk2.toml")
         elif os_type == "macos":
             candidates.append(
-                home
-                / "Library"
-                / "Preferences"
-                / "com.carriez.RustDesk"
-                / "RustDesk2.toml"
+                home / "Library" / "Preferences" / "com.carriez.RustDesk" / "RustDesk2.toml"
             )
             candidates.append(home / ".config" / "rustdesk" / "RustDesk2.toml")
         elif os_type == "windows":
@@ -330,9 +316,7 @@ class RustDeskInstaller:
                 )
                 continue
 
-            patched = self._merge_rustdesk_toml(
-                existing, password=password, bind_addr=bind_addr
-            )
+            patched = self._merge_rustdesk_toml(existing, password=password, bind_addr=bind_addr)
             try:
                 path.write_text(patched)
                 logger.info("rustdesk_native_config_patched", path=str(path))
@@ -390,13 +374,9 @@ class RustDeskInstaller:
                     await run_subprocess(["dpkg", "--remove", "rustdesk"], check=False)
                 elif "fedora" in distro or "rhel" in distro:
                     installer = "dnf" if shutil.which("dnf") else "yum"
-                    await run_subprocess(
-                        [installer, "remove", "-y", "rustdesk"], check=False
-                    )
+                    await run_subprocess([installer, "remove", "-y", "rustdesk"], check=False)
             elif os_type == "macos" and shutil.which("brew"):
-                await run_subprocess(
-                    ["brew", "uninstall", "--cask", "rustdesk"], check=False
-                )
+                await run_subprocess(["brew", "uninstall", "--cask", "rustdesk"], check=False)
             elif os_type == "windows" and shutil.which("winget"):
                 await run_subprocess(
                     ["winget", "uninstall", "--id", "RustDesk.RustDesk"],
@@ -408,9 +388,7 @@ class RustDeskInstaller:
 
     # --- helpers ----------------------------------------------------------
 
-    async def _fetch_release_asset(
-        self, *, suffix: str, arch_hint: str
-    ) -> dict[str, object]:
+    async def _fetch_release_asset(self, *, suffix: str, arch_hint: str) -> dict[str, object]:
         """Fetch latest release metadata and pick asset by suffix + arch."""
         client = self._http_client
         owns_client = client is None

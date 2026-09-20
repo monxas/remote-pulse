@@ -8,7 +8,7 @@ import hashlib
 import json
 import tomllib
 from base64 import b64decode
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -72,7 +72,7 @@ class ServerTrust:
         Returns:
             ServerTrust instance
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         trust = cls(
             pubkey_pem=server_pubkey_pem,
             fingerprint=fingerprint,
@@ -120,9 +120,7 @@ class ServerTrust:
 
             pinned_at = datetime.fromisoformat(pinned_at_str)
             last_verified_at = (
-                datetime.fromisoformat(last_verified_at_str)
-                if last_verified_at_str
-                else None
+                datetime.fromisoformat(last_verified_at_str) if last_verified_at_str else None
             )
 
             logger.info(
@@ -168,7 +166,7 @@ class ServerTrust:
             True if valid AND not expired AND fingerprint matches
         """
         # Check expiration first (fast path)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if expires_at < now:
             logger.warning(
                 "command expired",
@@ -201,9 +199,7 @@ class ServerTrust:
 
         # Reconstruct signing blob (must match server's format exactly)
         try:
-            canonical_payload = json.dumps(
-                payload, sort_keys=True, separators=(",", ":")
-            )
+            canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
             expires_iso = expires_at.isoformat()
             blob = f"{command_id}|{command_type}|{canonical_payload}|{expires_iso}"
             blob_hash = hashlib.sha256(blob.encode("utf-8")).digest()

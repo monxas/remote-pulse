@@ -2,21 +2,22 @@
 
 import logging
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from rp_server import __version__
+from rp_server.audit_retention import retention_loop
 from rp_server.config import settings
 from rp_server.database import DbSession, async_session_factory, engine
 from rp_server.middleware.compat import APICompatMiddleware
-from rp_server.audit_retention import retention_loop
 from rp_server.routers import (
     admin,
     agent_commands,
@@ -41,7 +42,6 @@ from rp_server.routers import (
     metrics,
 )
 from rp_server.webhooks import WebhookDispatcher, set_dispatcher
-from starlette.middleware.sessions import SessionMiddleware
 
 # Configure structured logging
 structlog.configure(

@@ -3,7 +3,7 @@
 import base64
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
@@ -98,7 +98,8 @@ async def register_ssh_key(
         Registered SSH key response
 
     Raises:
-        HTTPException: 404 if host not found, 409 if key already registered, 400 if fingerprint mismatch
+        HTTPException: 404 if host not found, 409 if key already registered,
+            400 if fingerprint mismatch
     """
     logger.info(
         "register_ssh_key_request",
@@ -265,7 +266,7 @@ async def revoke_ssh_key(
         )
 
     # Mark as revoked
-    key.revoked_at = datetime.now(timezone.utc)
+    key.revoked_at = datetime.now(UTC)
     key.revoked_reason = reason
     await db.commit()
     await db.refresh(key)
@@ -322,7 +323,7 @@ async def distribute_keys(
             "group": group,
             "content": "",
             "host_count": 0,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
     # Get all active SSH keys for these hosts
@@ -347,7 +348,7 @@ async def distribute_keys(
         "content": content,
         "host_count": len(hosts),
         "key_count": len(keys),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 

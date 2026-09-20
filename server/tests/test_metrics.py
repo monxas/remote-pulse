@@ -1,7 +1,7 @@
 """Tests for metrics endpoints (sparkline data)."""
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -29,7 +29,7 @@ async def host_with_metrics(db_session: AsyncSession) -> Host:
     # Insert 100 heartbeats with timestamps spaced 1s apart
     # CPU values follow sine wave: 50 + 40*sin(x) to range [10, 90]
     # MEM values linear: 20 + x/2 to range [20, 70]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     heartbeats = []
 
     for i in range(100):

@@ -13,7 +13,7 @@ All installers return :class:`InstallResult` dataclasses so the CLI layer can
 render uniform success/failure messages.
 """
 
-from rp.installers.base import InstallResult, InstallerError
+from rp.installers.base import InstallerError, InstallResult
 from rp.installers.rustdesk import RustDeskInstaller
 from rp.installers.sunshine import SunshineInstaller
 from rp.installers.vnc import VNCInstaller

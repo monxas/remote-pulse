@@ -1,6 +1,6 @@
 """Prometheus metrics exporter for Remote-Pulse server."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
@@ -189,7 +189,7 @@ async def refresh_fleet_gauges(db: AsyncSession) -> None:
     - Enrollment tokens active count
     - SSH keys counts by revoked status
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Clear all host-specific gauges before refresh
     # (prometheus_client doesn't provide clear_all for labeled metrics,

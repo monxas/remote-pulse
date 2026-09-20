@@ -6,13 +6,12 @@ import os
 import secrets
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import structlog
 
 from rp.installers.base import (
-    InstallResult,
     InstallerError,
+    InstallResult,
     ensure_rp_config_dir,
     run_subprocess,
     write_secure_toml,
@@ -39,17 +38,11 @@ class VNCInstaller:
     @staticmethod
     def _has_x11() -> bool:
         """Best-effort X11 detection."""
-        return bool(
-            shutil.which("Xorg")
-            or shutil.which("Xwayland")
-            or os.environ.get("DISPLAY")
-        )
+        return bool(shutil.which("Xorg") or shutil.which("Xwayland") or os.environ.get("DISPLAY"))
 
     async def detect_installed(self) -> bool:
         """Return True if TigerVNC server is installed."""
-        return any(
-            shutil.which(b) is not None for b in ("vncserver", "Xvnc", "x0vncserver")
-        )
+        return any(shutil.which(b) is not None for b in ("vncserver", "Xvnc", "x0vncserver"))
 
     async def install(self, force: bool = False) -> InstallResult:
         """Install TigerVNC server via the system package manager."""
@@ -91,19 +84,13 @@ class VNCInstaller:
             method = "apt"
         elif any(d in distro for d in ("fedora", "rhel", "centos", "rocky", "alma")):
             installer = "dnf" if shutil.which("dnf") else "yum"
-            await run_subprocess(
-                [installer, "install", "-y", "tigervnc-server"], check=True
-            )
+            await run_subprocess([installer, "install", "-y", "tigervnc-server"], check=True)
             method = installer
         elif "arch" in distro or "manjaro" in distro:
-            await run_subprocess(
-                ["pacman", "-S", "--noconfirm", "tigervnc"], check=True
-            )
+            await run_subprocess(["pacman", "-S", "--noconfirm", "tigervnc"], check=True)
             method = "pacman"
         else:
-            raise InstallerError(
-                f"Unsupported Linux distro for VNC install: {distro or 'unknown'}"
-            )
+            raise InstallerError(f"Unsupported Linux distro for VNC install: {distro or 'unknown'}")
 
         return InstallResult(
             tool="vnc",
@@ -113,7 +100,7 @@ class VNCInstaller:
         )
 
     async def configure(
-        self, *, tailscale_ip: Optional[str] = None, port: int = 5901
+        self, *, tailscale_ip: str | None = None, port: int = 5901
     ) -> dict[str, object]:
         """Configure VNC password + bind addr; write rp-managed config."""
         self._ensure_linux()
@@ -155,13 +142,9 @@ class VNCInstaller:
             )
         elif any(d in distro for d in ("fedora", "rhel", "centos", "rocky", "alma")):
             installer = "dnf" if shutil.which("dnf") else "yum"
-            await run_subprocess(
-                [installer, "remove", "-y", "tigervnc-server"], check=False
-            )
+            await run_subprocess([installer, "remove", "-y", "tigervnc-server"], check=False)
         elif "arch" in distro or "manjaro" in distro:
-            await run_subprocess(
-                ["pacman", "-Rs", "--noconfirm", "tigervnc"], check=False
-            )
+            await run_subprocess(["pacman", "-Rs", "--noconfirm", "tigervnc"], check=False)
         rp_path = ensure_rp_config_dir() / VNC_CONFIG_FILENAME
         rp_path.unlink(missing_ok=True)
 

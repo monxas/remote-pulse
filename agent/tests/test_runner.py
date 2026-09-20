@@ -48,9 +48,7 @@ async def test_runner_rejects_pkg_install() -> None:
 
 @pytest.mark.asyncio
 async def test_runner_rejects_screen_open() -> None:
-    result = await execute_remote_command(
-        _cmd("screen_open", {"protocol": "rustdesk"})
-    )
+    result = await execute_remote_command(_cmd("screen_open", {"protocol": "rustdesk"}))
     assert result.ack is False
     assert "not implemented" in (result.rejected_reason or "")
     assert "screen_open" in (result.rejected_reason or "")

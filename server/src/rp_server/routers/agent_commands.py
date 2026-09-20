@@ -36,7 +36,7 @@ client cert or HMAC body signing for replay protection.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -176,7 +176,7 @@ async def list_pending_commands(
     """
     host = await _require_host(db, host_id)
 
-    cutoff = datetime.now(timezone.utc) - PENDING_WINDOW
+    cutoff = datetime.now(UTC) - PENDING_WINDOW
 
     stmt = (
         select(Command)
@@ -283,7 +283,7 @@ async def submit_command_result(
             detail="Command already has a recorded result",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     update_stmt = (
         update(Command)

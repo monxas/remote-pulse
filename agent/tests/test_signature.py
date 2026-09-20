@@ -1,7 +1,7 @@
 """Tests for agent signature verification."""
 
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -42,14 +42,16 @@ MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lP/bUTNfBNn+DYs3c5i9Y8c=
 
 def test_verify_valid_signature():
     """Test verifying a valid signature."""
-    from rp.signature import ServerTrust
-
-    # Generate a real Ed25519 keypair for testing
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    from cryptography.hazmat.primitives import serialization
     import hashlib
     import json
     from base64 import b64encode
+
+    from cryptography.hazmat.primitives import serialization
+
+    # Generate a real Ed25519 keypair for testing
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from rp.signature import ServerTrust
 
     with tempfile.TemporaryDirectory() as tmpdir:
         trust_dir = Path(tmpdir)
@@ -82,7 +84,7 @@ def test_verify_valid_signature():
         command_id = "test-123"
         command_type = "exec_shell"
         payload = {"cmd": "echo hello"}
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         expires_iso = expires_at.isoformat()
@@ -93,19 +95,19 @@ def test_verify_valid_signature():
         signature_b64 = b64encode(signature_bytes).decode("ascii")
 
         # Verify
-        assert trust.verify_command(
-            command_id, command_type, payload, expires_at, signature_b64
-        )
+        assert trust.verify_command(command_id, command_type, payload, expires_at, signature_b64)
 
 
 def test_verify_tampered_payload():
     """Test that tampered payload fails verification."""
-    from rp.signature import ServerTrust
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    from cryptography.hazmat.primitives import serialization
     import hashlib
     import json
     from base64 import b64encode
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from rp.signature import ServerTrust
 
     with tempfile.TemporaryDirectory() as tmpdir:
         trust_dir = Path(tmpdir)
@@ -135,7 +137,7 @@ def test_verify_tampered_payload():
         command_id = "test-456"
         command_type = "exec_shell"
         original_payload = {"cmd": "echo hello"}
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+        expires_at = datetime.now(UTC) + timedelta(seconds=60)
 
         canonical = json.dumps(original_payload, sort_keys=True, separators=(",", ":"))
         blob = f"{command_id}|{command_type}|{canonical}|{expires_at.isoformat()}"
@@ -151,12 +153,14 @@ def test_verify_tampered_payload():
 
 def test_verify_expired_command():
     """Test that expired command fails verification."""
-    from rp.signature import ServerTrust
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    from cryptography.hazmat.primitives import serialization
     import hashlib
     import json
     from base64 import b64encode
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from rp.signature import ServerTrust
 
     with tempfile.TemporaryDirectory() as tmpdir:
         trust_dir = Path(tmpdir)
@@ -186,7 +190,7 @@ def test_verify_expired_command():
         command_id = "test-789"
         command_type = "exec_shell"
         payload = {"cmd": "echo hello"}
-        expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)  # Expired
+        expires_at = datetime.now(UTC) - timedelta(seconds=10)  # Expired
 
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         blob = f"{command_id}|{command_type}|{canonical}|{expires_at.isoformat()}"

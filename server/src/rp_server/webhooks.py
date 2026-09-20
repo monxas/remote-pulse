@@ -51,7 +51,7 @@ import uuid
 from typing import Any
 
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from rp_server.events import event_bus
@@ -154,7 +154,7 @@ def _build_delivery(
 ) -> tuple[dict[str, Any], bytes]:
     """Return the ``(envelope, encoded_body)`` for a delivery."""
     delivery_id = delivery_id or str(uuid.uuid4())
-    ts = (timestamp or _dt.datetime.now(_dt.timezone.utc)).isoformat()
+    ts = (timestamp or _dt.datetime.now(_dt.UTC)).isoformat()
     envelope = {
         "event": event_type,
         "delivery_id": delivery_id,
@@ -210,7 +210,7 @@ async def _record_result(
                 # Hook deleted mid-flight; nothing to record.
                 return
 
-            row.last_fired_at = _dt.datetime.now(_dt.timezone.utc)
+            row.last_fired_at = _dt.datetime.now(_dt.UTC)
             row.last_status_code = status_code
             row.last_error = None if success else error
 
@@ -232,7 +232,7 @@ async def _record_result(
             entry: dict[str, Any] = {
                 "delivery_id": delivery_id,
                 "event": event_type,
-                "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                "timestamp": _dt.datetime.now(_dt.UTC).isoformat(),
                 "status_code": status_code,
                 "error": error,
                 "attempt": attempt,
@@ -246,7 +246,7 @@ async def _record_result(
             )
 
             await db.commit()
-    except Exception:  # noqa: BLE001 — best-effort persistence
+    except Exception:
         logger.exception(
             "Failed to record webhook delivery outcome",
             extra={"webhook_id": str(webhook_id)},
@@ -302,7 +302,7 @@ class WebhookDispatcher:
             self._task.cancel()
             try:
                 await self._task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            except (asyncio.CancelledError, Exception):
                 pass
             self._task = None
         if self._owns_client:
@@ -334,7 +334,7 @@ class WebhookDispatcher:
                     )
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("WebhookDispatcher loop crashed; will not restart")
 
     # -- DB query ---------------------------------------------------------- #
@@ -372,7 +372,7 @@ class WebhookDispatcher:
                         }
                     )
                 return out
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "Webhook match query failed",
                 extra={"event_type": event_type},
@@ -430,7 +430,7 @@ class WebhookDispatcher:
             except httpx.RequestError as exc:
                 last_status = None
                 last_error = f"{type(exc).__name__}: {exc}"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 last_status = None
                 last_error = f"{type(exc).__name__}: {exc}"
 
@@ -501,7 +501,7 @@ class WebhookDispatcher:
                 if row is None:
                     return
                 hook = {"id": row.id, "url": row.url, "secret": row.secret}
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("Failed to load webhook for test fire")
             return
 
