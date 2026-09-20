@@ -1,39 +1,161 @@
 version: 2
+# Objetivo declarado: MENOS PRs, no más. Tres decisiones lo consiguen y conviene
+# entender por qué antes de tocar nada:
+#
+#  1. `groups:` — un PR por grupo en vez de uno por dependencia. Hay dos grupos
+#     por ecosistema a propósito: "seguridad" (applies-to: security-updates) y
+#     "mantenimiento" (applies-to: version-updates). Mezclarlos sería peor de lo
+#     que parece: el PR de seguridad urgente quedaría atado al bump rutinario que
+#     rompe la CI, y ninguno de los dos se podría mergear.
+#  2. `allow:` solo minor/patch en las actualizaciones de VERSIÓN. Los saltos
+#     mayores no se proponen solos (los 4 PRs de actions 4→6/7/8 de hoy salieron
+#     de no tener esto). Se piden a mano cuando toque, y siguen llegando si son la
+#     única forma de cerrar una alerta: `allow` NO se aplica a las
+#     actualizaciones de seguridad.
+#  3. `open-pull-requests-limit: 2` — con grupos, más de eso es ruido. No afecta a
+#     las de seguridad, que tienen su propio límite.
+#
+# Ojo con el interruptor que no está en este fichero: las actualizaciones de
+# seguridad automáticas son un ajuste DEL REPO (`dependabot_security_updates`),
+# no de este YAML. Estuvo apagado y por eso se acumularon 55 alertas sin un solo
+# PR. Se activó el 2026-09-20.
+#
+# El que cierra estos PRs es `dependabot_worker.py` de jev-gateway (VM208), con
+# la regla de hierro de que la CI roja no se mergea nunca.
 updates:
-  # Agent Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/agent"
+  # --------------------------------------------------------------- agente Python
+  - package-ecosystem: pip            # agent/pyproject.toml (sin lock)
+    directory: /agent
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "agent"
+      interval: weekly
+      day: monday
+      time: '10:00'
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 2
+    labels: [dependencies, agent]
     commit-message:
-      prefix: "deps(agent)"
+      prefix: deps(agent)
+    allow:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+    groups:
+      agent-seguridad:
+        applies-to: security-updates
+        patterns: ['*']
+      agent-mantenimiento:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
 
-  # Server Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/server"
+  # --------------------------------------------------------------- servidor
+  # `uv`, no `pip`: /server tiene uv.lock y es el ecosistema que GitHub eligió por
+  # su cuenta para la alerta de anyio (rama dependabot/uv/server/anyio-4.14.2).
+  # Con `pip` el lockfile se quedaba sin actualizar.
+  - package-ecosystem: uv             # server/pyproject.toml + server/uv.lock
+    directory: /server
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "server"
+      interval: weekly
+      day: monday
+      time: '10:00'
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 2
+    labels: [dependencies, server]
     commit-message:
-      prefix: "deps(server)"
+      prefix: deps(server)
+    allow:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+    groups:
+      server-seguridad:
+        applies-to: security-updates
+        patterns: ['*']
+      server-mantenimiento:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
 
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # --------------------------------------------------------------- SPA web
+  # Faltaba por completo, y ahí estaban las alertas altas (js-yaml, extract-zip):
+  # 28 de las 55 alertas del repo son de npm en /web y no tenían quién las
+  # propusiera hasta que se activó el interruptor de seguridad del repo.
+  - package-ecosystem: npm            # web/package.json + web/package-lock.json
+    directory: /web
     schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "ci"
+      interval: weekly
+      day: monday
+      time: '10:00'
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 2
+    labels: [dependencies, web]
     commit-message:
-      prefix: "ci"
+      prefix: deps(web)
+    allow:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+    groups:
+      web-seguridad:
+        applies-to: security-updates
+        patterns: ['*']
+      # vitest y sus satélites (@vitest/*) van SIEMPRE juntos: por separado se
+      # rompen entre ellos por el peer de la versión (es exactamente lo que dejó
+      # la CI de trip-planner#37 en rojo con un ERESOLVE).
+      web-vitest:
+        applies-to: version-updates
+        patterns: ['vitest', '@vitest/*']
+      web-mantenimiento:
+        applies-to: version-updates
+        patterns: ['*']
+        exclude-patterns: ['vitest', '@vitest/*']
+        update-types: [minor, patch]
+
+  # --------------------------------------------------------------- docs
+  - package-ecosystem: pip            # docs/requirements.txt (mkdocs)
+    directory: /docs
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [dependencies, docs]
+    commit-message:
+      prefix: deps(docs)
+    allow:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+    groups:
+      docs-seguridad:
+        applies-to: security-updates
+        patterns: ['*']
+      docs-mantenimiento:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # --------------------------------------------------------------- GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: ci
+    allow:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+    groups:
+      actions-seguridad:
+        applies-to: security-updates
+        patterns: ['*']
+      actions-mantenimiento:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
