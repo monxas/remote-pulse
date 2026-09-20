@@ -29,6 +29,10 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
     "aiosqlite>=0.20.0",
+    # The Server job runs `uv run ruff check .` but ruff was never a dependency
+    # of this project, so it failed with "Failed to spawn: ruff". Pinned for the
+    # same reason as the agent: a linter that gates the build is part of it.
+    "ruff==0.16.8",
 ]
 
 # Postgres-real tests (audit log immutability, atomic approval, etc.).
@@ -70,3 +74,28 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Kept identical to agent/pyproject.toml so both Python projects fail (and pass)
+# on the same rules. See that file for why the selection is explicit.
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort -- import ordering
+    "UP",     # pyupgrade
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+    "RUF100", # unused noqa directives
+]
+# Deferred here too, needing review rather than a mechanical fix:
+#   B008    18 hits, all FastAPI `Depends()` in defaults -- a framework false
+#           positive; would need a per-call allowlist before B could be enabled.
+#   DTZ003/DTZ005  naive datetime.utcnow()/now() -- real, but changing them
+#           touches stored timestamps, so it needs its own PR.
+#   S110, BLE001, TRY004  broad excepts / error typing.
+
+[tool.ruff.lint.per-file-ignores]
+# Applied migrations are historical artifacts: they already ran against the
+# production database, so they get read but not reflowed.
+"alembic/versions/*" = ["E501"]
