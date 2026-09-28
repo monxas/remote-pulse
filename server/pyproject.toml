@@ -32,7 +32,7 @@ dev = [
     # The Server job runs `uv run ruff check .` but ruff was never a dependency
     # of this project, so it failed with "Failed to spawn: ruff". Pinned for the
     # same reason as the agent: a linter that gates the build is part of it.
-    "ruff==0.16.8",
+    "ruff==0.16.9",
 ]
 
 # Postgres-real tests (audit log immutability, atomic approval, etc.).
