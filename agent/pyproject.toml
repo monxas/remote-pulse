@@ -40,7 +40,7 @@ dev = [
     # time, so when ruff widened its *default* rule selection the Agent job went
     # red on code nobody had touched. A linter that can fail a build is part of
     # the build: it gets an exact version, bumped on purpose via Dependabot.
-    "ruff==0.16.8",
+    "ruff==0.16.9",
 ]
 
 [tool.ruff]
