@@ -9,8 +9,8 @@ The daemon runs two cooperative asyncio tasks:
   in Phase 2.5 to close the exec-loop gap.
 
 Both loops share the same ``self.running`` flag so a single SIGTERM cleanly
-shuts down the whole agent. ``asyncio.gather(..., return_exceptions=True)``
-makes sure one loop crashing doesn't take the other down silently.
+shuts down the whole agent. Unexpected loop termination fails the daemon so
+the service supervisor can recover it instead of leaving a partial agent alive.
 """
 
 from __future__ import annotations
@@ -239,18 +239,29 @@ class HeartbeatDaemon:
             command_poll_interval_s=self.config.command_poll_interval_s,
         )
 
+        tasks = [
+            asyncio.create_task(self._heartbeat_loop()),
+            asyncio.create_task(self._command_loop()),
+        ]
         try:
-            # return_exceptions=True so one loop crashing doesn't cancel
-            # the other (we want heartbeat to keep flowing even if command
-            # exec hits a bug, and vice versa).
-            await asyncio.gather(
-                self._heartbeat_loop(),
-                self._command_loop(),
-                return_exceptions=True,
-            )
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                if task.cancelled():
+                    if self.running:
+                        raise RuntimeError("daemon loop cancelled unexpectedly")
+                else:
+                    task.result()  # Propagate failures to the service supervisor.
+            if self.running:
+                raise RuntimeError("daemon loop exited unexpectedly")
         except asyncio.CancelledError:
+            # Preserve the existing clean handling of external cancellation.
             logger.info("daemon cancelled")
         finally:
+            self.running = False
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             logger.info("daemon stopped")
 
     def stop(self):
