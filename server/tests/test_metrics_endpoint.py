@@ -185,3 +185,78 @@ async def test_metrics_http_duration_histogram(client: AsyncClient):
     assert 'path="/health"' in content
     assert 'method="GET"' in content
     assert 'status="200"' in content
+
+
+def _version_series(content):
+    from prometheus_client.parser import text_string_to_metric_families
+
+    return {
+        (
+            sample.labels["host_id"],
+            sample.labels["hostname"],
+            sample.labels["group"],
+            sample.labels["version"],
+        ): sample.value
+        for family in text_string_to_metric_families(content)
+        for sample in family.samples
+        if sample.name == "rp_host_agent_version"
+    }
+
+
+@pytest.mark.asyncio
+async def test_version_transition_preserves_other_host_and_repeated_scrapes(client, db_session):
+    changed = Host(
+        hostname="changing", os="linux", arch="x64", group_name="own", agent_version="1.0.0"
+    )
+    other = Host(
+        hostname="unchanged", os="linux", arch="x64", group_name="other", agent_version="0.9.0"
+    )
+    db_session.add_all([changed, other])
+    await db_session.commit()
+    old = (str(changed.id), "changing", "own", "1.0.0")
+    stable = (str(other.id), "unchanged", "other", "0.9.0")
+    assert _version_series((await client.get("/metrics")).text) == {old: 1, stable: 1}
+
+    # Exercise the real heartbeat update, not a mocked gauge mutation.
+    response = await client.post(
+        "/v1/heartbeat",
+        json={
+            "host_id": str(changed.id),
+            "agent_ts": datetime.now(UTC).isoformat(),
+            "agent_version": "1.0.15",
+        },
+    )
+    assert response.status_code == 200
+    current = (str(changed.id), "changing", "own", "1.0.15")
+    for _ in range(3):
+        assert _version_series((await client.get("/metrics")).text) == {current: 1, stable: 1}
+
+
+@pytest.mark.asyncio
+async def test_version_series_reconciles_host_labels_and_deletion(client, db_session):
+    changed = Host(
+        hostname="before", os="linux", arch="x64", group_name="before-group", agent_version=""
+    )
+    other = Host(
+        hostname="preserved", os="linux", arch="x64", group_name="other", agent_version="1.0.15"
+    )
+    db_session.add_all([changed, other])
+    await db_session.commit()
+    stable = (str(other.id), "preserved", "other", "1.0.15")
+    assert _version_series((await client.get("/metrics")).text) == {
+        (str(changed.id), "before", "before-group", "unknown"): 1,
+        stable: 1,
+    }
+    changed.hostname = "after"
+    changed.group_name = "after-group"
+    await db_session.commit()
+    assert _version_series((await client.get("/metrics")).text) == {
+        (str(changed.id), "after", "after-group", "unknown"): 1,
+        stable: 1,
+    }
+    await db_session.delete(changed)
+    await db_session.commit()
+    assert _version_series((await client.get("/metrics")).text) == {stable: 1}
+    await db_session.delete(other)
+    await db_session.commit()
+    assert _version_series((await client.get("/metrics")).text) == {}
