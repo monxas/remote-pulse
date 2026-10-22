@@ -191,14 +191,11 @@ async def refresh_fleet_gauges(db: AsyncSession) -> None:
     """
     now = datetime.now(UTC)
 
-    # Clear all host-specific gauges before refresh
-    # (prometheus_client doesn't provide clear_all for labeled metrics,
-    #  so we'll rely on setting current values and let stale labels expire)
-
     # Query all hosts
     stmt = select(Host)
     result = await db.execute(stmt)
     hosts = result.scalars().all()
+    current_version_labels = set()
 
     for host in hosts:
         host_id_str = str(host.id)
@@ -242,12 +239,25 @@ async def refresh_fleet_gauges(db: AsyncSession) -> None:
             ).set(-1)  # Indicator for "never seen"
 
         # Agent version (set to 1, version in label)
+        current_version_labels.add(
+            (host_id_str, hostname, group, host.agent_version or "unknown")
+        )
         rp_host_agent_version.labels(
             host_id=host_id_str,
             hostname=hostname,
             group=group,
             version=host.agent_version or "unknown",
         ).set(1)
+
+    # Gauge children persist until removed; setting v2 does not expire v1.
+    # Remove only obsolete version tuples, including renamed/removed hosts.
+    for metric in rp_host_agent_version.collect():
+        for sample in metric.samples:
+            labels = tuple(
+                sample.labels[key] for key in ("host_id", "hostname", "group", "version")
+            )
+            if labels not in current_version_labels:
+                rp_host_agent_version.remove(*labels)
 
     # Query latest heartbeat per host for metrics
     # Note: This is a simplified approach. For production, consider using
