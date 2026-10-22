@@ -5,7 +5,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from rp_server.config import settings
 
@@ -105,16 +106,24 @@ def decode_enrollment_token(token: str) -> dict[str, Any]:
     Decode and validate JWT enrollment token.
 
     Raises:
-        JWTError: If token is invalid, expired, or malformed.
+        InvalidTokenError: If token is invalid, expired, or malformed.
     """
     try:
         payload = jwt.decode(
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            # python-jose checked iat's type but did not reject future iat.
+            # Preserve that legacy contract; nbf and exp remain verified.
+            options={"verify_iat": False},
         )
+        if "iat" in payload:
+            try:
+                int(payload["iat"])
+            except (TypeError, ValueError) as exc:
+                raise InvalidTokenError("Issued At claim (iat) must be an integer.") from exc
         return payload
-    except JWTError:
+    except InvalidTokenError:
         raise
 
 
