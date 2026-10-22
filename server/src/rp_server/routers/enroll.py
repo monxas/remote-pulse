@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
-from jose import JWTError
+from jwt import InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -92,7 +92,7 @@ async def enroll_agent(request: EnrollRequest, db: DbSession) -> EnrollResponse:
         try:
             payload = decode_enrollment_token(request.token)
             validate_token_claims(payload)
-        except JWTError as e:
+        except InvalidTokenError as e:
             from rp_server.metrics_exporter import record_enroll_failure
 
             record_enroll_failure("unknown", "invalid_token")
