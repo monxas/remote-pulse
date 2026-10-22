@@ -137,7 +137,7 @@ jobs:
           extra_args: --only-verified
 
   security-scan:
-    name: Security analysis (semgrep + bandit + safety)
+    name: Security analysis (semgrep + bandit + dependency audit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -178,17 +178,42 @@ jobs:
         working-directory: agent
         run: uvx bandit@1.9.4 -r src/ -ll -b bandit-baseline.json
 
-      # Non-blocking dependency audit (unchanged intent). `uv run safety` could
-      # never work either — safety is not a project dependency, so it failed to
-      # spawn and `|| true` silently swallowed it, making these steps no-ops.
-      - name: Safety vulnerability check (server)
-        working-directory: server
-        run: |
-          uv sync --all-extras --dev
-          uv pip list --format=json | uvx safety check --stdin || true
+      # Findings remain informative; missing/partial/error scans must fail CI.
+      - name: Test dependency-audit report validation
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_audit_report.py' -v
 
-      - name: Safety vulnerability check (agent)
-        working-directory: agent
+      - name: Audit installed server and agent dependencies
+        shell: bash
         run: |
-          uv sync --all-extras --dev
-          uv pip list --format=json | uvx safety check --stdin || true
+          mkdir -p audit-reports
+          for project in server agent; do
+            (
+              cd "$project"
+              if [ "$project" = server ]; then
+                uv sync --locked --all-extras --dev
+              else
+                uv sync --all-extras --dev
+              fi
+              uv pip freeze --exclude-editable > "../audit-reports/$project.requirements.txt"
+              if uvx pip-audit@2.10.1 -r "../audit-reports/$project.requirements.txt" \
+                  --no-deps --disable-pip --strict --format=json \
+                  --output "../audit-reports/$project.json"; then
+                scanner_exit=0
+              else
+                scanner_exit=$?
+              fi
+              python3 ../.github/scripts/audit_report.py \
+                "../audit-reports/$project.requirements.txt" \
+                "../audit-reports/$project.json" "$scanner_exit" \
+                > "../audit-reports/$project.validation.txt"
+              cat "../audit-reports/$project.validation.txt"
+            )
+          done
+
+      - name: Upload dependency-audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-reports
+          path: audit-reports/
+          if-no-files-found: error

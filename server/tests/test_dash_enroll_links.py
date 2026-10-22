@@ -16,7 +16,9 @@ against our seeded fixture user.
 
 from __future__ import annotations
 
+import importlib.util
 import uuid
+import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -310,5 +312,42 @@ async def test_revoke_unknown_link_returns_404(
     try:
         r = await client.delete("/v1/dash/enroll/links/does-not-exist")
         assert r.status_code == 404
+    finally:
+        _clear_user_override()
+
+
+@pytest.mark.asyncio
+async def test_magic_link_renders_real_svg_without_pillow(
+    client: AsyncClient, test_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import qrcode
+
+    assert importlib.util.find_spec("PIL") is None
+    payloads = []
+    original_add_data = qrcode.QRCode.add_data
+
+    def record_data(self, data, *args, **kwargs):
+        payloads.append(data)
+        return original_add_data(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(qrcode.QRCode, "add_data", record_data)
+    admin = await _make_user(test_db, role="admin")
+    _override_user(admin)
+    try:
+        response = await client.post(
+            "/enroll-link/generate",
+            json={"group": "family", "hostname": "fixture-host", "ttl_hours": 1, "max_uses": 1},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["magic_url_unix"] == f"https://rp.monxas.casa/install?token={body['token']}"
+        assert payloads == [body["magic_url_unix"]]
+        claims = decode_enrollment_token(body["token"])
+        assert claims["group_name"] == "family"
+        assert claims["hostname"] == "fixture-host"
+        root = ET.fromstring(body["qr_code_svg"])
+        assert root.tag == "{http://www.w3.org/2000/svg}svg"
+        path = root.find("{http://www.w3.org/2000/svg}path")
+        assert path is not None and path.attrib["d"]
     finally:
         _clear_user_override()

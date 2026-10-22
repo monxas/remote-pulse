@@ -140,7 +140,7 @@ async def generate_enrollment_link(
 
     img = qr.make_image(image_factory=qrcode.image.svg.SvgPathImage)
 
-    # Convert PIL image to SVG string
+    # Serialize the SVG factory output; Pillow is not needed.
     import io
 
     svg_io = io.BytesIO()
