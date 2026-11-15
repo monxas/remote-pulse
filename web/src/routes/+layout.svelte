@@ -3,13 +3,13 @@
   import type { Snippet } from 'svelte';
   import { setContext } from 'svelte';
   import { QueryClientProvider } from '@tanstack/svelte-query';
-  import NavBar from '$lib/components/app/NavBar.svelte';
-  import CommandPalette from '$lib/components/app/CommandPalette.svelte';
-  import LiveToasts from '$lib/components/app/LiveToasts.svelte';
-  import LiveNotifications from '$lib/components/app/LiveNotifications.svelte';
-  import { Toaster } from '$lib/components/ui/sonner';
-  import { queryClient } from '$lib/queries/client';
-  import { useLiveStream } from '$lib/queries/sse.svelte';
+  import NavBar from '#lib/components/app/NavBar.svelte';
+  import CommandPalette from '#lib/components/app/CommandPalette.svelte';
+  import LiveToasts from '#lib/components/app/LiveToasts.svelte';
+  import LiveNotifications from '#lib/components/app/LiveNotifications.svelte';
+  import { Toaster } from '#lib/components/ui/sonner/index.ts';
+  import { queryClient } from '#lib/queries/client.ts';
+  import { useLiveStream } from '#lib/queries/sse.svelte.ts';
 
   type Props = {
     children: Snippet;
@@ -25,14 +25,14 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
-  <div class="flex min-h-dvh flex-col bg-base text-default pl-safe pr-safe">
+  <div class="bg-base text-default pl-safe pr-safe flex min-h-dvh flex-col">
     <NavBar />
     <main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
       {@render children()}
     </main>
-    <footer class="border-t border-border-subtle py-4 pb-safe text-center text-xs text-muted">
+    <footer class="border-border-subtle pb-safe text-muted border-t py-4 text-center text-xs">
       <span class="font-mono">remote-pulse</span> · ADR-0009 · /dash-next ·
-      <kbd class="rounded border border-border-default bg-subtle px-1 font-mono">⌘K</kbd> palette
+      <kbd class="border-border-default bg-subtle rounded border px-1 font-mono">⌘K</kbd> palette
     </footer>
   </div>
   <CommandPalette />

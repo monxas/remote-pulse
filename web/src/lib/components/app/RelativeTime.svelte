@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatRelative, secondsAgoFromIso } from '$lib/utils/relative-time';
+  import { formatRelative, secondsAgoFromIso } from '#lib/utils/relative-time.ts';
 
   type Props = {
     iso?: string | null;

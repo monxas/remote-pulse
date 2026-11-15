@@ -17,8 +17,8 @@
    * it ran *recently*, not the exact wall-clock instant.
    */
   import { Loader2, RotateCcw, Trash2, Clock } from '@lucide/svelte';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -26,12 +26,12 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
+  } from '#lib/components/ui/dialog/index.ts';
   import {
     createRetentionQuery,
     createUpdateRetentionMutation,
     createPurgeRetentionMutation,
-  } from '$lib/queries';
+  } from '#lib/queries/index.ts';
   import { formatRelativeTime } from './retention-format';
 
   const retentionQuery = createRetentionQuery();
@@ -103,7 +103,7 @@
 
 <div class="space-y-4" data-testid="retention-card">
   {#if $retentionQuery.isPending}
-    <div class="flex items-center gap-2 text-sm text-muted">
+    <div class="text-muted flex items-center gap-2 text-sm">
       <Loader2 class="size-4 animate-spin" aria-hidden="true" />
       Loading retention policy…
     </div>
@@ -117,11 +117,11 @@
   {:else if config}
     <!-- Status banner -->
     <div
-      class="flex flex-col gap-3 rounded-lg border border-border-subtle bg-subtle/40 p-4 sm:flex-row sm:items-start sm:justify-between"
+      class="border-border-subtle bg-subtle/40 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between"
       data-testid="retention-status"
     >
       <div class="flex items-start gap-3">
-        <Clock class="mt-0.5 size-5 text-muted" aria-hidden="true" />
+        <Clock class="text-muted mt-0.5 size-5" aria-hidden="true" />
         <div class="space-y-1">
           <p class="text-sm">
             Currently retaining
@@ -129,12 +129,12 @@
             history.
           </p>
           {#if lastPurgeLabel && config.last_purge_count !== null}
-            <p class="text-xs text-muted" data-testid="retention-last-purge">
+            <p class="text-muted text-xs" data-testid="retention-last-purge">
               Last purge: {lastPurgeLabel} (deleted {config.last_purge_count}
               event{config.last_purge_count === 1 ? '' : 's'}).
             </p>
           {:else}
-            <p class="text-xs text-muted" data-testid="retention-last-purge">
+            <p class="text-muted text-xs" data-testid="retention-last-purge">
               No purge has run yet.
             </p>
           {/if}
@@ -156,7 +156,7 @@
             max={config.max_days}
             bind:value={editDays}
             data-testid="retention-days-input"
-            class="flex h-9 w-32 rounded-md border border-border-default bg-base px-3 py-1 text-sm text-default shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            class="border-border-default bg-base text-default focus-visible:ring-ring flex h-9 w-32 rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-2 focus-visible:outline-none"
           />
           <input
             type="range"
@@ -168,7 +168,7 @@
             data-testid="retention-days-slider"
           />
         </div>
-        <span class="mt-1 block text-xs text-muted">
+        <span class="text-muted mt-1 block text-xs">
           Between {config.min_days} and {config.max_days} days. Default 90.
         </span>
       </label>
@@ -186,7 +186,7 @@
 
     <!-- Action bar -->
     <div
-      class="flex flex-col gap-2 border-t border-border-subtle pt-3 sm:flex-row sm:items-center sm:justify-between"
+      class="border-border-subtle flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div class="flex flex-wrap items-center gap-2">
         <Button
@@ -242,7 +242,7 @@
         >
         <input
           type="text"
-          class="w-full rounded border border-border-default bg-base px-2 py-1.5 font-mono text-sm focus:border-danger focus:outline-none"
+          class="border-border-default bg-base focus:border-danger w-full rounded border px-2 py-1.5 font-mono text-sm focus:outline-none"
           bind:value={purgeConfirmText}
           placeholder="DELETE"
           autocomplete="off"

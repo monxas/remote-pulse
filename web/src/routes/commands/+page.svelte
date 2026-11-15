@@ -1,33 +1,34 @@
 <script lang="ts">
   import { Loader2, Plus, Terminal } from '@lucide/svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent } from '$lib/components/ui/card';
-  import { Input } from '$lib/components/ui/input';
-  import { cn } from '$lib/utils';
-  import CommandRow from '$lib/components/app/CommandRow.svelte';
-  import LiveBadge from '$lib/components/app/LiveBadge.svelte';
-  import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
-  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
-  import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
-  import { createCommandsQuery, createHostsQuery } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import { ALL_COMMAND_STATUSES, type CommandStatus, type CommandsQueryParams } from '$lib/api';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { cn } from '#lib/utils.ts';
+  import CommandRow from '#lib/components/app/CommandRow.svelte';
+  import LiveBadge from '#lib/components/app/LiveBadge.svelte';
+  import IssueCommandDialog from '#lib/components/app/IssueCommandDialog.svelte';
+  import PullToRefresh from '#lib/components/app/PullToRefresh.svelte';
+  import SavedViewsSwitcher from '#lib/components/app/SavedViewsSwitcher.svelte';
+  import { createCommandsQuery, createHostsQuery } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import { ALL_COMMAND_STATUSES, type CommandStatus, type CommandsQueryParams } from '#lib/api.ts';
 
   const live = getLiveStream();
 
   // ---- Filters bound to URL ----
   const filterParams: CommandsQueryParams = $derived.by(() => {
-    const sp = $page.url.searchParams;
+    const sp = page.url.searchParams;
     const statusList = sp
       .getAll('status')
       .filter((s): s is CommandStatus =>
         (ALL_COMMAND_STATUSES as ReadonlyArray<string>).includes(s),
       );
+
     return {
       status: statusList.length > 0 ? statusList : undefined,
       host_id: sp.get('host_id') ?? undefined,
@@ -47,12 +48,12 @@
   // eslint-disable-next-line svelte/prefer-writable-derived
   let issuedByLocal = $state('');
   $effect(() => {
-    issuedByLocal = $page.url.searchParams.get('issued_by') ?? '';
+    issuedByLocal = page.url.searchParams.get('issued_by') ?? '';
   });
   let issuedByTimer: ReturnType<typeof setTimeout> | null = null;
 
   function updateUrl(patch: Record<string, string | string[] | null>): void {
-    const next = new SvelteURLSearchParams($page.url.searchParams);
+    const next = new SvelteURLSearchParams(page.url.search);
     for (const [k, v] of Object.entries(patch)) {
       next.delete(k);
       if (Array.isArray(v)) {
@@ -62,13 +63,13 @@
       }
     }
     const qs = next.toString();
-    const target = `${resolve('/commands')}${qs ? `?${qs}` : ''}` as `/${string}`;
+    const target = `${resolve('commands')}${qs ? `?${qs}` : ''}` as `/${string}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    void goto(target, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(target, { reset: false, replace: true });
   }
 
   function toggleStatus(s: CommandStatus): void {
-    const current = $page.url.searchParams.getAll('status');
+    const current = page.url.searchParams.getAll('status');
     const next = current.includes(s) ? current.filter((x) => x !== s) : [...current, s];
     updateUrl({ status: next });
   }
@@ -84,8 +85,8 @@
     updateUrl({ status: [], host_id: null, issued_by: null });
   }
 
-  const selectedStatus = $derived($page.url.searchParams.getAll('status'));
-  const selectedHostId = $derived($page.url.searchParams.get('host_id') ?? '');
+  const selectedStatus = $derived(page.url.searchParams.getAll('status'));
+  const selectedHostId = $derived(page.url.searchParams.get('host_id') ?? '');
   const hasFilters = $derived(
     selectedStatus.length > 0 || selectedHostId !== '' || (issuedByLocal && issuedByLocal !== ''),
   );
@@ -100,7 +101,7 @@
     <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Commands</h1>
-        <p class="text-sm text-muted">Recent commands issued across the fleet, newest first.</p>
+        <p class="text-muted text-sm">Recent commands issued across the fleet, newest first.</p>
       </div>
       <div class="flex items-center gap-2">
         {#if live}
@@ -116,16 +117,16 @@
     <SavedViewsSwitcher scope="commands" />
 
     <!-- Filter bar -->
-    <div class="flex flex-col gap-3 rounded-lg border border-border-default bg-elevated p-3">
+    <div class="border-border-default bg-elevated flex flex-col gap-3 rounded-lg border p-3">
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs font-medium text-muted">Status</span>
+        <span class="text-muted text-xs font-medium">Status</span>
         {#each ALL_COMMAND_STATUSES as s (s)}
           {@const on = selectedStatus.includes(s)}
           <button
             type="button"
             onclick={() => toggleStatus(s)}
             class={cn(
-              'touch-target inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-mono transition-colors',
+              'touch-target inline-flex min-h-9 items-center rounded-full border px-3 py-1 font-mono text-xs transition-colors',
               on
                 ? 'border-accent bg-accent-bg text-accent-text'
                 : 'border-border-default text-muted hover:bg-subtle',
@@ -138,11 +139,11 @@
       </div>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <label class="block space-y-1">
-          <span class="text-xs font-medium text-muted">Host</span>
+          <span class="text-muted text-xs font-medium">Host</span>
           <select
             value={selectedHostId}
             onchange={(e) => updateUrl({ host_id: (e.target as HTMLSelectElement).value || null })}
-            class="h-11 w-full rounded-md border border-border-default bg-base px-2 text-sm text-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9"
+            class="border-border-default bg-base text-default focus-visible:ring-ring h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:h-9"
           >
             <option value="">All hosts</option>
             {#each $hosts.data?.hosts ?? [] as h (h.id)}
@@ -151,7 +152,7 @@
           </select>
         </label>
         <label class="block space-y-1 sm:col-span-2">
-          <span class="text-xs font-medium text-muted">Issued by (email / sub)</span>
+          <span class="text-muted text-xs font-medium">Issued by (email / sub)</span>
           <Input
             value={issuedByLocal}
             oninput={onIssuedByInput}
@@ -164,7 +165,7 @@
         <div>
           <button
             type="button"
-            class="touch-target inline-flex items-center text-xs text-accent-text underline-offset-4 hover:underline"
+            class="touch-target text-accent-text inline-flex items-center text-xs underline-offset-4 hover:underline"
             onclick={clearFilters}
           >
             Clear filters
@@ -177,13 +178,13 @@
     {#if $commands.isPending && !$commands.data}
       <div class="space-y-2" aria-busy="true">
         {#each [0, 1, 2, 3, 4] as i (i)}
-          <div class="h-12 animate-pulse rounded-lg border border-border-subtle bg-subtle"></div>
+          <div class="border-border-subtle bg-subtle h-12 animate-pulse rounded-lg border"></div>
         {/each}
       </div>
     {:else if $commands.isError}
       <Card>
         <CardContent class="space-y-3 py-6">
-          <p class="text-sm text-muted">
+          <p class="text-muted text-sm">
             Could not load commands: {$commands.error?.message ?? 'unknown error'}.
           </p>
           <Button size="sm" onclick={() => void $commands.refetch()}>Reload</Button>
@@ -192,8 +193,8 @@
     {:else if flatCommands.length === 0}
       <Card>
         <CardContent class="flex flex-col items-center gap-3 py-12 text-center">
-          <Terminal class="size-8 text-muted" aria-hidden="true" />
-          <p class="text-sm text-muted">No commands match your filters.</p>
+          <Terminal class="text-muted size-8" aria-hidden="true" />
+          <p class="text-muted text-sm">No commands match your filters.</p>
           <div class="flex items-center gap-2">
             {#if hasFilters}
               <Button variant="outline" size="sm" onclick={clearFilters}>Clear filters</Button>

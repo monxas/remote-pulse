@@ -28,9 +28,9 @@
     Check,
   } from '@lucide/svelte';
   import { page } from '$app/state';
-  import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -38,8 +38,8 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { cn } from '$lib/utils';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { cn } from '#lib/utils.ts';
   import { createSavedViewsStore, type SavedView } from './saved-views.svelte';
 
   type Props = {
@@ -194,7 +194,7 @@
     <button
       type="button"
       class={cn(
-        'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+        'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
         store.active === null && !store.modified
           ? 'border-accent-border bg-accent-bg text-accent-text'
           : 'border-border-default bg-elevated text-default hover:bg-subtle',
@@ -208,7 +208,7 @@
       <button
         type="button"
         class={cn(
-          'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+          'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
           store.active?.id === v.id
             ? 'border-accent-border bg-accent-bg text-accent-text'
             : 'border-border-default bg-elevated text-default hover:bg-subtle',
@@ -223,7 +223,7 @@
       <button
         type="button"
         class={cn(
-          'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+          'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
           store.active?.id === v.id
             ? 'border-accent-border bg-accent-bg text-accent-text'
             : 'border-border-default bg-elevated text-muted hover:bg-subtle hover:text-default',
@@ -266,14 +266,14 @@
         ></button>
         <div
           role="menu"
-          class="absolute left-0 z-20 mt-1 min-w-[18rem] max-w-[24rem] overflow-hidden rounded-md border border-border-default bg-elevated shadow-lg"
+          class="border-border-default bg-elevated absolute left-0 z-20 mt-1 max-w-[24rem] min-w-[18rem] overflow-hidden rounded-md border shadow-lg"
         >
           <div class="max-h-72 overflow-auto py-1">
             <button
               type="button"
               role="menuitem"
               class={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-subtle',
+                'hover:bg-subtle flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
                 store.active === null && !store.modified && 'bg-subtle',
               )}
               onclick={() => {
@@ -283,12 +283,12 @@
             >
               <span class="flex-1 truncate">Default view</span>
               {#if store.active === null && !store.modified}
-                <Check class="size-3.5 text-accent-text" aria-hidden="true" />
+                <Check class="text-accent-text size-3.5" aria-hidden="true" />
               {/if}
             </button>
 
             {#if pinnedUser.length > 0}
-              <div class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              <div class="text-muted px-3 py-1 text-[10px] font-semibold tracking-wide uppercase">
                 Pinned
               </div>
               {#each pinnedUser as v (v.id)}
@@ -296,7 +296,7 @@
                   type="button"
                   role="menuitem"
                   class={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-subtle',
+                    'hover:bg-subtle flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
                     store.active?.id === v.id && 'bg-subtle',
                   )}
                   data-testid={`saved-views-item-${v.id}`}
@@ -305,17 +305,17 @@
                     closeDropdown();
                   }}
                 >
-                  <Pin class="size-3 text-muted" aria-hidden="true" />
+                  <Pin class="text-muted size-3" aria-hidden="true" />
                   <span class="flex-1 truncate">{v.name}</span>
                   {#if store.active?.id === v.id}
-                    <Check class="size-3.5 text-accent-text" aria-hidden="true" />
+                    <Check class="text-accent-text size-3.5" aria-hidden="true" />
                   {/if}
                 </button>
               {/each}
             {/if}
 
             {#if otherUser.length > 0}
-              <div class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              <div class="text-muted px-3 py-1 text-[10px] font-semibold tracking-wide uppercase">
                 Saved
               </div>
               {#each otherUser as v (v.id)}
@@ -323,7 +323,7 @@
                   type="button"
                   role="menuitem"
                   class={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-subtle',
+                    'hover:bg-subtle flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
                     store.active?.id === v.id && 'bg-subtle',
                   )}
                   data-testid={`saved-views-item-${v.id}`}
@@ -334,22 +334,22 @@
                 >
                   <span class="flex-1 truncate">{v.name}</span>
                   {#if store.active?.id === v.id}
-                    <Check class="size-3.5 text-accent-text" aria-hidden="true" />
+                    <Check class="text-accent-text size-3.5" aria-hidden="true" />
                   {/if}
                 </button>
               {/each}
             {/if}
 
             {#if pinnedUser.length === 0 && otherUser.length === 0}
-              <div class="px-3 py-2 text-xs text-muted">No custom views yet.</div>
+              <div class="text-muted px-3 py-2 text-xs">No custom views yet.</div>
             {/if}
           </div>
 
-          <div class="border-t border-border-default">
+          <div class="border-border-default border-t">
             <button
               type="button"
               role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-subtle"
+              class="hover:bg-subtle flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm"
               data-testid="saved-views-save"
               onclick={openSave}
             >
@@ -359,7 +359,7 @@
             <button
               type="button"
               role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-subtle"
+              class="hover:bg-subtle flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm"
               data-testid="saved-views-manage"
               onclick={openManage}
             >
@@ -409,7 +409,7 @@
     </DialogHeader>
     <div class="space-y-3">
       <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted">Name</span>
+        <span class="text-muted text-xs font-medium">Name</span>
         <Input
           bind:value={saveName}
           placeholder="My filters"
@@ -428,7 +428,7 @@
         <span>Pin to top of the list</span>
       </label>
       {#if saveError}
-        <p class="text-xs text-danger-text" role="alert" data-testid="saved-views-save-error">
+        <p class="text-danger-text text-xs" role="alert" data-testid="saved-views-save-error">
           {saveError}
         </p>
       {/if}
@@ -452,14 +452,14 @@
 
     <div class="space-y-4">
       <section class="space-y-2">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Custom</h3>
+        <h3 class="text-muted text-xs font-semibold tracking-wide uppercase">Custom</h3>
         {#if store.userViews.length === 0}
-          <p class="text-xs text-muted">
+          <p class="text-muted text-xs">
             You haven't saved any custom views yet. Apply filters on the page, then choose “Save
             current as view…”.
           </p>
         {:else}
-          <ul class="divide-y divide-border-subtle rounded-md border border-border-default">
+          <ul class="divide-border-subtle border-border-default divide-y rounded-md border">
             {#each store.userViews as v (v.id)}
               <li
                 class="flex items-center gap-2 px-3 py-2"
@@ -509,7 +509,7 @@
                     onclick={() => remove(v)}
                     data-testid={`saved-views-delete-${v.id}`}
                   >
-                    <Trash2 class="size-3.5 text-danger-text" />
+                    <Trash2 class="text-danger-text size-3.5" />
                   </Button>
                 {/if}
               </li>
@@ -517,13 +517,13 @@
           </ul>
         {/if}
         {#if renameError}
-          <p class="text-xs text-danger-text" role="alert">{renameError}</p>
+          <p class="text-danger-text text-xs" role="alert">{renameError}</p>
         {/if}
       </section>
 
       <section class="space-y-2">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Factory defaults</h3>
-        <ul class="space-y-1 text-sm text-muted">
+        <h3 class="text-muted text-xs font-semibold tracking-wide uppercase">Factory defaults</h3>
+        <ul class="text-muted space-y-1 text-sm">
           {#each store.factoryViews as v (v.id)}
             <li class="flex items-center justify-between">
               <span>{v.name}</span>
@@ -534,7 +534,7 @@
       </section>
 
       <section class="space-y-2">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Import / export</h3>
+        <h3 class="text-muted text-xs font-semibold tracking-wide uppercase">Import / export</h3>
         <div class="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onclick={doExport} data-testid="saved-views-export">
             <Download class="size-3.5" />
@@ -559,10 +559,10 @@
           />
         </div>
         {#if importError}
-          <p class="text-xs text-danger-text" role="alert">{importError}</p>
+          <p class="text-danger-text text-xs" role="alert">{importError}</p>
         {/if}
         {#if importSummary}
-          <p class="text-xs text-success-text" role="status">{importSummary}</p>
+          <p class="text-success-text text-xs" role="status">{importSummary}</p>
         {/if}
       </section>
     </div>

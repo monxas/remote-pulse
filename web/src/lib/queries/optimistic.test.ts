@@ -23,7 +23,7 @@ import type {
   SettingsGroupsResponse,
   SettingsUsersResponse,
   UserPermissionsResponse,
-} from '$lib/api';
+} from '#lib/api.ts';
 
 describe('patchGroupsAfterCreate', () => {
   it('appends a zero-count placeholder while preserving existing rows', () => {

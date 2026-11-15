@@ -23,11 +23,11 @@
   } from '@lucide/svelte';
   import { toast } from 'svelte-sonner';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Input } from '$lib/components/ui/input';
-  import { Switch } from '$lib/components/ui/switch';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Switch } from '#lib/components/ui/switch/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -35,7 +35,7 @@
     DialogFooter,
     DialogHeader,
     DialogTitle,
-  } from '$lib/components/ui/dialog';
+  } from '#lib/components/ui/dialog/index.ts';
   import {
     createWebhooksQuery,
     createCreateWebhookMutation,
@@ -44,13 +44,13 @@
     createSettingsGroupsQuery,
     createTestWebhookMutation,
     createUpdateWebhookMutation,
-  } from '$lib/queries';
+  } from '#lib/queries/index.ts';
   // ``AUTO_DISABLE_AFTER`` on the server. Mirrored here so the UI can
   // surface "Auto-disabled" without a round trip — kept in sync via the
   // backend's documented threshold (see rp_server.webhooks).
   const AUTO_DISABLE_AFTER = 10;
-  import { userStore } from '$lib/stores/user.svelte';
-  import type { CreateWebhookInput, WebhookCreateResponse, WebhookSummary } from '$lib/api';
+  import { userStore } from '#lib/stores/user.svelte.ts';
+  import type { CreateWebhookInput, WebhookCreateResponse, WebhookSummary } from '#lib/api.ts';
   import {
     INTEGRATION_TEMPLATES,
     applyTemplate as applyTemplatePure,
@@ -277,7 +277,7 @@
   <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Webhooks</h1>
-      <p class="mt-1 text-sm text-muted">
+      <p class="text-muted mt-1 text-sm">
         Forward Remote-Pulse events to external URLs. Each delivery is signed with HMAC-SHA256 so
         the receiver can verify authenticity. Useful for n8n, Discord, Slack, or any HTTP target.
       </p>
@@ -292,27 +292,27 @@
 
   {#if !isAdmin}
     <Card>
-      <CardContent class="py-8 text-center text-sm text-muted">
+      <CardContent class="text-muted py-8 text-center text-sm">
         <ShieldCheck class="mx-auto mb-2 size-6" aria-hidden="true" />
         Webhooks are admin-only.
       </CardContent>
     </Card>
   {:else if $webhooksQuery.isPending}
     <Card>
-      <CardContent class="flex items-center justify-center gap-2 py-12 text-sm text-muted">
+      <CardContent class="text-muted flex items-center justify-center gap-2 py-12 text-sm">
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
         Loading webhooks…
       </CardContent>
     </Card>
   {:else if $webhooksQuery.isError}
     <Card>
-      <CardContent class="py-8 text-center text-sm text-danger-text">
+      <CardContent class="text-danger-text py-8 text-center text-sm">
         Could not load webhooks: {$webhooksQuery.error?.message ?? 'Unknown error'}
       </CardContent>
     </Card>
   {:else if webhooks.length === 0}
     <Card>
-      <CardContent class="py-12 text-center text-sm text-muted">
+      <CardContent class="text-muted py-12 text-center text-sm">
         No webhooks yet. Click <strong>New webhook</strong> to forward events to an external URL.
       </CardContent>
     </Card>
@@ -324,7 +324,7 @@
       <CardContent class="overflow-x-auto p-0">
         <table class="w-full min-w-[800px] text-sm">
           <thead
-            class="border-b border-border-subtle bg-subtle/30 text-left text-xs uppercase tracking-wide text-muted"
+            class="border-border-subtle bg-subtle/30 text-muted border-b text-left text-xs tracking-wide uppercase"
           >
             <tr>
               <th class="px-4 py-2">Name</th>
@@ -341,13 +341,13 @@
             {#each webhooks as hook (hook.id)}
               {@const sb = statusBadge(hook)}
               <tr
-                class="border-b border-border-subtle last:border-0"
+                class="border-border-subtle border-b last:border-0"
                 data-testid="webhook-row"
                 data-webhook-id={hook.id}
               >
                 <td class="px-4 py-2 font-medium">{hook.name}</td>
                 <td class="px-4 py-2">
-                  <code class="break-all text-xs text-muted">{hook.url}</code>
+                  <code class="text-muted text-xs break-all">{hook.url}</code>
                 </td>
                 <td class="px-4 py-2">
                   <div class="flex flex-wrap gap-1">
@@ -368,7 +368,7 @@
                     aria-label={`Enable webhook ${hook.name}`}
                   />
                 </td>
-                <td class="px-4 py-2 text-xs text-muted">{fmtTimestamp(hook.last_fired_at)}</td>
+                <td class="text-muted px-4 py-2 text-xs">{fmtTimestamp(hook.last_fired_at)}</td>
                 <td class="px-4 py-2">
                   <Badge variant={sb.variant}>{sb.label}</Badge>
                 </td>
@@ -391,7 +391,7 @@
                   <div class="flex items-center justify-end gap-1">
                     <a
                       href={resolve('/webhooks/[id]/deliveries', { id: hook.id })}
-                      class="inline-flex h-8 items-center justify-center rounded-md px-2 text-sm hover:bg-subtle"
+                      class="hover:bg-subtle inline-flex h-8 items-center justify-center rounded-md px-2 text-sm"
                       data-testid="webhook-deliveries-link"
                       aria-label={`View deliveries for ${hook.name}`}
                       title="View deliveries"
@@ -427,7 +427,7 @@
                       data-testid="webhook-delete-btn"
                       aria-label={`Delete webhook ${hook.name}`}
                     >
-                      <Trash2 class="size-4 text-danger-text" aria-hidden="true" />
+                      <Trash2 class="text-danger-text size-4" aria-hidden="true" />
                     </Button>
                   </div>
                 </td>
@@ -458,13 +458,13 @@
         </label>
         <div class="block text-sm" data-testid="wh-templates">
           <span class="mb-1 block font-medium">
-            Quick fill <span class="font-normal text-muted">(optional)</span>
+            Quick fill <span class="text-muted font-normal">(optional)</span>
           </span>
           <div class="flex flex-wrap gap-1">
             {#each INTEGRATION_TEMPLATES as tmpl (tmpl.key)}
               <button
                 type="button"
-                class="rounded-full border border-border-default px-2.5 py-0.5 text-xs text-muted transition-colors hover:bg-subtle"
+                class="border-border-default text-muted hover:bg-subtle rounded-full border px-2.5 py-0.5 text-xs transition-colors"
                 onclick={() => applyTemplate(tmpl)}
                 data-testid={`wh-template-${tmpl.key}`}
                 title={`Fills empty fields with ${tmpl.label} defaults. Existing input is preserved.`}
@@ -473,7 +473,7 @@
               </button>
             {/each}
           </div>
-          <span class="mt-1 block text-xs text-muted">
+          <span class="text-muted mt-1 block text-xs">
             Drops a placeholder URL + sensible event filters into empty fields. Replace
             <code>{`{ID}/{TOKEN}`}</code> with your real webhook credentials before saving.
           </span>
@@ -487,7 +487,7 @@
             type="url"
             data-testid="wh-url"
           />
-          <span class="mt-1 block text-xs text-muted">
+          <span class="text-muted mt-1 block text-xs">
             HTTPS required (or HTTP to localhost / RFC1918 LAN).
           </span>
         </label>
@@ -514,7 +514,7 @@
         <div class="block text-sm">
           <span class="mb-1 block font-medium">Group filter (optional)</span>
           {#if availableGroups.length === 0}
-            <p class="text-xs text-muted" data-testid="wh-groups-empty">
+            <p class="text-muted text-xs" data-testid="wh-groups-empty">
               No groups in the system yet. Leave blank to deliver every event.
             </p>
           {:else}
@@ -537,7 +537,7 @@
               {/each}
             </div>
           {/if}
-          <span class="mt-1 block text-xs text-muted">
+          <span class="text-muted mt-1 block text-xs">
             {newGroupFilter.length === 0
               ? 'Leave none selected to receive events from every group.'
               : `Delivering only for: ${newGroupFilter.join(', ')}`}
@@ -566,20 +566,20 @@
   <DialogContent>
     <DialogHeader>
       <DialogTitle class="flex items-center gap-2">
-        <TriangleAlert class="size-5 text-warn-text" aria-hidden="true" />
+        <TriangleAlert class="text-warn-text size-5" aria-hidden="true" />
         Save your webhook secret
       </DialogTitle>
       <DialogDescription>
         This is the only time you'll see this secret. Copy it now and store it on the receiver side
         — Remote-Pulse cannot retrieve it later. The receiver verifies each delivery's
-        <code class="rounded bg-subtle px-1">X-RP-Signature-256</code> header with this secret.
+        <code class="bg-subtle rounded px-1">X-RP-Signature-256</code> header with this secret.
       </DialogDescription>
     </DialogHeader>
     {#if revealed}
       <div class="space-y-3 py-4">
         <div class="block text-sm">
           <span class="mb-1 block font-medium">Webhook</span>
-          <code class="break-all text-xs text-muted" data-testid="wh-revealed-name"
+          <code class="text-muted text-xs break-all" data-testid="wh-revealed-name"
             >{revealed.name}</code
           >
         </div>
@@ -587,7 +587,7 @@
           <span class="mb-1 block font-medium">Secret</span>
           <div class="flex items-center gap-2">
             <code
-              class="flex-1 break-all rounded border border-border-default bg-subtle px-2 py-1.5 font-mono text-xs"
+              class="border-border-default bg-subtle flex-1 rounded border px-2 py-1.5 font-mono text-xs break-all"
               data-testid="wh-revealed-secret"
             >
               {revealed.secret}

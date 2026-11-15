@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "pydantic[email]>=2.9.0",
     "pydantic-settings>=2.6.0",
-    "sqlalchemy>=2.0.36",
+    "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "cryptography>=50.0.2",    # Direct Ed25519 signing in rp_server.signing
@@ -32,7 +32,7 @@ dev = [
     # The Server job runs `uv run ruff check .` but ruff was never a dependency
     # of this project, so it failed with "Failed to spawn: ruff". Pinned for the
     # same reason as the agent: a linter that gates the build is part of it.
-    "ruff==0.16.8",
+    "ruff==0.17.4",
 ]
 
 # Postgres-real tests (audit log immutability, atomic approval, etc.).

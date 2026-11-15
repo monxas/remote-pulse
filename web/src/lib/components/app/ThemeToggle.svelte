@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Sun, Moon, Monitor } from '@lucide/svelte';
-  import { Button } from '$lib/components/ui/button';
-  import { themeStore } from '$lib/stores/theme.svelte';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { themeStore } from '#lib/stores/theme.svelte.ts';
 
   function label(pref: typeof themeStore.pref): string {
     return pref === 'system' ? 'System theme' : pref === 'dark' ? 'Dark theme' : 'Light theme';

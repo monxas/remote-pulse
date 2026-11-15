@@ -763,11 +763,7 @@ export async function deleteSettingsUser(id: string, f?: FetchFn): Promise<void>
 
 /** Canonical action enum. Kept in sync with rp_server.permissions.ALLOWED_ACTIONS. */
 export type PermissionAction =
-  | 'command.issue'
-  | 'command.approve'
-  | 'host.delete'
-  | 'enroll.create'
-  | 'enroll.revoke';
+  'command.issue' | 'command.approve' | 'host.delete' | 'enroll.create' | 'enroll.revoke';
 
 export const ALL_PERMISSION_ACTIONS: ReadonlyArray<PermissionAction> = [
   'command.issue',

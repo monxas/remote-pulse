@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Tabs as TabsPrimitive } from 'bits-ui';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type Props = TabsPrimitive.RootProps;
   let { ref = $bindable(null), class: className, value = $bindable(), ...rest }: Props = $props();

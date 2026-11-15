@@ -117,7 +117,7 @@ test.describe('flow: browser notifications opt-in', () => {
   });
 
   test('Settings exposes Notifications tab with permission flow', async ({ page }) => {
-    await page.goto('/settings');
+    await page.goto('settings');
     const tab = page.getByTestId('tab-notifications');
     await expect(tab).toBeVisible();
     await tab.click();
@@ -142,7 +142,7 @@ test.describe('flow: browser notifications opt-in', () => {
   });
 
   test('SSE command.failed event fires a native Notification when unfocused', async ({ page }) => {
-    await page.goto('/settings');
+    await page.goto('settings');
     await page.getByTestId('tab-notifications').click();
     await expect(page.getByTestId('notifications-options')).toBeVisible();
 
@@ -188,7 +188,7 @@ test.describe('flow: browser notifications opt-in', () => {
   });
 
   test('opting out of a category suppresses its Notification', async ({ page }) => {
-    await page.goto('/settings');
+    await page.goto('settings');
     await page.getByTestId('tab-notifications').click();
     await expect(page.getByTestId('notifications-options')).toBeVisible();
 

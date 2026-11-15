@@ -7,7 +7,7 @@ import {
   sortActionsByFrequency,
   type Range,
 } from './audit-filters';
-import type { AuditAction } from '$lib/api';
+import type { AuditAction } from '#lib/api.ts';
 
 describe('RANGES', () => {
   it('exposes the six preset ranges in stable order', () => {

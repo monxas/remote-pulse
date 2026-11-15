@@ -7,8 +7,8 @@
    * `tableState.query`/`tableState.setQuery()` API.
    */
   import { Search, X } from '@lucide/svelte';
-  import { Input } from '$lib/components/ui/input';
-  import { Button } from '$lib/components/ui/button';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
 
   type Props = {
     /** Current query value (read from `tableState.query`). */
@@ -60,7 +60,7 @@
 <div class="flex items-center gap-2">
   <div class="relative flex-1">
     <Search
-      class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted"
+      class="text-muted pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
       aria-hidden="true"
     />
     <Input

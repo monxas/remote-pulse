@@ -99,6 +99,7 @@ test.describe('flow: audit retention policy', () => {
 
     // Trigger manual purge: confirm modal then confirm.
     await page.getByTestId('retention-purge-now').click();
+    await page.getByTestId('retention-purge-confirm-input').fill('DELETE');
     await page.getByTestId('retention-purge-confirm').click();
 
     await expect.poll(() => purgeCount).toBe(1);

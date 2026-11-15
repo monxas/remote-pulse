@@ -125,7 +125,7 @@
   <div bind:this={container} class="absolute inset-0"></div>
   {#if tooltipValue !== null}
     <span
-      class="pointer-events-none absolute -top-5 right-0 rounded-sm bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-default shadow-sm"
+      class="bg-elevated text-default pointer-events-none absolute -top-5 right-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] shadow-sm"
     >
       {tooltipValue}{unit}
     </span>

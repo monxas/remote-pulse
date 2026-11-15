@@ -21,7 +21,7 @@
  *   the implementation of `dispatchBulk` and keep the consumer API.
  */
 
-import { issueDashCommand, ApiError, type IssueCommandInput } from '$lib/api';
+import { issueDashCommand, ApiError, type IssueCommandInput } from '#lib/api.ts';
 
 export type BulkItemStatus = 'pending' | 'in-flight' | 'success' | 'error' | 'cancelled';
 
@@ -70,7 +70,7 @@ export interface BulkDispatchResult {
 
 /**
  * Single-host issue. Extracted so tests can mock `issueDashCommand`
- * cleanly via `vi.mock('$lib/api', ...)`. Returns a result tuple so the
+ * cleanly via `vi.mock('#lib/api', ...)`. Returns a result tuple so the
  * caller can update the corresponding item without throwing.
  */
 async function issueOne(

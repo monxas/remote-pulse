@@ -49,11 +49,11 @@
 
   --success-bg: var(--green-3);
   --success-solid: var(--green-9);
-  --success-text: var(--green-11);
+  --success-text: var(--green-12);
 
   --warn-bg: var(--amber-3);
   --warn-solid: var(--amber-9);
-  --warn-text: var(--amber-11);
+  --warn-text: var(--amber-12);
 
   --danger-bg: var(--red-3);
   --danger-solid: var(--red-9);

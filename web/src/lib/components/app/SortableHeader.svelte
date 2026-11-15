@@ -9,7 +9,7 @@
    */
   import type { Snippet } from 'svelte';
   import { ChevronDown, ChevronUp, ChevronsUpDown } from '@lucide/svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type SortDir = 'asc' | 'desc' | null;
 
@@ -56,17 +56,17 @@
     onclick={() => onToggle(columnKey)}
     class={cn(
       'group inline-flex items-center gap-1 rounded text-inherit uppercase',
-      'transition-colors hover:text-default',
-      'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+      'hover:text-default transition-colors',
+      'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
       align === 'right' && 'ml-auto flex-row-reverse',
       align === 'center' && 'mx-auto',
     )}
   >
     {@render children()}
     {#if isActive && activeDir === 'asc'}
-      <ChevronUp class="size-3.5 text-default" aria-hidden="true" />
+      <ChevronUp class="text-default size-3.5" aria-hidden="true" />
     {:else if isActive && activeDir === 'desc'}
-      <ChevronDown class="size-3.5 text-default" aria-hidden="true" />
+      <ChevronDown class="text-default size-3.5" aria-hidden="true" />
     {:else}
       <ChevronsUpDown
         class="size-3.5 opacity-40 transition-opacity group-hover:opacity-80"

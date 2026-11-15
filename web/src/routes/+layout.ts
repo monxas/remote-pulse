@@ -1,7 +1,7 @@
 import type { LayoutLoad } from './$types';
-import { browser } from '$app/environment';
-import { ApiError, getAuthMe, type AuthMe } from '$lib/api';
-import { userStore } from '$lib/stores/user.svelte';
+import { browser } from '$app/env';
+import { ApiError, getAuthMe, type AuthMe } from '#lib/api.ts';
+import { userStore } from '#lib/stores/user.svelte.ts';
 
 // Static SPA — every load is client-side. No prerender, no SSR.
 export const prerender = false;

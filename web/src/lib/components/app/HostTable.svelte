@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import type { HostSummary } from '$lib/api';
+  import type { HostSummary } from '#lib/api.ts';
   import HostStatusBadge from './HostStatusBadge.svelte';
   import Sparkline from './Sparkline.svelte';
   import RelativeTime from './RelativeTime.svelte';
@@ -100,9 +100,9 @@
   in practice; revisit if a future redesign exposes the table on
   narrow viewports.
 -->
-<div class="hidden overflow-hidden rounded-lg border border-border-default sm:block">
+<div class="border-border-default hidden overflow-hidden rounded-lg border sm:block">
   <table class="w-full border-collapse text-sm" data-testid="hosts-table">
-    <thead class="bg-subtle text-xs tracking-wide text-muted uppercase">
+    <thead class="bg-subtle text-muted text-xs tracking-wide uppercase">
       <tr>
         {#if selection}
           <th class="w-12 px-3 py-2 text-left" scope="col">
@@ -176,7 +176,7 @@
     <tbody>
       {#each table.view as host (host.id)}
         <tr
-          class="cursor-pointer border-t border-border-subtle transition-colors hover:bg-hover focus-within:bg-hover"
+          class="border-border-subtle hover:bg-hover focus-within:bg-hover cursor-pointer border-t transition-colors"
           tabindex="0"
           role="link"
           aria-label={`Open host ${host.hostname}`}
@@ -200,9 +200,9 @@
             </td>
           {/if}
           <td class="px-3 py-2">
-            <span class="font-mono text-sm font-medium text-default">{host.hostname}</span>
+            <span class="text-default font-mono text-sm font-medium">{host.hostname}</span>
           </td>
-          <td class="px-3 py-2 text-muted">{host.group_name}</td>
+          <td class="text-muted px-3 py-2">{host.group_name}</td>
           <td class="px-3 py-2">
             <HostStatusBadge status={host.status} lastSeenSecondsAgo={host.last_seen_seconds_ago} />
           </td>
@@ -216,7 +216,7 @@
                 title="CPU"
                 unit="%"
               />
-              <span class="font-mono text-xs text-muted">{fmtPct(host.current.cpu_pct)}</span>
+              <span class="text-muted font-mono text-xs">{fmtPct(host.current.cpu_pct)}</span>
             </div>
           </td>
           <td class="px-3 py-2">
@@ -229,14 +229,14 @@
                 title="Memory"
                 unit="%"
               />
-              <span class="font-mono text-xs text-muted">{fmtPct(host.current.mem_pct)}</span>
+              <span class="text-muted font-mono text-xs">{fmtPct(host.current.mem_pct)}</span>
             </div>
           </td>
           <td class="px-3 py-2 text-right">
             <RelativeTime
               iso={host.last_seen_at}
               secondsAgo={host.last_seen_seconds_ago}
-              class="font-mono text-xs text-muted"
+              class="text-muted font-mono text-xs"
             />
           </td>
         </tr>
@@ -257,7 +257,7 @@
     <li class="relative">
       {#if selection}
         <label
-          class="absolute right-1 top-1 z-10 inline-flex h-11 w-11 cursor-pointer items-center justify-center"
+          class="absolute top-1 right-1 z-10 inline-flex h-11 w-11 cursor-pointer items-center justify-center"
         >
           <input
             type="checkbox"
@@ -272,22 +272,22 @@
       {/if}
       <button
         type="button"
-        class="min-h-16 w-full rounded-lg border border-border-default bg-elevated p-3 text-left transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        class="border-border-default bg-elevated hover:bg-hover focus-visible:ring-ring min-h-16 w-full rounded-lg border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
         onclick={() => navigate(host.id)}
       >
         <div class="flex items-center justify-between {selection ? 'pr-11' : ''}">
-          <span class="font-mono text-sm font-medium text-default">{host.hostname}</span>
+          <span class="text-default font-mono text-sm font-medium">{host.hostname}</span>
           <HostStatusBadge
             status={host.status}
             lastSeenSecondsAgo={host.last_seen_seconds_ago}
             showLabel={false}
           />
         </div>
-        <div class="mt-1 flex items-center justify-between text-xs text-muted">
+        <div class="text-muted mt-1 flex items-center justify-between text-xs">
           <span>{host.group_name}</span>
           <span class="font-mono">CPU {fmtPct(host.current.cpu_pct)}</span>
         </div>
-        <div class="mt-1 text-right text-[10px] text-muted">
+        <div class="text-muted mt-1 text-right text-[10px]">
           <RelativeTime
             iso={host.last_seen_at}
             secondsAgo={host.last_seen_seconds_ago}

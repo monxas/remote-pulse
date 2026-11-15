@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Terminal, X } from '@lucide/svelte';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
 
   /**
    * Floating action bar shown when the user has selected one or more hosts
@@ -31,13 +31,13 @@
 
 {#if count > 0}
   <div
-    class="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 pb-safe sm:bottom-6"
+    class="pb-safe fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 sm:bottom-6"
     data-testid="bulk-action-bar"
     role="region"
     aria-label={`Bulk actions: ${count} hosts selected`}
   >
     <div
-      class="flex min-h-14 w-full max-w-3xl items-center gap-3 rounded-full border border-border-default bg-elevated px-3 py-2 shadow-lg backdrop-blur"
+      class="border-border-default bg-elevated flex min-h-14 w-full max-w-3xl items-center gap-3 rounded-full border px-3 py-2 shadow-lg backdrop-blur"
     >
       <span class="flex items-center gap-2 text-sm" aria-live="polite">
         <Badge variant="default" class="font-mono">{count}</Badge>
@@ -45,7 +45,7 @@
         <span class="sm:hidden">selected</span>
       </span>
 
-      <span class="hidden flex-1 truncate text-xs text-muted md:inline" aria-hidden="true">
+      <span class="text-muted hidden flex-1 truncate text-xs md:inline" aria-hidden="true">
         {#each previewLabels as label, i (label)}
           <span class="font-mono">{label}</span>{#if i < previewLabels.length - 1}<span
               >,

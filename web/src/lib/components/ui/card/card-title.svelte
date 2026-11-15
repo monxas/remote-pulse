@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type Props = HTMLAttributes<HTMLHeadingElement> & {
     children?: Snippet;
@@ -16,21 +16,21 @@
 
 {#if level === 1}
   <h1
-    class={cn('text-lg leading-none font-semibold tracking-tight text-default', className)}
+    class={cn('text-default text-lg leading-none font-semibold tracking-tight', className)}
     {...rest}
   >
     {@render children?.()}
   </h1>
 {:else if level === 2}
   <h2
-    class={cn('text-lg leading-none font-semibold tracking-tight text-default', className)}
+    class={cn('text-default text-lg leading-none font-semibold tracking-tight', className)}
     {...rest}
   >
     {@render children?.()}
   </h2>
 {:else}
   <h3
-    class={cn('text-lg leading-none font-semibold tracking-tight text-default', className)}
+    class={cn('text-default text-lg leading-none font-semibold tracking-tight', className)}
     {...rest}
   >
     {@render children?.()}

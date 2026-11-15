@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { AuditAction, AuditTargetType } from '$lib/api';
+  import type { AuditAction, AuditTargetType } from '#lib/api.ts';
 
   type Tone = 'success' | 'warn' | 'danger' | 'accent' | 'muted';
 
@@ -42,8 +42,8 @@
 
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import type { AuditEvent } from '$lib/api';
-  import { cn } from '$lib/utils';
+  import type { AuditEvent } from '#lib/api.ts';
+  import { cn } from '#lib/utils.ts';
   import RelativeTime from './RelativeTime.svelte';
 
   type Props = { event: AuditEvent };
@@ -73,30 +73,30 @@
 <li class="relative flex gap-3 pl-1" data-testid="audit-event" data-action={event.action}>
   <div class="relative flex w-6 shrink-0 flex-col items-center">
     <span
-      class={cn('mt-1.5 size-2.5 shrink-0 rounded-full ring-4 ring-base', dotClass[tone])}
+      class={cn('ring-base mt-1.5 size-2.5 shrink-0 rounded-full ring-4', dotClass[tone])}
       aria-hidden="true"
     ></span>
-    <span class="mt-1 w-px flex-1 bg-border-subtle" aria-hidden="true"></span>
+    <span class="bg-border-subtle mt-1 w-px flex-1" aria-hidden="true"></span>
   </div>
   <div class="flex-1 pb-4 text-sm">
     <p>
-      <span class="font-mono text-default">{event.actor}</span>
+      <span class="text-default font-mono">{event.actor}</span>
       <span class="text-muted">{ACTION_LABEL[event.action]}</span>
       {#if href}
         <!-- href is produced via $app/paths' resolve(); rule can't trace through the helper. -->
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-        <a class="font-mono text-accent-text hover:underline" {href}>{event.target_label}</a>
+        <a class="text-accent-text font-mono hover:underline" {href}>{event.target_label}</a>
       {:else}
         <span class="font-mono">{event.target_label}</span>
       {/if}
     </p>
-    <p class="text-xs text-muted">
+    <p class="text-muted text-xs">
       <RelativeTime iso={event.ts} class="font-mono" />
       <span class="ml-2 font-mono">{event.action}</span>
     </p>
     {#if metadataPretty}
-      <details class="mt-1 rounded-md border border-border-subtle bg-subtle text-xs">
-        <summary class="cursor-pointer px-2 py-1 text-muted">metadata</summary>
+      <details class="border-border-subtle bg-subtle mt-1 rounded-md border text-xs">
+        <summary class="text-muted cursor-pointer px-2 py-1">metadata</summary>
         <pre class="overflow-x-auto px-2 pb-2 font-mono text-xs">{metadataPretty}</pre>
       </details>
     {/if}

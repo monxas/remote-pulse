@@ -27,18 +27,18 @@
     ShieldCheck,
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import RelativeTime from '$lib/components/app/RelativeTime.svelte';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import RelativeTime from '#lib/components/app/RelativeTime.svelte';
   import {
     createWebhooksQuery,
     createWebhookDeliveriesQuery,
     createRetryDeliveryMutation,
     createTestWebhookMutation,
-  } from '$lib/queries';
-  import { userStore } from '$lib/stores/user.svelte';
-  import type { WebhookDeliveryEntry, WebhookSummary } from '$lib/api';
+  } from '#lib/queries/index.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
+  import type { WebhookDeliveryEntry, WebhookSummary } from '#lib/api.ts';
 
   type Data = { webhookId: string };
   const { data }: { data: Data } = $props();
@@ -144,18 +144,18 @@
   data-testid="webhook-deliveries-page"
 >
   <!-- ============ Breadcrumb + header ============ -->
-  <nav class="text-sm text-muted" aria-label="Breadcrumb">
+  <nav class="text-muted text-sm" aria-label="Breadcrumb">
     <a
-      href={resolve('/webhooks')}
-      class="inline-flex items-center gap-1 hover:text-default hover:underline"
+      href={resolve('webhooks')}
+      class="hover:text-default inline-flex items-center gap-1 hover:underline"
       data-testid="deliveries-back-link"
     >
       <ArrowLeft class="size-3.5" aria-hidden="true" />
       Webhooks
     </a>
-    <span class="mx-2 text-muted/60">/</span>
+    <span class="text-muted/60 mx-2">/</span>
     <span class="text-default">{hook?.name ?? 'Loading…'}</span>
-    <span class="mx-2 text-muted/60">/</span>
+    <span class="text-muted/60 mx-2">/</span>
     <span>Deliveries</span>
   </nav>
 
@@ -165,15 +165,15 @@
         {hook?.name ?? 'Webhook'}
       </h1>
       {#if hook}
-        <p class="mt-1 break-all text-xs text-muted">
+        <p class="text-muted mt-1 text-xs break-all">
           <code>{hook.url}</code>
         </p>
-        <p class="mt-1 text-sm text-muted">
+        <p class="text-muted mt-1 text-sm">
           Showing the last {$deliveriesQuery.data?.max_history ?? 20} delivery attempts.
           {#if hook.failure_count >= 10}
             <Badge variant="danger" class="ml-2">Auto-disabled</Badge>
           {:else if hook.failure_count > 0}
-            <span class="ml-2 text-danger-text"
+            <span class="text-danger-text ml-2"
               >({hook.failure_count} consecutive failure{hook.failure_count === 1 ? '' : 's'})</span
             >
           {/if}
@@ -229,27 +229,27 @@
   <!-- ============ Body ============ -->
   {#if !isAdmin}
     <Card>
-      <CardContent class="py-8 text-center text-sm text-muted">
+      <CardContent class="text-muted py-8 text-center text-sm">
         <ShieldCheck class="mx-auto mb-2 size-6" aria-hidden="true" />
         Webhooks are admin-only.
       </CardContent>
     </Card>
   {:else if $deliveriesQuery.isPending}
     <Card>
-      <CardContent class="flex items-center justify-center gap-2 py-12 text-sm text-muted">
+      <CardContent class="text-muted flex items-center justify-center gap-2 py-12 text-sm">
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
         Loading deliveries…
       </CardContent>
     </Card>
   {:else if $deliveriesQuery.isError}
     <Card>
-      <CardContent class="py-8 text-center text-sm text-danger-text">
+      <CardContent class="text-danger-text py-8 text-center text-sm">
         Could not load deliveries: {$deliveriesQuery.error?.message ?? 'Unknown error'}
       </CardContent>
     </Card>
   {:else if deliveries.length === 0}
     <Card>
-      <CardContent class="py-12 text-center text-sm text-muted">
+      <CardContent class="text-muted py-12 text-center text-sm">
         No deliveries yet. Click <strong>Test</strong> to fire a synthetic <code>webhook.test</code>
         event.
       </CardContent>
@@ -262,7 +262,7 @@
       <CardContent class="overflow-x-auto p-0">
         <table class="w-full min-w-[900px] text-sm">
           <thead
-            class="border-b border-border-subtle bg-subtle/30 text-left text-xs uppercase tracking-wide text-muted"
+            class="border-border-subtle bg-subtle/30 text-muted border-b text-left text-xs tracking-wide uppercase"
           >
             <tr>
               <th class="px-4 py-2">Time</th>
@@ -280,12 +280,12 @@
               {@const failed = isFailed(d)}
               {@const isExpanded = Boolean(expanded[d.delivery_id])}
               <tr
-                class="border-b border-border-subtle last:border-0"
+                class="border-border-subtle border-b last:border-0"
                 data-testid="delivery-row"
                 data-delivery-id={d.delivery_id}
                 data-success={d.success ? 'true' : 'false'}
               >
-                <td class="px-4 py-2 text-xs text-muted">
+                <td class="text-muted px-4 py-2 text-xs">
                   <RelativeTime iso={d.timestamp} />
                 </td>
                 <td class="px-4 py-2">
@@ -301,24 +301,24 @@
                     {sb.label}
                   </Badge>
                 </td>
-                <td class="px-4 py-2 text-xs text-muted">
+                <td class="text-muted px-4 py-2 text-xs">
                   {d.attempt}/4
                   {#if d.attempt >= 4 && !d.success}
-                    <span class="ml-1 text-danger-text" title="All retries exhausted">⚠</span>
+                    <span class="text-danger-text ml-1" title="All retries exhausted">⚠</span>
                   {/if}
                 </td>
                 <td class="px-4 py-2">
-                  <code class="break-all font-mono text-[10px] text-muted" title={d.delivery_id}
+                  <code class="text-muted font-mono text-[10px] break-all" title={d.delivery_id}
                     >{d.delivery_id.slice(0, 8)}…</code
                   >
                 </td>
                 <td class="px-4 py-2 text-xs">
                   {#if d.error}
                     {#if isExpanded}
-                      <span class="break-all text-danger-text">{d.error}</span>
+                      <span class="text-danger-text break-all">{d.error}</span>
                       <button
                         type="button"
-                        class="ml-1 text-accent underline"
+                        class="text-accent ml-1 underline"
                         onclick={() => toggleExpand(d.delivery_id)}
                         data-testid="delivery-error-collapse"
                       >
@@ -331,7 +331,7 @@
                       {#if d.error.length > 60}
                         <button
                           type="button"
-                          class="ml-1 text-accent underline"
+                          class="text-accent ml-1 underline"
                           onclick={() => toggleExpand(d.delivery_id)}
                           data-testid="delivery-error-expand"
                         >
@@ -361,7 +361,7 @@
                         {/if}
                       </Button>
                     {:else}
-                      <span class="text-xs text-muted">—</span>
+                      <span class="text-muted text-xs">—</span>
                     {/if}
                   </div>
                 </td>

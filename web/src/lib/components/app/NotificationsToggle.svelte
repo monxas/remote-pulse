@@ -18,9 +18,9 @@
   import { onMount } from 'svelte';
   import { Bell, BellOff, Check, ShieldAlert } from '@lucide/svelte';
   import { toast } from 'svelte-sonner';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
-  import { userStore } from '$lib/stores/user.svelte';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
   import {
     ADMIN_ONLY_EVENT_TYPES,
     ALL_NOTIFICATION_EVENT_TYPES,
@@ -107,19 +107,19 @@
 
 <div class="space-y-4" data-testid="notifications-toggle">
   <div
-    class="flex flex-col gap-3 rounded-lg border border-border-subtle bg-subtle/40 p-4 sm:flex-row sm:items-center sm:justify-between"
+    class="border-border-subtle bg-subtle/40 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
   >
     <div class="flex items-start gap-3">
       {#if permission === 'granted'}
-        <Bell class="mt-0.5 size-5 text-success-text" aria-hidden="true" />
+        <Bell class="text-success-text mt-0.5 size-5" aria-hidden="true" />
       {:else if permission === 'denied' || permission === 'unsupported'}
-        <BellOff class="mt-0.5 size-5 text-danger-text" aria-hidden="true" />
+        <BellOff class="text-danger-text mt-0.5 size-5" aria-hidden="true" />
       {:else}
-        <Bell class="mt-0.5 size-5 text-muted" aria-hidden="true" />
+        <Bell class="text-muted mt-0.5 size-5" aria-hidden="true" />
       {/if}
       <div>
         <h3 class="text-sm font-semibold">Browser notifications</h3>
-        <p class="text-xs text-muted">
+        <p class="text-muted text-xs">
           Fire native OS notifications when high-signal events arrive and the dashboard tab is in
           the background. Works alongside (or instead of) Telegram alerts.
         </p>
@@ -149,7 +149,7 @@
 
   {#if permission === 'denied'}
     <p
-      class="rounded-md border border-border-subtle bg-subtle/40 p-3 text-xs text-muted"
+      class="border-border-subtle bg-subtle/40 text-muted rounded-md border p-3 text-xs"
       data-testid="notifications-denied-help"
     >
       Your browser is blocking notifications for this site. Open the site settings (lock icon →
@@ -161,7 +161,7 @@
     <div class="space-y-3" data-testid="notifications-options">
       <div>
         <h4 class="text-sm font-semibold">Notify me about</h4>
-        <p class="text-xs text-muted">
+        <p class="text-muted text-xs">
           Tab must be unfocused — when you're already looking at the dashboard, in-app toasts handle
           it.
         </p>
@@ -187,9 +187,9 @@
       </ul>
 
       <div
-        class="flex flex-col gap-2 border-t border-border-subtle pt-3 sm:flex-row sm:items-center sm:justify-between"
+        class="border-border-subtle flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <p class="text-xs text-muted">
+        <p class="text-muted text-xs">
           To turn notifications off entirely, revoke the permission in your browser's site settings.
         </p>
         <Button

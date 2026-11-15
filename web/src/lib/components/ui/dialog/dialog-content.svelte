@@ -2,7 +2,7 @@
   import { Dialog as DialogPrimitive } from 'bits-ui';
   import { X } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
   import DialogOverlay from './dialog-overlay.svelte';
 
   type Props = DialogPrimitive.ContentProps & {
@@ -43,7 +43,7 @@
     bind:ref
     class={cn(
       positioning[side],
-      'border border-border-default bg-elevated p-4 text-default shadow-xl sm:p-6 rounded-xl',
+      'border-border-default bg-elevated text-default rounded-xl border p-4 shadow-xl sm:p-6',
       className,
     )}
     {...rest}
@@ -51,7 +51,7 @@
     {@render children?.()}
     {#if showClose}
       <DialogPrimitive.Close
-        class="touch-target absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-3 sm:top-3 sm:h-7 sm:w-7"
+        class="touch-target text-muted hover:bg-subtle focus-visible:ring-ring absolute top-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none sm:top-3 sm:right-3 sm:h-7 sm:w-7"
         aria-label={closeLabel}
       >
         <X class="size-4" aria-hidden="true" />

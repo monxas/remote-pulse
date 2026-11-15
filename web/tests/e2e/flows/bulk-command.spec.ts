@@ -113,7 +113,7 @@ test.describe('flow: bulk issue command on selected hosts', () => {
     }
 
     // Success toast fires once all are settled.
-    await expect(page.getByText(/3 commands issued/)).toBeVisible();
+    await expect(page.getByText(/3 issued/)).toBeVisible();
 
     // Each fan-out call targets exactly one host id.
     expect(new Set(issuedHostIds)).toEqual(new Set(['h1', 'h2', 'h3']));
@@ -208,6 +208,6 @@ test.describe('flow: bulk issue command on selected hosts', () => {
     await expect(page.getByTestId('bulk-result-rp-beta')).toContainText(/Permission denied/);
 
     // Partial-failure toast.
-    await expect(page.getByText(/2 commands issued, 1 failed/)).toBeVisible();
+    await expect(page.getByText(/2 issued, 1 failed/)).toBeVisible();
   });
 });

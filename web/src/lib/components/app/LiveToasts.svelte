@@ -20,8 +20,8 @@
   import { toast } from 'svelte-sonner';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import type { SseEvent } from '$lib/queries/sse.svelte';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import type { SseEvent } from '#lib/queries/sse.svelte.ts';
 
   const FAILED_STATUSES = new Set(['failed', 'timeout', 'rejected']);
 
@@ -62,7 +62,7 @@
                 label: 'View',
                 onClick: () => {
                   // eslint-disable-next-line svelte/no-navigation-without-resolve
-                  void goto(resolve(`/commands/${commandId}`) as `/${string}`);
+                  void goto(resolve(`commands/${commandId}`) as `/${string}`);
                 },
               }
             : undefined,
@@ -77,7 +77,7 @@
             label: 'Review',
             onClick: () => {
               // eslint-disable-next-line svelte/no-navigation-without-resolve
-              void goto(resolve('/approvals') as `/${string}`);
+              void goto(resolve('approvals') as `/${string}`);
             },
           },
         });
@@ -94,7 +94,7 @@
                 label: 'View',
                 onClick: () => {
                   // eslint-disable-next-line svelte/no-navigation-without-resolve
-                  void goto(resolve(`/hosts/${hostId}`) as `/${string}`);
+                  void goto(resolve(`hosts/${hostId}`) as `/${string}`);
                 },
               }
             : undefined,

@@ -1,4 +1,4 @@
-import type { AuthMe } from '$lib/api';
+import type { AuthMe } from '#lib/api.ts';
 
 /**
  * Reactive user session container backed by a Svelte 5 rune `$state`.

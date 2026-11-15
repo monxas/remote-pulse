@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { CommandStatus } from '$lib/api';
+  import type { CommandStatus } from '#lib/api.ts';
 
   type Tone = 'success' | 'warn' | 'danger' | 'muted' | 'accent';
 
@@ -29,7 +29,7 @@
 </script>
 
 <script lang="ts">
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type Props = {
     status: CommandStatus;

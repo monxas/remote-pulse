@@ -1,3 +1,4 @@
+import { makeOverview } from './helpers/fixtures';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -110,7 +111,13 @@ async function installAuthAndApiMocks(page: Page): Promise<void> {
     };
     // Per-endpoint hinting: some pages key off specific top-level fields.
     if (url.includes('/dash/overview')) {
-      empty.total_hosts = 0;
+      Object.assign(
+        empty,
+        makeOverview({ total: 0, online: 0, stale: 0, offline: 0, online_pct: 0 }),
+      );
+    }
+    if (url.includes('/dash/stats')) {
+      empty.audit_summary = { total_events: 0, by_action: [], by_actor: [], daily: [] };
     }
     route.fulfill({
       status: 200,

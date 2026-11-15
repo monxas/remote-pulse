@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Trash2, Users as UsersIcon, FolderPlus, FolderMinus, KeyRound, X } from '@lucide/svelte';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
 
   /**
    * Floating action bar shown when the user has selected one or more
@@ -49,7 +49,7 @@
     aria-label={`Bulk actions: ${count} users selected`}
   >
     <div
-      class="flex w-full max-w-4xl flex-wrap items-center gap-2 rounded-2xl border border-border-default bg-elevated px-3 py-2 shadow-lg backdrop-blur"
+      class="border-border-default bg-elevated flex w-full max-w-4xl flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 shadow-lg backdrop-blur"
     >
       <span class="flex items-center gap-2 text-sm" aria-live="polite">
         <Badge variant="default" class="font-mono">{count}</Badge>
@@ -57,7 +57,7 @@
         <span class="sm:hidden">selected</span>
       </span>
 
-      <span class="hidden flex-1 truncate text-xs text-muted md:inline" aria-hidden="true">
+      <span class="text-muted hidden flex-1 truncate text-xs md:inline" aria-hidden="true">
         {#each previewLabels as label, i (label)}
           <span class="font-mono">{label}</span>{#if i < previewLabels.length - 1}<span
               >,

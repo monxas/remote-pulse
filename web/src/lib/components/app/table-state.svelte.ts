@@ -152,7 +152,7 @@ export function createTableState<T>(
 
   function updateUrl(patch: Record<string, string | null>): void {
     const current = page.url;
-    const next = new SvelteURLSearchParams(current.searchParams);
+    const next = new SvelteURLSearchParams(current.search);
     for (const [k, v] of Object.entries(patch)) {
       if (v === null || v === '') next.delete(k);
       else next.set(k, v);
@@ -160,7 +160,7 @@ export function createTableState<T>(
     const qs = next.toString();
     const target = `${current.pathname}${qs ? `?${qs}` : ''}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    void goto(target, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(target, { reset: false, replace: true });
   }
 
   function toggleSort(key: string): void {

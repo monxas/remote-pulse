@@ -7,9 +7,9 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { createDeleteHostMutation } from '$lib/queries';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { createDeleteHostMutation } from '#lib/queries/index.ts';
 
   type Props = {
     open: boolean;
@@ -43,7 +43,7 @@
   <DialogContent class="max-w-md" role="alertdialog" data-testid="host-delete-dialog">
     <DialogHeader>
       <DialogTitle class="flex items-center gap-2">
-        <AlertTriangle class="size-5 text-danger" aria-hidden="true" />
+        <AlertTriangle class="text-danger size-5" aria-hidden="true" />
         Delete this host?
       </DialogTitle>
       <DialogDescription>

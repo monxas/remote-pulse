@@ -19,17 +19,17 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
   import {
     createGrantPermissionMutation,
     createRevokePermissionMutation,
     createUserPermissionsQuery,
-  } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { userStore } from '$lib/stores/user.svelte';
-  import { ALL_PERMISSION_ACTIONS, type PermissionAction, type SettingsUser } from '$lib/api';
+  } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
+  import { ALL_PERMISSION_ACTIONS, type PermissionAction, type SettingsUser } from '#lib/api.ts';
 
   type Props = {
     open: boolean;
@@ -150,10 +150,10 @@
     {#if user}
       {#if isAdmin}
         <div
-          class="flex items-start gap-2 rounded-md border border-border-default bg-subtle p-3 text-xs text-muted"
+          class="border-border-default bg-subtle text-muted flex items-start gap-2 rounded-md border p-3 text-xs"
           role="note"
         >
-          <ShieldCheck class="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
+          <ShieldCheck class="text-accent mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
             This user is an <strong>admin</strong> and implicitly holds every action. Explicit grants
             below are honoured but redundant.
@@ -162,25 +162,25 @@
       {/if}
 
       <!-- Existing grants -->
-      <div class="overflow-x-auto rounded-md border border-border-default">
+      <div class="border-border-default overflow-x-auto rounded-md border">
         {#if $permsQuery.isPending}
-          <div class="flex items-center gap-2 p-4 text-sm text-muted">
+          <div class="text-muted flex items-center gap-2 p-4 text-sm">
             <Loader2 class="size-4 animate-spin" aria-hidden="true" />
             Loading permissions…
           </div>
         {:else if $permsQuery.isError}
-          <div class="p-4 text-sm text-danger-text">
+          <div class="text-danger-text p-4 text-sm">
             Failed to load: {$permsQuery.error?.message ?? 'unknown error'}
           </div>
         {:else if ($permsQuery.data?.permissions ?? []).length === 0}
-          <div class="p-4 text-center text-sm text-muted">
+          <div class="text-muted p-4 text-center text-sm">
             {isAdmin
               ? 'No explicit grants. (Admin already holds every action.)'
               : 'No explicit grants yet. Use the form below to grant one.'}
           </div>
         {:else}
           <table class="w-full text-sm">
-            <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
+            <thead class="border-border-subtle bg-subtle text-muted border-b text-xs uppercase">
               <tr>
                 <th class="px-3 py-2 text-left font-medium">Action</th>
                 <th class="px-3 py-2 text-left font-medium">Scope</th>
@@ -190,12 +190,12 @@
             </thead>
             <tbody>
               {#each $permsQuery.data?.permissions ?? [] as p (p.id)}
-                <tr class="border-b border-border-subtle last:border-b-0">
-                  <td class="px-3 py-2 font-mono text-default">{p.action}</td>
+                <tr class="border-border-subtle border-b last:border-b-0">
+                  <td class="text-default px-3 py-2 font-mono">{p.action}</td>
                   <td class="px-3 py-2">
                     <Badge variant={p.scope === '*' ? 'default' : 'muted'}>{p.scope}</Badge>
                   </td>
-                  <td class="px-3 py-2 text-xs text-muted">
+                  <td class="text-muted px-3 py-2 text-xs">
                     <div>{p.granted_by}</div>
                     <div class="opacity-60">
                       {new Date(p.granted_at).toLocaleString()}
@@ -220,12 +220,12 @@
       </div>
 
       <!-- Grant form -->
-      <form onsubmit={submitGrant} class="space-y-3 border-t border-border-subtle pt-4">
-        <p class="text-xs font-medium uppercase text-muted">Grant new permission</p>
+      <form onsubmit={submitGrant} class="border-border-subtle space-y-3 border-t pt-4">
+        <p class="text-muted text-xs font-medium uppercase">Grant new permission</p>
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Action</span>
           <select
-            class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="border-border-default bg-base w-full rounded border px-2 py-1.5 text-sm"
             bind:value={newAction}
             data-testid="perm-action"
           >
@@ -253,7 +253,7 @@
               All groups (<code>*</code>)
             </button>
             {#if groups.length === 0}
-              <span class="px-2 py-0.5 text-xs text-muted">
+              <span class="text-muted px-2 py-0.5 text-xs">
                 No groups defined yet — only <code>*</code> available.
               </span>
             {:else}
@@ -276,14 +276,14 @@
             {/if}
           </div>
           {#if !wildcardSelected && selectedGroups.length > 1}
-            <p class="mt-1 text-xs text-muted" data-testid="perm-multi-hint">
+            <p class="text-muted mt-1 text-xs" data-testid="perm-multi-hint">
               Will create {selectedGroups.length} grants — one per group.
             </p>
           {/if}
         </div>
 
         <div class="flex items-center justify-between gap-2">
-          <p class="text-xs text-muted">
+          <p class="text-muted text-xs">
             <code>*</code> grants on every group. Pick specific groups to scope the grant — each chip
             becomes its own row.
           </p>

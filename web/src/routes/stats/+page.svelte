@@ -1,35 +1,36 @@
 <script lang="ts">
   import { BarChart3, CheckCircle2, ListTree, Loader2, Server, Activity } from '@lucide/svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
-  import MetricCard from '$lib/components/app/MetricCard.svelte';
-  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
-  import { createStatsQuery } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { ALL_STATS_RANGES, type StatsRange } from '$lib/api';
-  import { cn } from '$lib/utils';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import MetricCard from '#lib/components/app/MetricCard.svelte';
+  import PullToRefresh from '#lib/components/app/PullToRefresh.svelte';
+  import { createStatsQuery } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { ALL_STATS_RANGES, type StatsRange } from '#lib/api.ts';
+  import { cn } from '#lib/utils.ts';
 
   // ----- Range from URL ---------------------------------------------------
   function rangeFromSearch(sp: URLSearchParams): StatsRange {
     const raw = sp.get('range');
+
     return (ALL_STATS_RANGES as ReadonlyArray<string>).includes(raw ?? '')
       ? (raw as StatsRange)
       : '7d';
   }
 
-  const range: StatsRange = $derived(rangeFromSearch($page.url.searchParams));
+  const range: StatsRange = $derived(rangeFromSearch(new URLSearchParams(page.url.search)));
 
   function setRange(next: StatsRange): void {
-    const sp = new SvelteURLSearchParams($page.url.searchParams);
+    const sp = new SvelteURLSearchParams(page.url.search);
     sp.set('range', next);
     const qs = sp.toString();
-    const target = `${resolve('/stats')}${qs ? `?${qs}` : ''}` as `/${string}`;
+    const target = `${resolve('stats')}${qs ? `?${qs}` : ''}` as `/${string}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    void goto(target, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(target, { reset: false, replace: true });
   }
 
   const stats = createStatsQuery(runeReadable(() => range));
@@ -117,11 +118,11 @@
 <PullToRefresh onRefresh={reload}>
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-2">
-      <BarChart3 class="size-5 text-muted" aria-hidden="true" />
+      <BarChart3 class="text-muted size-5" aria-hidden="true" />
       <h1 class="text-xl font-semibold tracking-tight">Statistics</h1>
     </div>
     <div
-      class="inline-flex rounded-md border border-border-default bg-elevated p-0.5"
+      class="border-border-default bg-elevated inline-flex rounded-md border p-0.5"
       role="radiogroup"
       aria-label="Time range"
       data-testid="stats-range-selector"
@@ -147,13 +148,13 @@
   </header>
 
   {#if $stats.isLoading && !$stats.data}
-    <div class="flex h-32 items-center justify-center gap-2 text-muted" data-testid="stats-loading">
+    <div class="text-muted flex h-32 items-center justify-center gap-2" data-testid="stats-loading">
       <Loader2 class="size-4 animate-spin" aria-hidden="true" />
       <span>Loading statistics…</span>
     </div>
   {:else if $stats.error}
     <Card class="border-danger-border bg-danger-subtle">
-      <CardContent class="py-4 text-sm text-danger-text">
+      <CardContent class="text-danger-text py-4 text-sm">
         Could not load statistics: {$stats.error.message}
         <Button variant="outline" size="sm" class="ml-2" onclick={reload} data-testid="stats-retry">
           Retry
@@ -195,8 +196,8 @@
            purges old events the leftmost band drops visibly. -->
       <Card data-testid="stats-audit-card">
         <CardHeader class="flex flex-row items-center justify-between gap-2 pb-2">
-          <CardTitle class="text-sm font-medium text-muted">Audit events</CardTitle>
-          <ListTree class="size-4 text-muted" aria-hidden="true" />
+          <CardTitle class="text-muted text-sm font-medium">Audit events</CardTitle>
+          <ListTree class="text-muted size-4" aria-hidden="true" />
         </CardHeader>
         <CardContent>
           <div class="flex items-baseline justify-between gap-2">
@@ -206,7 +207,7 @@
             >
               {audit?.total_events ?? 0}
             </span>
-            <span class="text-xs text-muted">{range}</span>
+            <span class="text-muted text-xs">{range}</span>
           </div>
           {#if auditDaily.length > 0}
             <svg
@@ -225,7 +226,7 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 class="text-accent"
-              />
+              ></path>
             </svg>
           {:else}
             <div class="mt-2 h-6" aria-hidden="true"></div>
@@ -238,11 +239,11 @@
     <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card data-testid="stats-daily-chart">
         <CardHeader class="pb-2">
-          <CardTitle class="text-sm font-medium text-muted">Commands per day</CardTitle>
+          <CardTitle class="text-muted text-sm font-medium">Commands per day</CardTitle>
         </CardHeader>
         <CardContent>
           {#if !hasCommands || commands?.daily.length === 0}
-            <p class="py-8 text-center text-sm text-muted">No activity in this range</p>
+            <p class="text-muted py-8 text-center text-sm">No activity in this range</p>
           {:else}
             <svg
               viewBox="0 0 600 160"
@@ -284,15 +285,15 @@
                 </g>
               {/each}
             </svg>
-            <div class="mt-2 flex items-center justify-between text-xs text-muted">
+            <div class="text-muted mt-2 flex items-center justify-between text-xs">
               <span>{commands?.daily[0]?.day ?? ''}</span>
               <span class="inline-flex items-center gap-3">
                 <span class="inline-flex items-center gap-1">
-                  <span class="inline-block size-2 rounded-sm bg-success"></span>
+                  <span class="bg-success inline-block size-2 rounded-sm"></span>
                   succeeded
                 </span>
                 <span class="inline-flex items-center gap-1">
-                  <span class="inline-block size-2 rounded-sm bg-danger"></span>
+                  <span class="bg-danger inline-block size-2 rounded-sm"></span>
                   failed
                 </span>
               </span>
@@ -305,27 +306,28 @@
       <!-- Uptime per host -------------------------------------------- -->
       <Card data-testid="stats-uptime-chart">
         <CardHeader class="pb-2">
-          <CardTitle class="text-sm font-medium text-muted">
+          <CardTitle class="text-muted text-sm font-medium">
             Uptime per host
             <span class="ml-1 font-normal">({topUptime.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {#if !hasHosts}
-            <p class="py-8 text-center text-sm text-muted">No hosts visible to you</p>
+            <p class="text-muted py-8 text-center text-sm">No hosts visible to you</p>
           {:else}
             <ul class="space-y-1.5">
               {#each topUptime as h (h.hostname)}
                 <li class="flex items-center gap-2 text-xs">
-                  <span class="w-24 truncate font-mono text-muted" title={h.hostname}>
-                    {h.hostname}
-                  </span>
+                  <span class="text-muted w-24 truncate font-mono" title={h.hostname}
+                    >{h.hostname}</span
+                  >
+
                   <span
-                    class="relative h-3 flex-1 overflow-hidden rounded-sm bg-subtle"
+                    class="bg-subtle relative h-3 flex-1 overflow-hidden rounded-sm"
                     aria-hidden="true"
                   >
                     <span
-                      class="absolute inset-y-0 left-0 bg-success"
+                      class="bg-success absolute inset-y-0 left-0"
                       style:width="{Math.max(0.5, h.uptime_percent)}%"
                     ></span>
                   </span>
@@ -342,26 +344,26 @@
       <!-- Audit by action -------------------------------------------- -->
       <Card data-testid="stats-actions-chart">
         <CardHeader class="pb-2">
-          <CardTitle class="text-sm font-medium text-muted">
+          <CardTitle class="text-muted text-sm font-medium">
             Top audit actions ({topActions.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {#if !hasAudit}
-            <p class="py-8 text-center text-sm text-muted">No audit activity in this range</p>
+            <p class="text-muted py-8 text-center text-sm">No audit activity in this range</p>
           {:else}
             <ul class="space-y-1.5">
               {#each topActions as a (a.action)}
                 <li class="flex items-center gap-2 text-xs">
-                  <span class="w-40 truncate font-mono text-muted" title={a.action}>
-                    {a.action}
-                  </span>
+                  <span class="text-muted w-40 truncate font-mono" title={a.action}>{a.action}</span
+                  >
+
                   <span
-                    class="relative h-3 flex-1 overflow-hidden rounded-sm bg-subtle"
+                    class="bg-subtle relative h-3 flex-1 overflow-hidden rounded-sm"
                     aria-hidden="true"
                   >
                     <span
-                      class="absolute inset-y-0 left-0 bg-info"
+                      class="bg-info absolute inset-y-0 left-0"
                       style:width="{(a.count / actionMax) * 100}%"
                     ></span>
                   </span>
@@ -376,26 +378,25 @@
       <!-- Audit by actor --------------------------------------------- -->
       <Card data-testid="stats-actors-chart">
         <CardHeader class="pb-2">
-          <CardTitle class="text-sm font-medium text-muted">
+          <CardTitle class="text-muted text-sm font-medium">
             Top actors ({topActors.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {#if !hasAudit}
-            <p class="py-8 text-center text-sm text-muted">No audit activity in this range</p>
+            <p class="text-muted py-8 text-center text-sm">No audit activity in this range</p>
           {:else}
             <ul class="space-y-1.5">
               {#each topActors as a (a.actor)}
                 <li class="flex items-center gap-2 text-xs">
-                  <span class="w-40 truncate font-mono text-muted" title={a.actor}>
-                    {a.actor}
-                  </span>
+                  <span class="text-muted w-40 truncate font-mono" title={a.actor}>{a.actor}</span>
+
                   <span
-                    class="relative h-3 flex-1 overflow-hidden rounded-sm bg-subtle"
+                    class="bg-subtle relative h-3 flex-1 overflow-hidden rounded-sm"
                     aria-hidden="true"
                   >
                     <span
-                      class="absolute inset-y-0 left-0 bg-warn"
+                      class="bg-warn absolute inset-y-0 left-0"
                       style:width="{(a.count / actorMax) * 100}%"
                     ></span>
                   </span>
@@ -415,7 +416,9 @@
         data-testid="stats-heartbeat-band"
       >
         <MetricCard label="Total heartbeats" value={heartbeats.total.toLocaleString()} />
+
         <MetricCard label="Avg/host/min" value={heartbeats.per_host_avg_per_min.toFixed(2)} />
+
         <MetricCard
           label="Stale (now)"
           value={String(heartbeats.stale_events)}
@@ -434,18 +437,18 @@
       <div>
         <button
           type="button"
-          class="touch-target inline-flex items-center gap-2 rounded-md border border-border-default bg-elevated px-3 py-1.5 text-sm hover:bg-subtle/60"
+          class="touch-target border-border-default bg-elevated hover:bg-subtle/60 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
           aria-expanded={showByType}
           onclick={() => (showByType = !showByType)}
           data-testid="stats-toggle-by-type"
         >
           Commands by type
-          <span class="font-mono text-xs text-muted">({commands?.by_type.length ?? 0})</span>
+          <span class="text-muted font-mono text-xs">({commands?.by_type.length ?? 0})</span>
         </button>
         {#if showByType}
-          <div class="mt-2 overflow-hidden rounded-md border border-border-subtle">
+          <div class="border-border-subtle mt-2 overflow-hidden rounded-md border">
             <table class="w-full text-sm">
-              <thead class="bg-subtle/60 text-xs text-muted">
+              <thead class="bg-subtle/60 text-muted text-xs">
                 <tr>
                   <th class="px-3 py-2 text-left font-medium">Type</th>
                   <th class="px-3 py-2 text-right font-medium">Count</th>
@@ -453,12 +456,12 @@
               </thead>
               <tbody>
                 {#each commands?.by_type ?? [] as t (t.type)}
-                  <tr class="border-t border-border-subtle">
+                  <tr class="border-border-subtle border-t">
                     <td class="px-3 py-2 font-mono">{t.type}</td>
                     <td class="px-3 py-2 text-right font-mono tabular-nums">{t.count}</td>
                   </tr>
                 {:else}
-                  <tr><td colspan="2" class="px-3 py-4 text-center text-muted">No commands</td></tr>
+                  <tr><td colspan="2" class="text-muted px-3 py-4 text-center">No commands</td></tr>
                 {/each}
               </tbody>
             </table>
@@ -469,18 +472,18 @@
       <div>
         <button
           type="button"
-          class="touch-target inline-flex items-center gap-2 rounded-md border border-border-default bg-elevated px-3 py-1.5 text-sm hover:bg-subtle/60"
+          class="touch-target border-border-default bg-elevated hover:bg-subtle/60 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
           aria-expanded={showUptimeTable}
           onclick={() => (showUptimeTable = !showUptimeTable)}
           data-testid="stats-toggle-uptime-table"
         >
           Uptime per host (full)
-          <span class="font-mono text-xs text-muted">({uptimePerHost.length})</span>
+          <span class="text-muted font-mono text-xs">({uptimePerHost.length})</span>
         </button>
         {#if showUptimeTable}
-          <div class="mt-2 overflow-hidden rounded-md border border-border-subtle">
+          <div class="border-border-subtle mt-2 overflow-hidden rounded-md border">
             <table class="w-full text-sm">
-              <thead class="bg-subtle/60 text-xs text-muted">
+              <thead class="bg-subtle/60 text-muted text-xs">
                 <tr>
                   <th class="px-3 py-2 text-left font-medium">Host</th>
                   <th class="px-3 py-2 text-right font-medium">Uptime</th>
@@ -489,7 +492,7 @@
               </thead>
               <tbody>
                 {#each uptimePerHost as h (h.hostname)}
-                  <tr class="border-t border-border-subtle">
+                  <tr class="border-border-subtle border-t">
                     <td class="px-3 py-2 font-mono">{h.hostname}</td>
                     <td class="px-3 py-2 text-right font-mono tabular-nums">
                       {h.uptime_percent.toFixed(2)}%
@@ -499,7 +502,7 @@
                     </td>
                   </tr>
                 {:else}
-                  <tr><td colspan="3" class="px-3 py-4 text-center text-muted">No hosts</td></tr>
+                  <tr><td colspan="3" class="text-muted px-3 py-4 text-center">No hosts</td></tr>
                 {/each}
               </tbody>
             </table>

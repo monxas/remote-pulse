@@ -1,3 +1,4 @@
+import { makeOverview } from './helpers/fixtures';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { mockAdminAuth, mockSseSilent } from './helpers/auth';
 
@@ -70,8 +71,13 @@ async function installApiMocks(page: Page): Promise<void> {
       pending_approvals: 0,
     };
     if (url.includes('/dash/overview')) {
-      empty.total = 0;
-      empty.online = 0;
+      Object.assign(
+        empty,
+        makeOverview({ total: 0, online: 0, stale: 0, offline: 0, online_pct: 0 }),
+      );
+    }
+    if (url.includes('/dash/stats')) {
+      empty.audit_summary = { total_events: 0, by_action: [], by_actor: [], daily: [] };
     }
     return route.fulfill({
       status: 200,

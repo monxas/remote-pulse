@@ -10,24 +10,24 @@
     ShieldCheck,
     Archive,
   } from '@lucide/svelte';
-  import PermissionsDialog from '$lib/components/app/PermissionsDialog.svelte';
-  import NotificationsToggle from '$lib/components/app/NotificationsToggle.svelte';
-  import RetentionCard from '$lib/components/app/RetentionCard.svelte';
-  import BulkUserActionBar from '$lib/components/app/BulkUserActionBar.svelte';
-  import BulkUserDialogs, { type BulkMode } from '$lib/components/app/BulkUserDialogs.svelte';
-  import BulkGroupActionBar from '$lib/components/app/BulkGroupActionBar.svelte';
-  import SortableHeader from '$lib/components/app/SortableHeader.svelte';
-  import TableSearch from '$lib/components/app/TableSearch.svelte';
-  import { createSelection } from '$lib/components/app/selection.svelte';
-  import { bulkDeleteGroups } from '$lib/settings/bulk-group-ops';
+  import PermissionsDialog from '#lib/components/app/PermissionsDialog.svelte';
+  import NotificationsToggle from '#lib/components/app/NotificationsToggle.svelte';
+  import RetentionCard from '#lib/components/app/RetentionCard.svelte';
+  import BulkUserActionBar from '#lib/components/app/BulkUserActionBar.svelte';
+  import BulkUserDialogs, { type BulkMode } from '#lib/components/app/BulkUserDialogs.svelte';
+  import BulkGroupActionBar from '#lib/components/app/BulkGroupActionBar.svelte';
+  import SortableHeader from '#lib/components/app/SortableHeader.svelte';
+  import TableSearch from '#lib/components/app/TableSearch.svelte';
+  import { createSelection } from '#lib/components/app/selection.svelte.ts';
+  import { bulkDeleteGroups } from '#lib/settings/bulk-group-ops.ts';
   import { toast } from 'svelte-sonner';
   import { useQueryClient } from '@tanstack/svelte-query';
-  import { userStore } from '$lib/stores/user.svelte';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Input } from '$lib/components/ui/input';
-  import { Tabs, TabsList, TabsTrigger, TabsContent } from '$lib/components/ui/tabs';
+  import { userStore } from '#lib/stores/user.svelte.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Tabs, TabsList, TabsTrigger, TabsContent } from '#lib/components/ui/tabs/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -35,7 +35,7 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
+  } from '#lib/components/ui/dialog/index.ts';
   import {
     createSettingsGroupsQuery,
     createSettingsUsersQuery,
@@ -45,9 +45,9 @@
     createUpdateUserMutation,
     createDeleteUserMutation,
     qk,
-  } from '$lib/queries';
-  import type { SettingsGroup, SettingsUser, UserRole } from '$lib/api';
-  import { createTableState } from '$lib/components/app/table-state.svelte';
+  } from '#lib/queries/index.ts';
+  import type { SettingsGroup, SettingsUser, UserRole } from '#lib/api.ts';
+  import { createTableState } from '#lib/components/app/table-state.svelte.ts';
 
   const groupsQuery = createSettingsGroupsQuery();
   const usersQuery = createSettingsUsersQuery();
@@ -286,7 +286,7 @@
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
-      <p class="text-sm text-muted">
+      <p class="text-muted text-sm">
         Manage groups, dashboard users, and row-level permissions. Admin only — changes are captured
         in the audit trail.
       </p>
@@ -334,7 +334,7 @@
         </CardHeader>
         <CardContent class="p-0">
           {#if $groupsQuery.isPending}
-            <div class="flex items-center gap-2 px-4 py-8 text-sm text-muted">
+            <div class="text-muted flex items-center gap-2 px-4 py-8 text-sm">
               <Loader2 class="size-4 animate-spin" aria-hidden="true" />
               Loading groups…
             </div>
@@ -346,11 +346,11 @@
               <Button size="sm" onclick={() => void $groupsQuery.refetch()}>Retry</Button>
             </div>
           {:else if groups.length === 0}
-            <div class="px-4 py-8 text-center text-sm text-muted">
+            <div class="text-muted px-4 py-8 text-center text-sm">
               No groups yet. Create one to organise hosts and grant access.
             </div>
           {:else}
-            <div class="border-b border-border-subtle px-4 py-3">
+            <div class="border-border-subtle border-b px-4 py-3">
               <TableSearch
                 value={groupsTable.query}
                 onChange={(q) => groupsTable.setQuery(q)}
@@ -363,7 +363,7 @@
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-sm" data-testid="groups-table">
-                <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
+                <thead class="border-border-subtle bg-subtle text-muted border-b text-xs uppercase">
                   <tr>
                     <th class="w-10 px-3 py-2 text-left" scope="col">
                       <input
@@ -418,13 +418,13 @@
                 <tbody>
                   {#if groupsTable.view.length === 0}
                     <tr>
-                      <td colspan="6" class="px-4 py-6 text-center text-sm text-muted">
+                      <td colspan="6" class="text-muted px-4 py-6 text-center text-sm">
                         No groups match “{groupsTable.query}”.
                       </td>
                     </tr>
                   {:else}
                     {#each groupsTable.view as g (g.name)}
-                      <tr class="border-b border-border-subtle last:border-b-0">
+                      <tr class="border-border-subtle border-b last:border-b-0">
                         <td class="px-3 py-2">
                           <input
                             type="checkbox"
@@ -435,8 +435,8 @@
                             data-testid={`select-group-${g.name}`}
                           />
                         </td>
-                        <td class="px-4 py-2 font-mono text-default">{g.name}</td>
-                        <td class="px-4 py-2 text-muted">{g.description ?? '—'}</td>
+                        <td class="text-default px-4 py-2 font-mono">{g.name}</td>
+                        <td class="text-muted px-4 py-2">{g.description ?? '—'}</td>
                         <td class="px-4 py-2 text-right tabular-nums">{g.host_count}</td>
                         <td class="px-4 py-2 text-right tabular-nums">{g.user_count}</td>
                         <td class="px-4 py-2 text-right">
@@ -478,7 +478,7 @@
         </CardHeader>
         <CardContent class="p-0">
           {#if $usersQuery.isPending}
-            <div class="flex items-center gap-2 px-4 py-8 text-sm text-muted">
+            <div class="text-muted flex items-center gap-2 px-4 py-8 text-sm">
               <Loader2 class="size-4 animate-spin" aria-hidden="true" />
               Loading users…
             </div>
@@ -490,9 +490,9 @@
               <Button size="sm" onclick={() => void $usersQuery.refetch()}>Retry</Button>
             </div>
           {:else if users.length === 0}
-            <div class="px-4 py-8 text-center text-sm text-muted">No users yet.</div>
+            <div class="text-muted px-4 py-8 text-center text-sm">No users yet.</div>
           {:else}
-            <div class="border-b border-border-subtle px-4 py-3">
+            <div class="border-border-subtle border-b px-4 py-3">
               <TableSearch
                 value={usersTable.query}
                 onChange={(q) => usersTable.setQuery(q)}
@@ -505,7 +505,7 @@
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-sm" data-testid="users-table">
-                <thead class="border-b border-border-subtle bg-subtle text-xs uppercase text-muted">
+                <thead class="border-border-subtle bg-subtle text-muted border-b text-xs uppercase">
                   <tr>
                     <th class="w-10 px-3 py-2 text-left" scope="col">
                       <input
@@ -550,13 +550,13 @@
                 <tbody>
                   {#if usersTable.view.length === 0}
                     <tr>
-                      <td colspan="5" class="px-4 py-6 text-center text-sm text-muted">
+                      <td colspan="5" class="text-muted px-4 py-6 text-center text-sm">
                         No users match “{usersTable.query}”.
                       </td>
                     </tr>
                   {:else}
                     {#each usersTable.view as u (u.id)}
-                      <tr class="border-b border-border-subtle last:border-b-0">
+                      <tr class="border-border-subtle border-b last:border-b-0">
                         <td class="px-3 py-2">
                           <input
                             type="checkbox"
@@ -568,9 +568,9 @@
                           />
                         </td>
                         <td class="px-4 py-2">
-                          <div class="font-medium text-default">{u.email}</div>
+                          <div class="text-default font-medium">{u.email}</div>
                           {#if u.name}
-                            <div class="text-xs text-muted">{u.name}</div>
+                            <div class="text-muted text-xs">{u.name}</div>
                           {/if}
                           {#if !u.is_active}
                             <Badge variant="muted" class="mt-1">disabled</Badge>
@@ -578,7 +578,7 @@
                         </td>
                         <td class="px-4 py-2">
                           <select
-                            class="rounded border border-border-default bg-base px-2 py-1 text-xs"
+                            class="border-border-default bg-base rounded border px-2 py-1 text-xs"
                             value={u.role}
                             onchange={(e) =>
                               changeRole(
@@ -596,7 +596,7 @@
                         <td class="px-4 py-2">
                           <div class="flex flex-wrap gap-1">
                             {#if groupNames.length === 0}
-                              <span class="text-xs text-muted">No groups available</span>
+                              <span class="text-muted text-xs">No groups available</span>
                             {:else}
                               {#each groupNames as g (g)}
                                 {@const on = u.groups.includes(g)}
@@ -675,7 +675,7 @@
           {#if userStore.value?.user_role === 'admin'}
             <RetentionCard />
           {:else}
-            <p class="text-sm text-muted" data-testid="retention-non-admin">
+            <p class="text-muted text-sm" data-testid="retention-non-admin">
               Audit retention is admin-only. Ask an admin to adjust the policy from this page.
             </p>
           {/if}
@@ -749,7 +749,7 @@
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Role</span>
           <select
-            class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="border-border-default bg-base w-full rounded border px-2 py-1.5 text-sm"
             bind:value={newUserRole}
           >
             <option value="viewer">viewer — read-only</option>
@@ -761,7 +761,7 @@
           <span class="mb-1 block font-medium">Groups</span>
           <div class="flex flex-wrap gap-1">
             {#if groupNames.length === 0}
-              <span class="text-xs text-muted">Create a group first.</span>
+              <span class="text-muted text-xs">Create a group first.</span>
             {:else}
               {#each groupNames as g (g)}
                 {@const on = newUserGroups.includes(g)}
@@ -839,7 +839,7 @@
       </DialogDescription>
     </DialogHeader>
     <ul
-      class="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-subtle p-2 text-xs"
+      class="border-border-subtle bg-subtle max-h-32 overflow-y-auto rounded-md border p-2 text-xs"
       data-testid="bulk-group-targets"
     >
       {#each selectedGroups as g (g.name)}

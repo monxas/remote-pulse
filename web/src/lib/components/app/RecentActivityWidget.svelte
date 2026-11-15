@@ -18,9 +18,9 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import RelativeTime from './RelativeTime.svelte';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import { cn } from '$lib/utils';
-  import type { SseEvent } from '$lib/queries/sse.svelte';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import { cn } from '#lib/utils.ts';
+  import type { SseEvent } from '#lib/queries/sse.svelte.ts';
 
   const STORAGE_KEY = 'rp:lastSeenActivityTs';
   const VISIBLE_LIMIT = 10;
@@ -66,37 +66,37 @@
         return {
           title: 'Heartbeat',
           subtitle: groupName ?? hostId ?? 'host',
-          href: hostId ? resolve(`/hosts/${hostId}`) : null,
+          href: hostId ? resolve(`hosts/${hostId}`) : null,
         };
       case 'host.status_change':
         return {
           title: `Host ${toStatus ?? 'changed'}`,
           subtitle: `${fromStatus ?? '?'} → ${toStatus ?? '?'}`,
-          href: hostId ? resolve(`/hosts/${hostId}`) : null,
+          href: hostId ? resolve(`hosts/${hostId}`) : null,
         };
       case 'command.issued':
         return {
           title: 'Command issued',
           subtitle: issuedBy ? `by ${issuedBy}` : (commandId ?? ''),
-          href: commandId ? resolve(`/commands/${commandId}`) : null,
+          href: commandId ? resolve(`commands/${commandId}`) : null,
         };
       case 'command.status_change':
         return {
           title: `Command ${status ?? 'updated'}`,
           subtitle: commandId ?? '',
-          href: commandId ? resolve(`/commands/${commandId}`) : null,
+          href: commandId ? resolve(`commands/${commandId}`) : null,
         };
       case 'approval.created':
         return {
           title: 'Approval requested',
           subtitle: issuedBy ? `by ${issuedBy}` : (commandId ?? ''),
-          href: resolve('/approvals'),
+          href: resolve('approvals'),
         };
       case 'approval.resolved':
         return {
           title: `Approval ${resolution ?? 'resolved'}`,
           subtitle: resolvedBy ? `by ${resolvedBy}` : (commandId ?? ''),
-          href: commandId ? resolve(`/commands/${commandId}`) : resolve('/approvals'),
+          href: commandId ? resolve(`commands/${commandId}`) : resolve('approvals'),
         };
       default:
         return { title: e.type, subtitle: '', href: null };
@@ -173,9 +173,9 @@
     <button
       type="button"
       class={cn(
-        'touch-target relative inline-flex size-8 items-center justify-center rounded-md text-muted',
-        'transition-colors hover:bg-subtle hover:text-default focus:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-accent',
+        'touch-target text-muted relative inline-flex size-8 items-center justify-center rounded-md',
+        'hover:bg-subtle hover:text-default transition-colors focus:outline-none',
+        'focus-visible:ring-accent focus-visible:ring-2',
       )}
       aria-label={unreadCount > 0 ? `Recent activity — ${unreadCount} unread` : 'Recent activity'}
       aria-haspopup="menu"
@@ -187,8 +187,8 @@
       {#if unreadCount > 0}
         <span
           class={cn(
-            'absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center',
-            'rounded-full bg-danger px-1 font-mono text-[10px] font-semibold leading-none text-white',
+            'absolute -top-1 -right-1 inline-flex h-4 min-w-[1rem] items-center justify-center',
+            'bg-danger rounded-full px-1 font-mono text-[10px] leading-none font-semibold text-white',
           )}
           aria-hidden="true"
           data-testid="activity-badge"
@@ -202,20 +202,20 @@
       <div
         class={cn(
           'absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden',
-          'rounded-md border border-border-default bg-base shadow-lg',
+          'border-border-default bg-base rounded-md border shadow-lg',
         )}
         role="menu"
         aria-label="Recent activity"
         data-testid="activity-popover"
       >
-        <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
+        <div class="border-border-subtle flex items-center justify-between border-b px-3 py-2">
           <span class="text-sm font-semibold">Recent activity</span>
-          <span class="text-xs text-muted">
+          <span class="text-muted text-xs">
             {visible.length} event{visible.length === 1 ? '' : 's'}
           </span>
         </div>
         {#if visible.length === 0}
-          <div class="px-3 py-6 text-center text-sm text-muted" data-testid="activity-empty">
+          <div class="text-muted px-3 py-6 text-center text-sm" data-testid="activity-empty">
             {#if live.state === 'failed'}
               Real-time disconnected. Refresh to reconnect.
             {:else}
@@ -223,7 +223,7 @@
             {/if}
           </div>
         {:else}
-          <ul class="max-h-96 divide-y divide-border-subtle overflow-y-auto">
+          <ul class="divide-border-subtle max-h-96 divide-y overflow-y-auto">
             {#each visible as evt, idx (evt.ts + ':' + idx)}
               {@const meta = describe(evt)}
               {@const isUnread = evt.ts > lastSeenTs}
@@ -248,14 +248,14 @@
                   ></span>
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex items-baseline justify-between gap-2">
-                      <span class="truncate font-medium text-default">{meta.title}</span>
+                      <span class="text-default truncate font-medium">{meta.title}</span>
                       <RelativeTime
                         iso={new Date(evt.ts).toISOString()}
-                        class="shrink-0 text-[10px] text-muted"
+                        class="text-muted shrink-0 text-[10px]"
                       />
                     </span>
                     {#if meta.subtitle}
-                      <span class="truncate text-xs text-muted">{meta.subtitle}</span>
+                      <span class="text-muted truncate text-xs">{meta.subtitle}</span>
                     {/if}
                   </span>
                 </button>

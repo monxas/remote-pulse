@@ -2,17 +2,17 @@
   import { onDestroy } from 'svelte';
   import QRCode from 'qrcode';
   import { Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from '@lucide/svelte';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Input } from '$lib/components/ui/input';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
   import {
     createSettingsGroupsQuery,
     createEnrollLinksQuery,
     createCreateEnrollLinkMutation,
     createRevokeEnrollLinkMutation,
-  } from '$lib/queries';
-  import type { EnrollLinkOut, EnrollLinkSummary, SettingsGroup } from '$lib/api';
+  } from '#lib/queries/index.ts';
+  import type { EnrollLinkOut, EnrollLinkSummary, SettingsGroup } from '#lib/api.ts';
 
   // Reuse the groups query so the dropdown stays in sync with /settings.
   const groupsQuery = createSettingsGroupsQuery();
@@ -195,7 +195,7 @@
   <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Enroll an agent</h1>
-      <p class="text-sm text-muted">
+      <p class="text-muted text-sm">
         Generate a short, memorable enrollment code (e.g. <code class="font-mono">K7M-X3F</code>) to
         bootstrap a new Remote-Pulse agent. The code is single-use by default and expires in 5
         minutes.
@@ -220,7 +220,7 @@
         <label class="space-y-1 text-sm">
           <span class="font-medium">Group</span>
           <select
-            class="touch-target block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="touch-target border-border-default bg-base block w-full rounded border px-2 py-1.5 text-sm"
             bind:value={groupName}
             data-testid="enroll-group"
             disabled={$createLink.isPending}
@@ -238,7 +238,7 @@
         <label class="space-y-1 text-sm">
           <span class="font-medium">Expiration</span>
           <select
-            class="touch-target block w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="touch-target border-border-default bg-base block w-full rounded border px-2 py-1.5 text-sm"
             bind:value={ttlMinutes}
             data-testid="enroll-ttl"
             disabled={$createLink.isPending}
@@ -273,7 +273,7 @@
           />
         </label>
 
-        <div class="sm:col-span-2 flex justify-end">
+        <div class="flex justify-end sm:col-span-2">
           <Button type="submit" disabled={$createLink.isPending} data-testid="enroll-submit">
             {#if $createLink.isPending}
               <Loader2 class="mr-1 size-4 animate-spin" aria-hidden="true" />
@@ -301,19 +301,19 @@
              tablet → friend's phone) can scan it and paste-and-run on
              the target machine. -->
         <div
-          class="flex flex-col items-center gap-4 rounded-lg bg-accent/5 px-4 py-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8"
+          class="bg-accent/5 flex flex-col items-center gap-4 rounded-lg px-4 py-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8"
         >
           <div class="flex flex-col items-center gap-2">
             <button
               type="button"
-              class="font-mono text-5xl font-bold tracking-widest tabular-nums hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-2"
+              class="hover:text-accent focus-visible:ring-accent rounded px-2 font-mono text-5xl font-bold tracking-widest tabular-nums focus-visible:ring-2 focus-visible:outline-none"
               onclick={() => void copy(lastIssued!.code)}
               data-testid="enroll-code-hero"
               aria-label="Copy enrollment code"
             >
               {lastIssued.code}
             </button>
-            <p class="text-xs text-muted" data-testid="enroll-countdown">
+            <p class="text-muted text-xs" data-testid="enroll-countdown">
               Expires in <span class="font-mono">{heroCountdown}</span> · {lastIssued.max_uses}
               {lastIssued.max_uses === 1 ? 'use' : 'uses'} · group
               <span class="font-mono">{lastIssued.group_name}</span>
@@ -327,19 +327,19 @@
                 class="h-[140px] w-[140px] rounded-md bg-white p-1 sm:h-[180px] sm:w-[180px]"
                 data-testid="enroll-qr-img"
               />
-              <p class="text-xs text-muted">Scan to install (Unix/macOS)</p>
+              <p class="text-muted text-xs">Scan to install (Unix/macOS)</p>
             </div>
           {/if}
         </div>
 
         <!-- Install command (Linux/macOS) -->
         <div>
-          <p class="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+          <p class="text-muted mb-1 text-xs font-medium tracking-wide uppercase">
             Linux / macOS install
           </p>
           <div class="flex flex-wrap items-start gap-2">
             <code
-              class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono text-xs"
+              class="bg-muted/10 flex-1 rounded px-2 py-1 font-mono text-xs break-all"
               data-testid="enroll-install-cmd"
             >
               {lastIssued.install_url}
@@ -357,10 +357,10 @@
         </div>
 
         <!-- Install command (Windows) -->
-        <details class="text-xs text-muted">
+        <details class="text-muted text-xs">
           <summary class="cursor-pointer">Windows install</summary>
           <div class="mt-2 flex flex-wrap items-start gap-2">
-            <code class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono">
+            <code class="bg-muted/10 flex-1 rounded px-2 py-1 font-mono break-all">
               {lastIssued.install_url_windows_short}
             </code>
             <Button
@@ -376,7 +376,7 @@
 
         <!-- Legacy fallback — collapsed. JWT path still works against this
              server for back-compat; surface it for operators on old agents. -->
-        <details class="text-xs text-muted" data-testid="enroll-legacy-details">
+        <details class="text-muted text-xs" data-testid="enroll-legacy-details">
           <summary class="cursor-pointer">Advanced — legacy JWT URL</summary>
           <div class="mt-2 space-y-2">
             <p>
@@ -385,7 +385,7 @@
             </p>
             <div class="flex flex-wrap items-start gap-2">
               <code
-                class="flex-1 break-all rounded bg-muted/10 px-2 py-1 font-mono"
+                class="bg-muted/10 flex-1 rounded px-2 py-1 font-mono break-all"
                 data-testid="enroll-url"
               >
                 {lastIssued.url}
@@ -413,7 +413,7 @@
     </CardHeader>
     <CardContent class="p-0">
       {#if $linksQuery.isPending}
-        <div class="flex items-center gap-2 px-4 py-8 text-sm text-muted">
+        <div class="text-muted flex items-center gap-2 px-4 py-8 text-sm">
           <Loader2 class="size-4 animate-spin" aria-hidden="true" />
           Loading codes…
         </div>
@@ -431,13 +431,13 @@
           {/if}
         </div>
       {:else if links.length === 0}
-        <div class="px-4 py-8 text-center text-sm text-muted">
+        <div class="text-muted px-4 py-8 text-center text-sm">
           No active codes. Generate one above to enroll a new agent.
         </div>
       {:else}
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead class="bg-muted/5 text-left text-xs uppercase tracking-wide text-muted">
+            <thead class="bg-muted/5 text-muted text-left text-xs tracking-wide uppercase">
               <tr>
                 <th class="px-4 py-2">Code</th>
                 <th class="px-4 py-2">Group</th>
@@ -449,17 +449,17 @@
             </thead>
             <tbody>
               {#each links as link (link.token_jti)}
-                <tr class="border-t border-border-default" data-testid="enroll-link-row">
+                <tr class="border-border-default border-t" data-testid="enroll-link-row">
                   <td class="px-4 py-2 font-mono font-medium" data-testid="enroll-row-code">
                     {link.code ?? '—'}
                   </td>
                   <td class="px-4 py-2">{link.group_name}</td>
-                  <td class="px-4 py-2 text-muted">{link.issued_by}</td>
+                  <td class="text-muted px-4 py-2">{link.issued_by}</td>
                   <td class="px-4 py-2">
                     <div>{expiresIn(link.expires_at, now)}</div>
-                    <div class="text-xs text-muted">{fmtDate(link.expires_at)}</div>
+                    <div class="text-muted text-xs">{fmtDate(link.expires_at)}</div>
                   </td>
-                  <td class="px-4 py-2 text-muted">
+                  <td class="text-muted px-4 py-2">
                     {link.used_count} / {link.max_uses}
                   </td>
                   <td class="px-4 py-2 text-right">
