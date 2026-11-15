@@ -194,7 +194,7 @@
     <button
       type="button"
       class={cn(
-        'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+        'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
         store.active === null && !store.modified
           ? 'border-accent-border bg-accent-bg text-accent-text'
           : 'border-border-default bg-elevated text-default hover:bg-subtle',
@@ -208,7 +208,7 @@
       <button
         type="button"
         class={cn(
-          'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+          'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
           store.active?.id === v.id
             ? 'border-accent-border bg-accent-bg text-accent-text'
             : 'border-border-default bg-elevated text-default hover:bg-subtle',
@@ -223,7 +223,7 @@
       <button
         type="button"
         class={cn(
-          'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+          'inline-flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0',
           store.active?.id === v.id
             ? 'border-accent-border bg-accent-bg text-accent-text'
             : 'border-border-default bg-elevated text-muted hover:bg-subtle hover:text-default',

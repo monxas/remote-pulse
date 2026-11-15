@@ -102,9 +102,9 @@ test.describe('flow: audit timeline', () => {
 
     // Tone-based dot icons surface per ACTION_TONE table. We assert the
     // visible action-label texts emitted by `AuditEvent.svelte`.
-    await expect(page.getByText('issued command')).toBeVisible();
-    await expect(page.getByText('created group')).toBeVisible();
-    await expect(page.getByText('enrolled host')).toBeVisible();
+    await expect(page.getByText('issued command', { exact: true })).toBeVisible();
+    await expect(page.getByText('created group', { exact: true })).toBeVisible();
+    await expect(page.getByText('enrolled host', { exact: true })).toBeVisible();
 
     // Filter chip: click "settings.group.create". The chips are
     // role-less buttons inside the filter bar; identify by their

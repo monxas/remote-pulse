@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     ArrowLeft,
     ArrowRight,
@@ -126,7 +127,7 @@
 
   // Reset whenever the dialog reopens.
   $effect(() => {
-    if (open) resetState();
+    if (open) untrack(resetState);
   });
 
   function choose(type: CommandTypeId): void {
