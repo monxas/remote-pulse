@@ -245,7 +245,7 @@
             value={selectedTarget}
             onchange={(e) =>
               updateUrl({ target_type: (e.target as HTMLSelectElement).value || null })}
-            class="border-border-default bg-base text-default focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            class="border-border-default bg-base text-default focus-visible:ring-ring h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:h-9"
           >
             {#each targetTypes as t (t.value)}
               <option value={t.value}>{t.label}</option>
@@ -254,13 +254,15 @@
         </label>
         <div class="space-y-1">
           <span class="text-muted text-xs font-medium">Range</span>
-          <div class="border-border-default flex h-9 items-center gap-1 rounded-md border p-0.5">
+          <div
+            class="border-border-default flex min-h-11 items-center gap-1 rounded-md border p-0.5 sm:h-9 sm:min-h-0"
+          >
             {#each ranges as r (r.value)}
               <button
                 type="button"
                 onclick={() => updateUrl({ range: r.value })}
                 class={cn(
-                  'flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors',
+                  'min-h-11 flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors sm:min-h-0',
                   range === r.value
                     ? 'bg-accent-bg text-accent-text'
                     : 'text-muted hover:bg-subtle',
@@ -306,7 +308,7 @@
             type="button"
             onclick={() => toggleAction(a)}
             class={cn(
-              'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors',
+              'inline-flex min-h-11 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors sm:min-h-0',
               on
                 ? 'border-accent bg-accent-bg text-accent-text'
                 : 'border-border-default text-muted hover:bg-subtle',
@@ -328,7 +330,7 @@
       <div class="flex items-center justify-between">
         <button
           type="button"
-          class="text-accent-text text-xs underline-offset-4 hover:underline"
+          class="text-accent-text inline-flex min-h-11 items-center text-xs underline-offset-4 hover:underline sm:min-h-0"
           onclick={clearFilters}>Clear filters</button
         >
 
