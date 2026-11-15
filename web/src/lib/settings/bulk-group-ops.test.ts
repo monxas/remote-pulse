@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const deleteMock = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('#lib/api.ts', async () => {
+  const actual = await vi.importActual<typeof import('#lib/api.ts')>('#lib/api.ts');
   return {
     ...actual,
     deleteSettingsGroup: (...args: unknown[]) => deleteMock(...args),
   };
 });
 
-import { ApiError } from '$lib/api';
+import { ApiError } from '#lib/api.ts';
 import { bulkDeleteGroups, seedGroupItems } from './bulk-group-ops';
 
 describe('seedGroupItems', () => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Loader2, ArrowDown } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
   import {
     ptrStateFor,
     damp,
@@ -144,7 +144,7 @@
       aria-busy={refreshing}
     >
       <div
-        class="flex items-center gap-2 rounded-full border border-border-default bg-elevated px-3 py-1.5 text-xs text-muted shadow-sm"
+        class="border-border-default bg-elevated text-muted flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm"
       >
         {#if refreshing}
           <Loader2 class="size-4 animate-spin" aria-hidden="true" />

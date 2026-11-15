@@ -17,11 +17,16 @@
     CommandInput,
     CommandItem,
     CommandList,
-  } from '$lib/components/ui/command';
-  import { Dialog, DialogContent, DialogTitle, DialogDescription } from '$lib/components/ui/dialog';
-  import { createCommandsQuery, createHostsQuery, staticReadable } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import type { HostsParams } from '$lib/queries';
+  } from '#lib/components/ui/command/index.ts';
+  import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    DialogDescription,
+  } from '#lib/components/ui/dialog/index.ts';
+  import { createCommandsQuery, createHostsQuery, staticReadable } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import type { HostsParams } from '#lib/queries/index.ts';
   import IssueCommandDialog from './IssueCommandDialog.svelte';
 
   let open = $state(false);
@@ -79,31 +84,31 @@
 
         <CommandGroup heading="Navigate">
           <CommandItem onSelect={() => go(resolve('/'))}>
-            <Activity class="size-4 text-muted" aria-hidden="true" />
+            <Activity class="text-muted size-4" aria-hidden="true" />
             Fleet
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/hosts'))}>
-            <Server class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('hosts'))}>
+            <Server class="text-muted size-4" aria-hidden="true" />
             Hosts
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/commands'))}>
-            <Terminal class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('commands'))}>
+            <Terminal class="text-muted size-4" aria-hidden="true" />
             Commands
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/approvals'))}>
-            <ShieldAlert class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('approvals'))}>
+            <ShieldAlert class="text-muted size-4" aria-hidden="true" />
             Approvals
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/audit'))}>
-            <ListTree class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('audit'))}>
+            <ListTree class="text-muted size-4" aria-hidden="true" />
             Audit log
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/enroll'))}>
-            <KeyRound class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('enroll'))}>
+            <KeyRound class="text-muted size-4" aria-hidden="true" />
             Enroll
           </CommandItem>
-          <CommandItem onSelect={() => go(resolve('/settings'))}>
-            <Settings class="size-4 text-muted" aria-hidden="true" />
+          <CommandItem onSelect={() => go(resolve('settings'))}>
+            <Settings class="text-muted size-4" aria-hidden="true" />
             Settings
           </CommandItem>
         </CommandGroup>
@@ -116,7 +121,7 @@
             }}
             keywords={['new', 'issue', 'shell', 'reboot']}
           >
-            <Terminal class="size-4 text-muted" aria-hidden="true" />
+            <Terminal class="text-muted size-4" aria-hidden="true" />
             Issue a new command…
           </CommandItem>
         </CommandGroup>
@@ -129,9 +134,9 @@
                 keywords={[host.hostname, host.group_name]}
                 onSelect={() => go(resolve('/hosts/[id]', { id: host.id }))}
               >
-                <Server class="size-4 text-muted" aria-hidden="true" />
+                <Server class="text-muted size-4" aria-hidden="true" />
                 <span class="font-mono">{host.hostname}</span>
-                <span class="ml-auto text-xs text-muted">{host.group_name}</span>
+                <span class="text-muted ml-auto text-xs">{host.group_name}</span>
               </CommandItem>
             {/each}
           </CommandGroup>
@@ -145,9 +150,9 @@
                 keywords={[cmd.command_type, cmd.host_hostname, cmd.status]}
                 onSelect={() => go(resolve('/commands/[id]', { id: cmd.id }))}
               >
-                <Terminal class="size-4 text-muted" aria-hidden="true" />
+                <Terminal class="text-muted size-4" aria-hidden="true" />
                 <span class="font-mono">{cmd.command_type}</span>
-                <span class="ml-auto text-xs text-muted">{cmd.host_hostname}</span>
+                <span class="text-muted ml-auto text-xs">{cmd.host_hostname}</span>
               </CommandItem>
             {/each}
           </CommandGroup>

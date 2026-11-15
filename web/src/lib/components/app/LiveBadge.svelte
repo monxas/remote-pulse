@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { cn } from '$lib/utils';
-  import type { SseState } from '$lib/queries/sse.svelte';
+  import { cn } from '#lib/utils.ts';
+  import type { SseState } from '#lib/queries/sse.svelte.ts';
 
   type Props = { state: SseState; class?: string };
   const { state, class: className }: Props = $props();

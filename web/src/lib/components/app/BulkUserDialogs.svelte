@@ -15,10 +15,10 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
-  import { Badge } from '$lib/components/ui/badge';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
   import { toast } from 'svelte-sonner';
   import { useQueryClient } from '@tanstack/svelte-query';
   import {
@@ -26,7 +26,7 @@
     type PermissionAction,
     type SettingsUser,
     type UserRole,
-  } from '$lib/api';
+  } from '#lib/api.ts';
   import {
     bulkChangeRole,
     bulkAddUsersToGroup,
@@ -34,8 +34,8 @@
     bulkGrantPermission,
     bulkDeleteUsers,
     type BulkUserItem,
-  } from '$lib/settings/bulk-user-ops';
-  import { qk } from '$lib/queries';
+  } from '#lib/settings/bulk-user-ops.ts';
+  import { qk } from '#lib/queries/index.ts';
 
   /**
    * Wraps the five bulk-user modals (role / add-group / remove-group /
@@ -219,7 +219,7 @@
     <DialogHeader>
       <DialogTitle>
         {#if mode === 'delete'}
-          <AlertTriangle class="mr-1 inline size-4 text-danger-text" aria-hidden="true" />
+          <AlertTriangle class="text-danger-text mr-1 inline size-4" aria-hidden="true" />
         {/if}
         {title}
       </DialogTitle>
@@ -230,7 +230,7 @@
     </DialogHeader>
 
     <!-- Selection preview (always shown so the user can sanity-check) -->
-    <div class="max-h-32 overflow-y-auto rounded-md border border-border-subtle bg-subtle p-2">
+    <div class="border-border-subtle bg-subtle max-h-32 overflow-y-auto rounded-md border p-2">
       <ul class="space-y-1 text-xs" data-testid="bulk-user-targets">
         {#each users as u (u.id)}
           <li class="flex items-center justify-between gap-2">
@@ -251,7 +251,7 @@
       <label class="block text-sm">
         <span class="mb-1 block font-medium">New role</span>
         <select
-          class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+          class="border-border-default bg-base w-full rounded border px-2 py-1.5 text-sm"
           bind:value={role}
           data-testid="bulk-role-select"
         >
@@ -261,7 +261,7 @@
         </select>
       </label>
       {#if selfInSelection && role === 'viewer' && users.find((u) => u.id === currentUserId)?.role === 'admin'}
-        <p class="rounded-md border border-border-default bg-warn-bg p-2 text-xs text-warn-text">
+        <p class="border-border-default bg-warn-bg text-warn-text rounded-md border p-2 text-xs">
           Refusing self-demote: your own admin row is in the selection.
         </p>
       {/if}
@@ -269,7 +269,7 @@
       <label class="block text-sm">
         <span class="mb-1 block font-medium">Group</span>
         <select
-          class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+          class="border-border-default bg-base w-full rounded border px-2 py-1.5 text-sm"
           bind:value={pickedGroup}
           data-testid="bulk-group-select"
         >
@@ -292,7 +292,7 @@
         <label class="block text-sm">
           <span class="mb-1 block font-medium">Action</span>
           <select
-            class="w-full rounded border border-border-default bg-base px-2 py-1.5 text-sm"
+            class="border-border-default bg-base w-full rounded border px-2 py-1.5 text-sm"
             bind:value={grantAction}
             data-testid="bulk-grant-action"
           >
@@ -317,13 +317,13 @@
           </datalist>
         </label>
       </div>
-      <p class="text-xs text-muted">
+      <p class="text-muted text-xs">
         Grants <code>{grantAction}</code> on <code>{grantScope || '*'}</code> for every selected user.
       </p>
     {:else if mode === 'delete'}
       {#if selfInSelection}
         <p
-          class="rounded-md border border-border-default bg-danger-bg p-2 text-xs text-danger-text"
+          class="border-border-default bg-danger-bg text-danger-text rounded-md border p-2 text-xs"
           data-testid="bulk-delete-self-warning"
         >
           Your own account is in the selection. Deselect yourself before deleting.
@@ -331,7 +331,7 @@
       {:else}
         {#if allSelectedAreAdmins}
           <p
-            class="rounded-md border border-border-default bg-warn-bg p-2 text-xs text-warn-text"
+            class="border-border-default bg-warn-bg text-warn-text rounded-md border p-2 text-xs"
             data-testid="bulk-delete-all-admins-warning"
           >
             All {users.length} selected accounts are admins. Deleting them all locks the dashboard out
@@ -354,7 +354,7 @@
 
     <!-- Progress strip while we fire ----------------------------------- -->
     {#if progress.length > 0}
-      <div class="space-y-1 rounded-md border border-border-subtle p-2 text-xs">
+      <div class="border-border-subtle space-y-1 rounded-md border p-2 text-xs">
         {#each progress as p (p.user_id)}
           <div
             class="flex items-center justify-between gap-2"

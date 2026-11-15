@@ -21,7 +21,7 @@ import {
   type GrantPermissionInput,
   type SettingsUser,
   type UserRole,
-} from '$lib/api';
+} from '#lib/api.ts';
 
 export type BulkUserOpStatus = 'pending' | 'in-flight' | 'success' | 'error';
 

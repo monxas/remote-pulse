@@ -1,3 +1,5 @@
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
@@ -10,7 +12,29 @@ import { defineConfig } from 'vitest/config';
 // type-checked. Vite 8 dropped the inline `test` property from its own
 // `UserConfigExport`.
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
+  plugins: [
+    tailwindcss(),
+    sveltekit({
+      preprocess: vitePreprocess(),
+      // Static SPA: every navigation is client-side. `fallback: 'index.html'`
+      // tells the adapter to write the SPA shell at index.html so the FastAPI
+      // StaticFiles mount (`html=True`) serves it for unknown paths under
+      // `/dash-next/` and the client-side router takes over. ADR-0009 §3.8.
+      adapter: adapter({
+        pages: 'build',
+        assets: 'build',
+        fallback: 'index.html',
+        precompress: false,
+        strict: true,
+      }),
+
+      // The SPA is mounted at /dash-next/ by FastAPI. Tell SvelteKit so all
+      // built asset URLs and client-side navigations carry that prefix.
+      paths: { base: '/dash-next', relative: false },
+      // No prerendered pages — every route is dynamic in the SPA sense.
+      prerender: { entries: [] },
+    }),
+  ],
   server: {
     port: 5173,
     strictPort: false,

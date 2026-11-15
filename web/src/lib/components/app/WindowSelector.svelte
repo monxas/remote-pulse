@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type Props = {
     value: string;
@@ -19,7 +19,7 @@
 <div
   role="radiogroup"
   aria-label={label}
-  class="inline-flex items-center gap-0 rounded-md border border-border-default bg-subtle p-0.5 text-xs"
+  class="border-border-default bg-subtle inline-flex items-center gap-0 rounded-md border p-0.5 text-xs"
 >
   {#each options as opt (opt)}
     {@const selected = opt === value}

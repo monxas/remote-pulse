@@ -1,32 +1,32 @@
 <script lang="ts">
   import { CheckCircle2, Clock, Server, ShieldAlert } from '@lucide/svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
-  import MetricCard from '$lib/components/app/MetricCard.svelte';
-  import HostTable from '$lib/components/app/HostTable.svelte';
-  import HostFilters from '$lib/components/app/HostFilters.svelte';
-  import SavedViewsSwitcher from '$lib/components/app/SavedViewsSwitcher.svelte';
-  import LiveBadge from '$lib/components/app/LiveBadge.svelte';
-  import BulkActionBar from '$lib/components/app/BulkActionBar.svelte';
-  import BulkIssueCommandDialog from '$lib/components/app/BulkIssueCommandDialog.svelte';
-  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
-  import { createHostSelection } from '$lib/components/app/host-selection.svelte';
-  import { createOverviewQuery, createHostsQuery, type HostsParams } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import type { HostStatus } from '$lib/api';
-  import { userStore } from '$lib/stores/user.svelte';
-  import { ApiError } from '$lib/api';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import MetricCard from '#lib/components/app/MetricCard.svelte';
+  import HostTable from '#lib/components/app/HostTable.svelte';
+  import HostFilters from '#lib/components/app/HostFilters.svelte';
+  import SavedViewsSwitcher from '#lib/components/app/SavedViewsSwitcher.svelte';
+  import LiveBadge from '#lib/components/app/LiveBadge.svelte';
+  import BulkActionBar from '#lib/components/app/BulkActionBar.svelte';
+  import BulkIssueCommandDialog from '#lib/components/app/BulkIssueCommandDialog.svelte';
+  import PullToRefresh from '#lib/components/app/PullToRefresh.svelte';
+  import { createHostSelection } from '#lib/components/app/host-selection.svelte.ts';
+  import { createOverviewQuery, createHostsQuery, type HostsParams } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import type { HostStatus } from '#lib/api.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
+  import { ApiError } from '#lib/api.ts';
 
   const live = getLiveStream();
 
   // ---- Filters bound to URL ----
   const params: HostsParams = $derived.by(() => {
-    const sp = $page.url.searchParams;
+    const sp = page.url.searchParams;
     const status = sp.get('status') as HostStatus | null;
     return {
       q: sp.get('q') ?? undefined,
@@ -46,7 +46,7 @@
   }
 
   function clearFilters(): void {
-    void goto(resolve('/'), { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(resolve('/'), { reset: false, replace: true });
   }
 
   function reload(): void {
@@ -58,8 +58,7 @@
     ($hosts.error instanceof ApiError && $hosts.error.status === 401) ||
       ($overview.error instanceof ApiError && $overview.error.status === 401),
   );
-
-  const loginNext = $derived(encodeURIComponent($page.url.pathname + $page.url.search));
+  const loginNext = $derived(encodeURIComponent(page.url.pathname + page.url.search));
 
   // ---- Multi-select state ----
   const selection = createHostSelection();
@@ -106,7 +105,7 @@
     <header class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Fleet</h1>
-        <p class="text-sm text-muted">
+        <p class="text-muted text-sm">
           Overview of every host reporting to Remote-Pulse.
           {#if userStore.value?.user_email}
             <span class="ml-1">
@@ -133,7 +132,9 @@
         {/each}
       {:else if $overview.data}
         {@const o = $overview.data}
+
         <MetricCard label="Total" value={String(o.total)} hint="fleet size" Icon={Server} />
+
         <MetricCard
           label="Online"
           value={`${o.online_pct.toFixed(0)}%`}
@@ -146,7 +147,9 @@
             unit: '%',
           }}
         />
+
         <MetricCard label="Stale" value={String(o.stale)} hint="60-180s" tone="warn" Icon={Clock} />
+
         <MetricCard
           label="Pending"
           value={String(o.pending_approvals)}
@@ -160,7 +163,7 @@
             <CardTitle>Could not load overview</CardTitle>
           </CardHeader>
           <CardContent class="space-y-3">
-            <p class="text-sm text-muted">
+            <p class="text-muted text-sm">
               {$overview.error?.message ?? 'Unknown error.'}
             </p>
             <div class="flex items-center gap-2">
@@ -186,7 +189,7 @@
     {#if $hosts.isPending && !$hosts.data}
       <div class="space-y-2" aria-busy="true" aria-live="polite">
         {#each [0, 1, 2, 3, 4] as i (i)}
-          <div class="h-12 animate-pulse rounded-md border border-border-subtle bg-subtle"></div>
+          <div class="border-border-subtle bg-subtle h-12 animate-pulse rounded-md border"></div>
         {/each}
       </div>
     {:else if $hosts.isError}
@@ -195,7 +198,7 @@
           <CardTitle>Could not load hosts</CardTitle>
         </CardHeader>
         <CardContent class="space-y-3">
-          <p class="text-sm text-muted">
+          <p class="text-muted text-sm">
             {$hosts.error?.message ?? 'Unknown error.'}
           </p>
           <div class="flex items-center gap-2">
@@ -211,8 +214,8 @@
     {:else if $hosts.data && $hosts.data.hosts.length === 0}
       <Card>
         <CardContent class="flex flex-col items-center gap-3 py-12 text-center">
-          <Server class="size-8 text-muted" aria-hidden="true" />
-          <p class="text-sm text-muted">No hosts match your filters.</p>
+          <Server class="text-muted size-8" aria-hidden="true" />
+          <p class="text-muted text-sm">No hosts match your filters.</p>
           <Button variant="outline" size="sm" onclick={clearFilters}>Clear filters</Button>
         </CardContent>
       </Card>

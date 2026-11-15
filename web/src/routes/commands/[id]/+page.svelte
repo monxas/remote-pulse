@@ -1,10 +1,10 @@
 <script lang="ts">
   import { ArrowLeft, Check, Loader2, RotateCw, ShieldAlert, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Tabs, TabsList, TabsTrigger, TabsContent } from '$lib/components/ui/tabs';
-  import { Textarea } from '$lib/components/ui/textarea';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Tabs, TabsList, TabsTrigger, TabsContent } from '#lib/components/ui/tabs/index.ts';
+  import { Textarea } from '#lib/components/ui/textarea/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -12,19 +12,19 @@
     DialogHeader,
     DialogTitle,
     DialogDescription,
-  } from '$lib/components/ui/dialog';
-  import CommandStatusBadge from '$lib/components/app/CommandStatusBadge.svelte';
-  import RelativeTime from '$lib/components/app/RelativeTime.svelte';
-  import LiveBadge from '$lib/components/app/LiveBadge.svelte';
+  } from '#lib/components/ui/dialog/index.ts';
+  import CommandStatusBadge from '#lib/components/app/CommandStatusBadge.svelte';
+  import RelativeTime from '#lib/components/app/RelativeTime.svelte';
+  import LiveBadge from '#lib/components/app/LiveBadge.svelte';
   import {
     createApproveMutation,
     createCommandDetailQuery,
     createRejectMutation,
     createRetryCommandMutation,
-  } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import { IN_FLIGHT_STATUSES } from '$lib/api';
+  } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import { IN_FLIGHT_STATUSES } from '#lib/api.ts';
 
   type Data = { commandId: string };
   const { data }: { data: Data } = $props();
@@ -74,7 +74,7 @@
 
 <section class="space-y-6">
   <div>
-    <Button href={resolve('/commands')} variant="ghost" size="sm" class="-ml-2">
+    <Button href={resolve('commands')} variant="ghost" size="sm" class="-ml-2">
       <ArrowLeft class="size-4" aria-hidden="true" />
       Commands
     </Button>
@@ -82,8 +82,8 @@
 
   {#if $cmdQuery.isPending && !cmd}
     <div class="space-y-3" aria-busy="true">
-      <div class="h-7 w-72 animate-pulse rounded bg-subtle"></div>
-      <div class="h-4 w-96 animate-pulse rounded bg-subtle"></div>
+      <div class="bg-subtle h-7 w-72 animate-pulse rounded"></div>
+      <div class="bg-subtle h-4 w-96 animate-pulse rounded"></div>
     </div>
   {:else if $cmdQuery.isError}
     <Card>
@@ -91,7 +91,7 @@
         <CardTitle>Could not load command</CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
-        <p class="text-sm text-muted">{$cmdQuery.error?.message ?? 'Unknown error.'}</p>
+        <p class="text-muted text-sm">{$cmdQuery.error?.message ?? 'Unknown error.'}</p>
         <Button onclick={() => void $cmdQuery.refetch()} size="sm">Reload</Button>
       </CardContent>
     </Card>
@@ -103,10 +103,10 @@
             {cmd.command_type}
           </h1>
           <CommandStatusBadge status={cmd.status} />
-          <span class="text-xs text-muted">
+          <span class="text-muted text-xs">
             on
             <a
-              class="font-mono text-accent-text hover:underline"
+              class="text-accent-text font-mono hover:underline"
               href={resolve('/hosts/[id]', { id: cmd.host_id })}>{cmd.host_hostname}</a
             >
             ·
@@ -117,7 +117,7 @@
           <LiveBadge state={live.state} />
         {/if}
       </div>
-      <p class="font-mono text-[11px] text-muted break-all">id {cmd.id}</p>
+      <p class="text-muted font-mono text-[11px] break-all">id {cmd.id}</p>
     </header>
 
     <!-- Actions -->
@@ -131,10 +131,9 @@
           {/if}
           Approve
         </Button>
-        <Button variant="outline" onclick={() => (rejectOpen = true)}>
-          <X class="size-4" aria-hidden="true" />
-          Reject
-        </Button>
+        <Button variant="outline" onclick={() => (rejectOpen = true)}
+          ><X class="size-4" aria-hidden="true" /> Reject</Button
+        >
       {/if}
       {#if canRetry}
         <Button onclick={() => $retry.mutate(cmd.id)} disabled={$retry.isPending}>
@@ -152,7 +151,7 @@
         </Button>
       {/if}
       {#if inFlight}
-        <span class="text-xs text-muted">In-flight commands cannot be cancelled yet.</span>
+        <span class="text-muted text-xs">In-flight commands cannot be cancelled yet.</span>
       {/if}
     </div>
 
@@ -164,31 +163,31 @@
       <CardContent class="space-y-4">
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
           <div>
-            <dt class="text-xs text-muted">Issued by</dt>
+            <dt class="text-muted text-xs">Issued by</dt>
             <dd class="font-mono">{cmd.issued_by}</dd>
           </div>
           <div>
-            <dt class="text-xs text-muted">Approved by</dt>
+            <dt class="text-muted text-xs">Approved by</dt>
             <dd class="font-mono">{cmd.approved_by ?? '—'}</dd>
           </div>
           <div>
-            <dt class="text-xs text-muted">Exit code</dt>
+            <dt class="text-muted text-xs">Exit code</dt>
             <dd class="font-mono">{cmd.exit_code ?? '—'}</dd>
           </div>
           <div>
-            <dt class="text-xs text-muted">Duration</dt>
+            <dt class="text-muted text-xs">Duration</dt>
             <dd class="font-mono">
               {cmd.duration_ms === null ? '—' : `${cmd.duration_ms}ms`}
             </dd>
           </div>
         </dl>
 
-        <details open class="rounded-md border border-border-default">
-          <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-muted">
+        <details open class="border-border-default rounded-md border">
+          <summary class="text-muted cursor-pointer px-3 py-2 text-xs font-medium">
             Payload
           </summary>
           <pre
-            class="max-h-72 overflow-auto whitespace-pre-wrap rounded-b-md bg-subtle p-3 font-mono text-xs">{JSON.stringify(
+            class="bg-subtle max-h-72 overflow-auto rounded-b-md p-3 font-mono text-xs whitespace-pre-wrap">{JSON.stringify(
               cmd.command_payload,
               null,
               2,
@@ -196,7 +195,7 @@
         </details>
 
         {#if cmd.rejected_reason}
-          <div class="rounded-md border border-danger bg-danger-bg p-2 text-xs text-danger-text">
+          <div class="border-danger bg-danger-bg text-danger-text rounded-md border p-2 text-xs">
             <span class="font-medium">Rejected:</span>
             {cmd.rejected_reason}
           </div>
@@ -204,15 +203,15 @@
 
         <!-- Timeline -->
         <div>
-          <h3 class="mb-2 text-xs font-medium text-muted">Timeline</h3>
+          <h3 class="text-muted mb-2 text-xs font-medium">Timeline</h3>
           <ol class="space-y-1 text-xs">
             <li class="flex items-center gap-2">
-              <span class="inline-block size-2 rounded-full bg-accent" aria-hidden="true"></span>
-              issued <RelativeTime iso={cmd.issued_at} class="font-mono text-muted" />
+              <span class="bg-accent inline-block size-2 rounded-full" aria-hidden="true"></span>
+              issued <RelativeTime iso={cmd.issued_at} class="text-muted font-mono" />
             </li>
             {#if cmd.approved_by}
               <li class="flex items-center gap-2">
-                <span class="inline-block size-2 rounded-full bg-success" aria-hidden="true"></span>
+                <span class="bg-success inline-block size-2 rounded-full" aria-hidden="true"></span>
                 approved by <span class="font-mono">{cmd.approved_by}</span>
               </li>
             {/if}
@@ -223,7 +222,7 @@
                   aria-hidden="true"
                 ></span>
                 {cmd.status}
-                <RelativeTime iso={cmd.completed_at} class="font-mono text-muted" />
+                <RelativeTime iso={cmd.completed_at} class="text-muted font-mono" />
               </li>
             {/if}
           </ol>
@@ -246,12 +245,12 @@
             </TabsList>
             <TabsContent value="stdout">
               <pre
-                class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-default bg-subtle p-2 font-mono text-xs">{cmd.stdout ??
+                class="border-border-default bg-subtle mt-2 max-h-96 overflow-auto rounded-md border p-2 font-mono text-xs break-words whitespace-pre-wrap">{cmd.stdout ??
                   '(empty)'}</pre>
             </TabsContent>
             <TabsContent value="stderr">
               <pre
-                class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-default bg-subtle p-2 font-mono text-xs text-danger-text">{cmd.stderr ??
+                class="border-border-default bg-subtle text-danger-text mt-2 max-h-96 overflow-auto rounded-md border p-2 font-mono text-xs break-words whitespace-pre-wrap">{cmd.stderr ??
                   '(empty)'}</pre>
             </TabsContent>
           </Tabs>
@@ -259,15 +258,15 @@
         <!-- Desktop: side-by-side -->
         <div class="hidden grid-cols-2 gap-3 sm:grid">
           <div>
-            <h4 class="mb-1 text-xs font-medium text-muted">stdout</h4>
+            <h4 class="text-muted mb-1 text-xs font-medium">stdout</h4>
             <pre
-              class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-default bg-subtle p-2 font-mono text-xs">{cmd.stdout ??
+              class="border-border-default bg-subtle max-h-96 overflow-auto rounded-md border p-2 font-mono text-xs break-words whitespace-pre-wrap">{cmd.stdout ??
                 '(empty)'}</pre>
           </div>
           <div>
-            <h4 class="mb-1 text-xs font-medium text-danger-text">stderr</h4>
+            <h4 class="text-danger-text mb-1 text-xs font-medium">stderr</h4>
             <pre
-              class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-default bg-subtle p-2 font-mono text-xs text-danger-text">{cmd.stderr ??
+              class="border-border-default bg-subtle text-danger-text max-h-96 overflow-auto rounded-md border p-2 font-mono text-xs break-words whitespace-pre-wrap">{cmd.stderr ??
                 '(empty)'}</pre>
           </div>
         </div>
@@ -287,16 +286,15 @@
           aria-label="Rejection reason"
         />
         {#if rejectError}
-          <p class="mt-2 text-xs text-danger-text">{rejectError}</p>
+          <p class="text-danger-text mt-2 text-xs">{rejectError}</p>
         {/if}
         <DialogFooter>
           <Button
             variant="outline"
             onclick={() => (rejectOpen = false)}
-            disabled={$reject.isPending}
+            disabled={$reject.isPending}>Cancel</Button
           >
-            Cancel
-          </Button>
+
           <Button variant="danger" onclick={() => doReject(cmd.id)} disabled={$reject.isPending}>
             {#if $reject.isPending}
               <Loader2 class="size-4 animate-spin" aria-hidden="true" />

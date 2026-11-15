@@ -19,8 +19,8 @@
    */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import { userStore } from '$lib/stores/user.svelte';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
   import {
     DEFAULT_OPT_INS,
     classifySseEvent,
@@ -29,7 +29,7 @@
     shouldFireNotification,
     type NotificationOptIns,
   } from './notifications-state';
-  import type { SseEvent } from '$lib/queries/sse.svelte';
+  import type { SseEvent } from '#lib/queries/sse.svelte.ts';
 
   const live = getLiveStream();
 

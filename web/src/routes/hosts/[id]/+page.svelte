@@ -1,29 +1,29 @@
 <script lang="ts">
   import { ArrowLeft, Server } from '@lucide/svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { base, resolve } from '$app/paths';
+  import { resolve } from '$app/paths';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Tabs, TabsList, TabsTrigger, TabsContent } from '$lib/components/ui/tabs';
-  import HostStatusBadge from '$lib/components/app/HostStatusBadge.svelte';
-  import TimeseriesChart from '$lib/components/app/TimeseriesChart.svelte';
-  import WindowSelector from '$lib/components/app/WindowSelector.svelte';
-  import RelativeTime from '$lib/components/app/RelativeTime.svelte';
-  import LiveBadge from '$lib/components/app/LiveBadge.svelte';
-  import IssueCommandDialog from '$lib/components/app/IssueCommandDialog.svelte';
-  import DeleteHostDialog from '$lib/components/app/DeleteHostDialog.svelte';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Tabs, TabsList, TabsTrigger, TabsContent } from '#lib/components/ui/tabs/index.ts';
+  import HostStatusBadge from '#lib/components/app/HostStatusBadge.svelte';
+  import TimeseriesChart from '#lib/components/app/TimeseriesChart.svelte';
+  import WindowSelector from '#lib/components/app/WindowSelector.svelte';
+  import RelativeTime from '#lib/components/app/RelativeTime.svelte';
+  import LiveBadge from '#lib/components/app/LiveBadge.svelte';
+  import IssueCommandDialog from '#lib/components/app/IssueCommandDialog.svelte';
+  import DeleteHostDialog from '#lib/components/app/DeleteHostDialog.svelte';
   import {
     createHostDetailQuery,
     createTimeseriesQuery,
     type TimeseriesParams,
-  } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
-  import { getLiveStream } from '$lib/queries/live-context';
-  import { formatUptime } from '$lib/utils/relative-time';
-  import { userStore } from '$lib/stores/user.svelte';
+  } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
+  import { formatUptime } from '#lib/utils/relative-time.ts';
+  import { userStore } from '#lib/stores/user.svelte.ts';
 
   type Data = { hostId: string };
   const { data }: { data: Data } = $props();
@@ -31,7 +31,7 @@
   const live = getLiveStream();
 
   // ---- Metrics tab state, persisted to URL ----
-  const window = $derived($page.url.searchParams.get('window') ?? '5m');
+  const window = $derived(page.url.searchParams.get('window') ?? '5m');
 
   const allSeries = [
     { key: 'cpu_pct', label: 'CPU %', defaultOn: true },
@@ -74,9 +74,11 @@
   );
 
   function updateWindow(next: string): void {
-    const sp = new SvelteURLSearchParams($page.url.searchParams);
+    const sp = new SvelteURLSearchParams(page.url.search);
+
     if (next === '5m') sp.delete('window');
     else sp.set('window', next);
+
     const qs = sp.toString();
     const path = resolve('/hosts/[id]', { id: data.hostId });
     // `path` was produced by `resolve()` directly above; we append the
@@ -84,9 +86,8 @@
     // the template, so silence it locally.
     // eslint-disable-next-line svelte/no-navigation-without-resolve
     void goto(`${path}${qs ? `?${qs}` : ''}` as `/${string}`, {
-      keepFocus: true,
-      noScroll: true,
-      replaceState: true,
+      reset: false,
+      replace: true,
     });
   }
 </script>
@@ -97,7 +98,7 @@
 
 <section class="space-y-6">
   <div>
-    <Button href={`${base}/`} variant="ghost" size="sm" class="-ml-2">
+    <Button href={resolve('/')} variant="ghost" size="sm" class="-ml-2">
       <ArrowLeft class="size-4" aria-hidden="true" />
       Fleet
     </Button>
@@ -105,22 +106,23 @@
 
   {#if $hostQuery.isPending && !$hostQuery.data}
     <div class="space-y-3" aria-busy="true">
-      <div class="h-7 w-56 animate-pulse rounded bg-subtle"></div>
-      <div class="h-4 w-80 animate-pulse rounded bg-subtle"></div>
+      <div class="bg-subtle h-7 w-56 animate-pulse rounded"></div>
+      <div class="bg-subtle h-4 w-80 animate-pulse rounded"></div>
     </div>
   {:else if $hostQuery.data}
     {@const host = $hostQuery.data}
     <header class="space-y-2">
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <Server class="size-6 text-muted" aria-hidden="true" />
+          <Server class="text-muted size-6" aria-hidden="true" />
           <h1 class="font-mono text-2xl font-semibold tracking-tight">{host.hostname}</h1>
           <HostStatusBadge status={host.status} lastSeenSecondsAgo={host.last_seen_seconds_ago} />
         </div>
         <div class="flex items-center gap-2">
-          <Button size="sm" data-testid="host-issue-command-btn" onclick={() => (issueOpen = true)}>
-            Issue command
-          </Button>
+          <Button size="sm" data-testid="host-issue-command-btn" onclick={() => (issueOpen = true)}
+            >Issue command</Button
+          >
+
           {#if live}
             <LiveBadge state={live.state} />
           {/if}
@@ -171,7 +173,7 @@
           <div class="flex flex-wrap items-center gap-2 text-xs">
             {#each allSeries as s (s.key)}
               <label
-                class="inline-flex items-center gap-1.5 rounded-md border border-border-default px-2 py-1 text-default"
+                class="border-border-default text-default inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
               >
                 <input
                   type="checkbox"
@@ -185,7 +187,7 @@
         </div>
 
         <div class="grid grid-cols-1 gap-4">
-          <div class="rounded-lg border border-border-default bg-elevated p-3 sm:p-4">
+          <div class="border-border-default bg-elevated rounded-lg border p-3 sm:p-4">
             <TimeseriesChart
               data={$tsQuery.data}
               series={[
@@ -218,7 +220,7 @@
           </div>
 
           {#if enabledSeries.load_1m}
-            <div class="rounded-lg border border-border-default bg-elevated p-3 sm:p-4">
+            <div class="border-border-default bg-elevated rounded-lg border p-3 sm:p-4">
               <TimeseriesChart
                 data={$tsQuery.data}
                 series={[
@@ -236,7 +238,7 @@
           {/if}
 
           {#if enabledSeries.net_rx_kbps || enabledSeries.net_tx_kbps}
-            <div class="rounded-lg border border-border-default bg-elevated p-3 sm:p-4">
+            <div class="border-border-default bg-elevated rounded-lg border p-3 sm:p-4">
               <TimeseriesChart
                 data={$tsQuery.data}
                 series={[
@@ -275,25 +277,25 @@
             <CardContent>
               <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                 <div>
-                  <dt class="text-xs text-muted">CPU</dt>
+                  <dt class="text-muted text-xs">CPU</dt>
                   <dd class="font-mono text-lg">
                     {host.current.cpu_pct === null ? '—' : `${host.current.cpu_pct.toFixed(1)}%`}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs text-muted">Memory</dt>
+                  <dt class="text-muted text-xs">Memory</dt>
                   <dd class="font-mono text-lg">
                     {host.current.mem_pct === null ? '—' : `${host.current.mem_pct.toFixed(1)}%`}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs text-muted">Load 1m</dt>
+                  <dt class="text-muted text-xs">Load 1m</dt>
                   <dd class="font-mono text-lg">
                     {host.current.load_1m === null ? '—' : host.current.load_1m.toFixed(2)}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-xs text-muted">Uptime</dt>
+                  <dt class="text-muted text-xs">Uptime</dt>
                   <dd class="font-mono text-lg">{formatUptime(host.current.uptime_s)}</dd>
                 </div>
               </dl>
@@ -304,7 +306,7 @@
         {#if $tsQuery.isError}
           <Card>
             <CardContent class="py-4">
-              <p class="text-sm text-muted">
+              <p class="text-muted text-sm">
                 Could not load time series: {$tsQuery.error?.message ?? 'unknown error'}.
               </p>
             </CardContent>
@@ -319,7 +321,7 @@
             <CardTitle>Commands</CardTitle>
           </CardHeader>
           <CardContent>
-            <p class="text-sm text-muted">Coming in Phase 2.</p>
+            <p class="text-muted text-sm">Coming in Phase 2.</p>
           </CardContent>
         </Card>
       </TabsContent>
@@ -330,7 +332,7 @@
             <CardTitle>Logs</CardTitle>
           </CardHeader>
           <CardContent>
-            <p class="text-sm text-muted">Coming in Phase 2.</p>
+            <p class="text-muted text-sm">Coming in Phase 2.</p>
           </CardContent>
         </Card>
       </TabsContent>
@@ -341,7 +343,7 @@
             <CardTitle>Keys</CardTitle>
           </CardHeader>
           <CardContent>
-            <p class="text-sm text-muted">Coming in Phase 4.</p>
+            <p class="text-muted text-sm">Coming in Phase 4.</p>
           </CardContent>
         </Card>
       </TabsContent>
@@ -349,13 +351,13 @@
 
     {#if canDeleteHost}
       <section
-        class="mt-6 rounded-lg border border-danger/40 bg-elevated p-4 sm:p-6"
+        class="border-danger/40 bg-elevated mt-6 rounded-lg border p-4 sm:p-6"
         aria-labelledby="danger-zone-heading"
       >
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="space-y-1">
-            <h2 id="danger-zone-heading" class="text-sm font-semibold text-danger">Danger zone</h2>
-            <p class="text-xs text-muted">
+            <h2 id="danger-zone-heading" class="text-danger text-sm font-semibold">Danger zone</h2>
+            <p class="text-muted text-xs">
               Permanently delete <span class="font-mono">{host.hostname}</span> and all its history (heartbeats,
               commands, SSH keys). This cannot be undone.
             </p>
@@ -364,10 +366,8 @@
             variant="danger"
             size="sm"
             data-testid="host-delete-btn"
-            onclick={() => (deleteOpen = true)}
+            onclick={() => (deleteOpen = true)}>Delete host</Button
           >
-            Delete host
-          </Button>
         </div>
       </section>
 
@@ -378,12 +378,8 @@
         hostname={host.hostname}
         onDeleted={() => {
           // Send the user back to the fleet overview — the host row will
-          // already be gone thanks to the optimistic patch. The base
-          // prefix is the SPA mount-point; this is intentionally a
-          // template literal so eslint-plugin-svelte sees `goto(base + '/')`
-          // rather than a magic string it can't resolve.
-          // eslint-disable-next-line svelte/no-navigation-without-resolve
-          void goto(`${base}/`);
+          // already be gone thanks to the optimistic patch.
+          void goto(resolve('/'));
         }}
       />
     {/if}
@@ -399,12 +395,13 @@
         <CardTitle>Could not load host</CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
-        <p class="text-sm text-muted">
+        <p class="text-muted text-sm">
           {$hostQuery.error?.message ?? 'Unknown error.'}
         </p>
         <div class="flex items-center gap-2">
           <Button onclick={() => void $hostQuery.refetch()} size="sm">Reload</Button>
-          <Button href={`${base}/`} variant="outline" size="sm">Back to fleet</Button>
+
+          <Button href={resolve('/')} variant="outline" size="sm">Back to fleet</Button>
         </div>
       </CardContent>
     </Card>
@@ -414,12 +411,12 @@
         <CardTitle>Host not found</CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
-        <p class="text-sm text-muted">
+        <p class="text-muted text-sm">
           No host with id <span class="font-mono">{data.hostId}</span> is currently reporting.
         </p>
         <Badge variant="muted">404</Badge>
         <div>
-          <Button href={`${base}/`} variant="outline" size="sm">Back to fleet</Button>
+          <Button href={resolve('/')} variant="outline" size="sm">Back to fleet</Button>
         </div>
       </CardContent>
     </Card>

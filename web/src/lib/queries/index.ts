@@ -100,7 +100,7 @@ import {
   type WebhookDeliveriesResponse,
   type WebhookListResponse,
   type WebhookSummary,
-} from '$lib/api';
+} from '#lib/api.ts';
 
 // ---- query keys ----
 export const qk = {

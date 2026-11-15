@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.17.0"
   },
   "scripts": {
     "dev": "vite dev",
@@ -26,9 +26,10 @@
     "@axe-core/playwright": "4.14.0",
     "@eslint/js": "9.39.5",
     "@lhci/cli": "0.16.0",
-    "@playwright/test": "1.65.0",
-    "@sveltejs/adapter-static": "3.0.11",
-    "@sveltejs/kit": "2.70.4",
+    "@playwright/test": "1.65.1",
+    "@sveltejs/adapter-static": "^4.0.0",
+    "@sveltejs/kit": "3.0.0",
+    "@sveltejs/load-config": "^0.2.2",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tailwindcss/vite": "4.3.4",
     "@testing-library/jest-dom": "6.9.1",
@@ -46,7 +47,7 @@
     "svelte": "5.57.3",
     "svelte-check": "4.7.8",
     "tailwindcss": "4.3.4",
-    "typescript": "5.9.3",
+    "typescript": "^6.0.0",
     "typescript-eslint": "8.72.1",
     "vite": "8.3.6",
     "vitest": "4.1.12"
@@ -67,5 +68,9 @@
     "tailwind-merge": "3.7.0",
     "tailwind-variants": "3.3.1",
     "uplot": "^1.6.32"
+  },
+  "imports": {
+    "#lib": "./src/lib/index.js",
+    "#lib/*": "./src/lib/*"
   }
 }

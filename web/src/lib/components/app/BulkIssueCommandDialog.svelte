@@ -19,14 +19,14 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
-  import { Textarea } from '$lib/components/ui/textarea';
-  import { Switch } from '$lib/components/ui/switch';
-  import { Badge } from '$lib/components/ui/badge';
-  import { cn } from '$lib/utils';
-  import { qk } from '$lib/queries';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Textarea } from '#lib/components/ui/textarea/index.ts';
+  import { Switch } from '#lib/components/ui/switch/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { cn } from '#lib/utils.ts';
+  import { qk } from '#lib/queries/index.ts';
   import {
     COMMAND_TYPES,
     DEFAULT_FORM_STATE,
@@ -35,8 +35,8 @@
     summarizePayload,
     type CommandFormState,
     type CommandTypeId,
-  } from '$lib/commands/types';
-  import { dispatchBulk, seedItems, type BulkItem } from '$lib/commands/bulk-dispatch';
+  } from '#lib/commands/types.ts';
+  import { dispatchBulk, seedItems, type BulkItem } from '#lib/commands/bulk-dispatch.ts';
 
   /**
    * Bulk variant of `IssueCommandDialog`. Designed for the Fleet table's
@@ -272,7 +272,7 @@
       </DialogDescription>
     </DialogHeader>
 
-    <ol class="mb-3 flex items-center gap-1 text-xs text-muted" aria-label="Progress">
+    <ol class="text-muted mb-3 flex items-center gap-1 text-xs" aria-label="Progress">
       {#each [1, 2, 3, 4] as n (n)}
         <li
           class={cn(
@@ -287,7 +287,7 @@
     <!-- Always-visible target host preview (except on results) -->
     {#if step < 4}
       <div
-        class="mb-3 flex flex-wrap items-center gap-1 rounded-md border border-border-default bg-subtle px-2 py-2 text-xs"
+        class="border-border-default bg-subtle mb-3 flex flex-wrap items-center gap-1 rounded-md border px-2 py-2 text-xs"
         data-testid="bulk-target-hosts"
       >
         <span class="text-muted">Targets:</span>
@@ -316,10 +316,10 @@
             data-testid={`bulk-cmd-type-${t.id}`}
           >
             <div class="flex items-center gap-2">
-              <Terminal class="size-4 text-muted" aria-hidden="true" />
+              <Terminal class="text-muted size-4" aria-hidden="true" />
               <span class="font-medium">{t.label}</span>
             </div>
-            <span class="text-xs text-muted">{t.description}</span>
+            <span class="text-muted text-xs">{t.description}</span>
           </button>
         {/each}
       </div>
@@ -330,7 +330,7 @@
       <div class="space-y-3 text-sm">
         {#if chosenType === 'shell'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Command</span>
+            <span class="text-muted text-xs font-medium">Command</span>
             <Textarea
               bind:value={formState.shell.cmd}
               rows={4}
@@ -339,7 +339,7 @@
             />
           </label>
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Timeout (seconds)</span>
+            <span class="text-muted text-xs font-medium">Timeout (seconds)</span>
             <Input
               type="number"
               min="1"
@@ -354,7 +354,7 @@
           </label>
         {:else if chosenType === 'reboot'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">
+            <span class="text-muted text-xs font-medium">
               Delay before reboot · {formState.reboot.delayS}s
             </span>
             <input
@@ -370,17 +370,17 @@
             />
           </label>
         {:else if chosenType === 'ssh-rotate'}
-          <p class="text-sm text-muted">
+          <p class="text-muted text-sm">
             Each agent will generate a fresh Ed25519 signing key. The previous key is retired after
             the next successful command roundtrip.
           </p>
         {:else if chosenType === 'apt-update'}
           <label
-            class="flex items-center justify-between gap-3 rounded-md border border-border-default p-3"
+            class="border-border-default flex items-center justify-between gap-3 rounded-md border p-3"
           >
             <div>
               <p class="text-sm font-medium">Reboot if needed</p>
-              <p class="text-xs text-muted">
+              <p class="text-muted text-xs">
                 After upgrade, schedule a reboot if any package requested it.
               </p>
             </div>
@@ -388,7 +388,7 @@
           </label>
         {:else if chosenType === 'exec-script'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Script name</span>
+            <span class="text-muted text-xs font-medium">Script name</span>
             <Input
               value={formState['exec-script'].script}
               oninput={(e) =>
@@ -398,7 +398,7 @@
             />
           </label>
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Args (space-separated)</span>
+            <span class="text-muted text-xs font-medium">Args (space-separated)</span>
             <Input
               value={formState['exec-script'].args}
               oninput={(e) =>
@@ -410,8 +410,8 @@
         {/if}
 
         {#if previewPayload}
-          <details class="rounded-md border border-border-default bg-subtle">
-            <summary class="cursor-pointer px-3 py-2 text-xs text-muted">Payload preview</summary>
+          <details class="border-border-default bg-subtle rounded-md border">
+            <summary class="text-muted cursor-pointer px-3 py-2 text-xs">Payload preview</summary>
             <pre class="overflow-x-auto px-3 pb-3 font-mono text-xs">{previewPayload}</pre>
           </details>
         {/if}
@@ -422,7 +422,7 @@
     {#if step === 3}
       <div class="space-y-3">
         <label class="block space-y-1">
-          <span class="text-xs font-medium text-muted">Reason (optional)</span>
+          <span class="text-muted text-xs font-medium">Reason (optional)</span>
           <Textarea
             bind:value={reason}
             rows={3}
@@ -431,11 +431,11 @@
           />
         </label>
         <label
-          class="flex items-center justify-between gap-3 rounded-md border border-border-default p-3"
+          class="border-border-default flex items-center justify-between gap-3 rounded-md border p-3"
         >
           <div>
             <p class="text-sm font-medium">Require human approval</p>
-            <p class="text-xs text-muted">
+            <p class="text-muted text-xs">
               When on, each command waits in <span class="font-mono">pending-approval</span> until a second
               operator approves it. Approvals are still per-host.
             </p>
@@ -443,7 +443,7 @@
           <Switch bind:checked={requiresApproval} />
         </label>
         {#if inlineError}
-          <p class="rounded-md border border-danger bg-danger-bg p-2 text-xs text-danger-text">
+          <p class="border-danger bg-danger-bg text-danger-text rounded-md border p-2 text-xs">
             {inlineError}
           </p>
         {/if}
@@ -454,7 +454,7 @@
     {#if step === 4}
       <div class="space-y-3">
         <div
-          class="flex items-center justify-between text-xs text-muted"
+          class="text-muted flex items-center justify-between text-xs"
           data-testid="bulk-progress"
         >
           <span>
@@ -472,9 +472,9 @@
             {/if}
           </span>
         </div>
-        <div class="max-h-72 overflow-y-auto rounded-md border border-border-default">
+        <div class="border-border-default max-h-72 overflow-y-auto rounded-md border">
           <table class="w-full text-sm" data-testid="bulk-results-table">
-            <thead class="bg-subtle text-xs uppercase tracking-wide text-muted">
+            <thead class="bg-subtle text-muted text-xs tracking-wide uppercase">
               <tr>
                 <th class="px-3 py-2 text-left">Host</th>
                 <th class="px-3 py-2 text-left">Status</th>
@@ -484,37 +484,37 @@
             <tbody>
               {#each items as item (item.host_id)}
                 <tr
-                  class="border-t border-border-subtle"
+                  class="border-border-subtle border-t"
                   data-testid={`bulk-result-${item.hostname}`}
                   data-status={item.status}
                 >
                   <td class="px-3 py-2 font-mono">{item.hostname}</td>
                   <td class="px-3 py-2">
                     {#if item.status === 'pending'}
-                      <span class="text-xs text-muted">queued</span>
+                      <span class="text-muted text-xs">queued</span>
                     {:else if item.status === 'in-flight'}
-                      <span class="inline-flex items-center gap-1 text-xs text-muted">
+                      <span class="text-muted inline-flex items-center gap-1 text-xs">
                         <Loader2 class="size-3 animate-spin" aria-hidden="true" />
                         sending
                       </span>
                     {:else if item.status === 'success'}
-                      <span class="inline-flex items-center gap-1 text-xs text-success-text">
+                      <span class="text-success-text inline-flex items-center gap-1 text-xs">
                         <Check class="size-3" aria-hidden="true" />
                         issued
                       </span>
                     {:else if item.status === 'cancelled'}
-                      <span class="inline-flex items-center gap-1 text-xs text-muted">
+                      <span class="text-muted inline-flex items-center gap-1 text-xs">
                         <MinusCircle class="size-3" aria-hidden="true" />
                         cancelled
                       </span>
                     {:else}
-                      <span class="inline-flex items-center gap-1 text-xs text-danger-text">
+                      <span class="text-danger-text inline-flex items-center gap-1 text-xs">
                         <AlertCircle class="size-3" aria-hidden="true" />
                         {item.httpStatus ?? 'error'}
                       </span>
                     {/if}
                   </td>
-                  <td class="px-3 py-2 text-xs text-muted">
+                  <td class="text-muted px-3 py-2 text-xs">
                     {#if item.status === 'error'}
                       {item.error ?? 'Unknown error'}
                     {:else if item.status === 'success' && item.command_id}

@@ -8,7 +8,7 @@
  * out before calling here so the user can't even fire a doomed batch.
  */
 
-import { deleteSettingsGroup, ApiError, type SettingsGroup } from '$lib/api';
+import { deleteSettingsGroup, ApiError, type SettingsGroup } from '#lib/api.ts';
 
 export type BulkGroupOpStatus = 'pending' | 'in-flight' | 'success' | 'error';
 

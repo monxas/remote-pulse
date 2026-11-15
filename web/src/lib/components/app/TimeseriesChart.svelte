@@ -1,7 +1,7 @@
 <script lang="ts">
   import uPlot, { type Options as UPlotOptions, type AlignedData } from 'uplot';
   import 'uplot/dist/uPlot.min.css';
-  import type { TimeseriesPayload } from '$lib/api';
+  import type { TimeseriesPayload } from '#lib/api.ts';
 
   type SeriesSpec = {
     key: keyof TimeseriesPayload;
@@ -126,11 +126,11 @@
 
 <div class="w-full">
   {#if title}
-    <h3 class="mb-2 text-sm font-medium text-muted">{title}</h3>
+    <h3 class="text-muted mb-2 text-sm font-medium">{title}</h3>
   {/if}
   <div
     bind:this={container}
-    class="w-full overflow-hidden rounded-md border border-border-subtle bg-subtle/40 p-2"
+    class="border-border-subtle bg-subtle/40 w-full overflow-hidden rounded-md border p-2"
     style:height="{height + 30}px"
     role="img"
     aria-label={title ?? 'time series chart'}

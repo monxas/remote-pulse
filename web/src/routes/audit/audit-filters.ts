@@ -12,7 +12,7 @@ import {
   type AuditAction,
   type AuditQueryParams,
   type AuditTargetType,
-} from '$lib/api';
+} from '#lib/api.ts';
 
 export type Range = 'today' | '24h' | '7d' | '30d' | 'all' | 'custom';
 

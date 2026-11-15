@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Trash2, X } from '@lucide/svelte';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
 
   /**
    * Floating action bar for the Settings → Groups tab. Only exposes
@@ -37,14 +37,14 @@
     aria-label={`Bulk actions: ${count} groups selected`}
   >
     <div
-      class="flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border-default bg-elevated px-3 py-2 shadow-lg backdrop-blur"
+      class="border-border-default bg-elevated flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 shadow-lg backdrop-blur"
     >
       <span class="flex items-center gap-2 text-sm" aria-live="polite">
         <Badge variant="default" class="font-mono">{count}</Badge>
         <span class="hidden sm:inline">groups selected</span>
       </span>
 
-      <span class="hidden flex-1 truncate text-xs text-muted md:inline" aria-hidden="true">
+      <span class="text-muted hidden flex-1 truncate text-xs md:inline" aria-hidden="true">
         {#each previewLabels as label, i (label)}
           <span class="font-mono">{label}</span>{#if i < previewLabels.length - 1}<span
               >,
@@ -54,7 +54,7 @@
       </span>
 
       {#if !deletable && blockedNames.length > 0}
-        <span class="text-xs text-warn-text" data-testid="bulk-group-blocked">
+        <span class="text-warn-text text-xs" data-testid="bulk-group-blocked">
           {blockedNames.length} group{blockedNames.length === 1 ? '' : 's'} still hold hosts.
         </span>
       {/if}

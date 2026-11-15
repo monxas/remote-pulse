@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { cn } from '$lib/utils';
-  import type { HostStatus } from '$lib/api';
-  import { formatRelative } from '$lib/utils/relative-time';
+  import { cn } from '#lib/utils.ts';
+  import type { HostStatus } from '#lib/api.ts';
+  import { formatRelative } from '#lib/utils/relative-time.ts';
 
   type Props = {
     status: HostStatus;

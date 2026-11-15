@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Component } from 'svelte';
   import { TrendingUp, TrendingDown, Minus } from '@lucide/svelte';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Badge } from '$lib/components/ui/badge';
-  import { cn } from '$lib/utils';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { cn } from '#lib/utils.ts';
 
   type Tone = 'default' | 'success' | 'warn' | 'danger';
   type Trend = { value: number; direction: 'up' | 'down' | 'neutral'; unit?: string };
@@ -45,15 +45,15 @@
 
 <Card class={cn(className)}>
   <CardHeader class="flex flex-row items-center justify-between gap-2 pb-2">
-    <CardTitle class="text-sm font-medium text-muted">{label}</CardTitle>
+    <CardTitle class="text-muted text-sm font-medium">{label}</CardTitle>
     {#if Icon}
-      <Icon class="size-4 text-muted" aria-hidden="true" />
+      <Icon class="text-muted size-4" aria-hidden="true" />
     {/if}
   </CardHeader>
   <CardContent>
     {#if loading}
-      <div class="h-7 w-20 animate-pulse rounded bg-subtle" aria-hidden="true"></div>
-      <div class="mt-2 h-4 w-16 animate-pulse rounded bg-subtle" aria-hidden="true"></div>
+      <div class="bg-subtle h-7 w-20 animate-pulse rounded" aria-hidden="true"></div>
+      <div class="bg-subtle mt-2 h-4 w-16 animate-pulse rounded" aria-hidden="true"></div>
     {:else}
       <div class="flex items-baseline gap-2">
         <span class="font-mono text-2xl font-semibold tracking-tight">{value}</span>

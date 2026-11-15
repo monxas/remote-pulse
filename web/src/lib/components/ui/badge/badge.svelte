@@ -1,18 +1,12 @@
 <script lang="ts" module>
   export type BadgeVariant =
-    | 'default'
-    | 'secondary'
-    | 'outline'
-    | 'success'
-    | 'warn'
-    | 'danger'
-    | 'muted';
+    'default' | 'secondary' | 'outline' | 'success' | 'warn' | 'danger' | 'muted';
 </script>
 
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   type Props = HTMLAttributes<HTMLSpanElement> & {
     variant?: BadgeVariant;

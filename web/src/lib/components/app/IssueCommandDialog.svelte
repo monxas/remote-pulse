@@ -7,15 +7,15 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { Input } from '$lib/components/ui/input';
-  import { Textarea } from '$lib/components/ui/textarea';
-  import { Switch } from '$lib/components/ui/switch';
-  import { Badge } from '$lib/components/ui/badge';
-  import { cn } from '$lib/utils';
-  import { createHostsQuery, createIssueCommandMutation } from '$lib/queries';
-  import { runeReadable } from '$lib/queries/reactive.svelte';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { Textarea } from '#lib/components/ui/textarea/index.ts';
+  import { Switch } from '#lib/components/ui/switch/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { cn } from '#lib/utils.ts';
+  import { createHostsQuery, createIssueCommandMutation } from '#lib/queries/index.ts';
+  import { runeReadable } from '#lib/queries/reactive.svelte.ts';
   import {
     COMMAND_TYPES,
     DEFAULT_FORM_STATE,
@@ -25,7 +25,7 @@
     summarizePayload,
     type CommandFormState,
     type CommandTypeId,
-  } from '$lib/commands/types';
+  } from '#lib/commands/types.ts';
 
   type Props = {
     open: boolean;
@@ -187,7 +187,7 @@
       </DialogDescription>
     </DialogHeader>
 
-    <ol class="mb-3 flex items-center gap-1 text-xs text-muted" aria-label="Progress">
+    <ol class="text-muted mb-3 flex items-center gap-1 text-xs" aria-label="Progress">
       {#each [1, 2, 3, 4, 5] as n (n)}
         <li
           class={cn(
@@ -204,7 +204,7 @@
       <div class="space-y-3">
         <div class="relative">
           <Search
-            class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted"
+            class="text-muted pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
             aria-hidden="true"
           />
           <Input
@@ -215,7 +215,7 @@
             aria-label="Search hosts"
           />
         </div>
-        <div class="flex items-center justify-between text-xs text-muted">
+        <div class="text-muted flex items-center justify-between text-xs">
           <span>
             {selectedHostIds.length} selected · {filteredHosts.length} visible
           </span>
@@ -227,15 +227,15 @@
             Toggle visible
           </button>
         </div>
-        <div class="max-h-72 space-y-3 overflow-y-auto rounded-md border border-border-default p-2">
+        <div class="border-border-default max-h-72 space-y-3 overflow-y-auto rounded-md border p-2">
           {#if $hostsQuery.isPending}
-            <p class="py-4 text-center text-xs text-muted">Loading hosts…</p>
+            <p class="text-muted py-4 text-center text-xs">Loading hosts…</p>
           {:else if groupedHosts.length === 0}
-            <p class="py-4 text-center text-xs text-muted">No matching hosts.</p>
+            <p class="text-muted py-4 text-center text-xs">No matching hosts.</p>
           {:else}
             {#each groupedHosts as [groupName, groupHosts] (groupName)}
               <div>
-                <h4 class="px-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
+                <h4 class="text-muted px-1 pb-1 text-[10px] font-medium tracking-wide uppercase">
                   {groupName}
                 </h4>
                 <ul class="space-y-0.5">
@@ -256,7 +256,7 @@
                           aria-label={`Select ${host.hostname}`}
                         />
                         <span class="font-mono">{host.hostname}</span>
-                        <span class="ml-auto text-xs text-muted">{host.status}</span>
+                        <span class="text-muted ml-auto text-xs">{host.status}</span>
                       </label>
                     </li>
                   {/each}
@@ -283,10 +283,10 @@
             onclick={() => choose(t.id)}
           >
             <div class="flex items-center gap-2">
-              <Terminal class="size-4 text-muted" aria-hidden="true" />
+              <Terminal class="text-muted size-4" aria-hidden="true" />
               <span class="font-medium">{t.label}</span>
             </div>
-            <span class="text-xs text-muted">{t.description}</span>
+            <span class="text-muted text-xs">{t.description}</span>
           </button>
         {/each}
       </div>
@@ -297,7 +297,7 @@
       <div class="space-y-3 text-sm">
         {#if chosenType === 'shell'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Command</span>
+            <span class="text-muted text-xs font-medium">Command</span>
             <Textarea
               bind:value={formState.shell.cmd}
               rows={4}
@@ -306,7 +306,7 @@
             />
           </label>
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Timeout (seconds)</span>
+            <span class="text-muted text-xs font-medium">Timeout (seconds)</span>
             <Input
               type="number"
               min="1"
@@ -321,7 +321,7 @@
           </label>
         {:else if chosenType === 'reboot'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">
+            <span class="text-muted text-xs font-medium">
               Delay before reboot · {formState.reboot.delayS}s
             </span>
             <input
@@ -337,17 +337,17 @@
             />
           </label>
         {:else if chosenType === 'ssh-rotate'}
-          <p class="text-sm text-muted">
+          <p class="text-muted text-sm">
             The agent will generate a fresh Ed25519 signing key. The previous key is retired after
             the next successful command roundtrip.
           </p>
         {:else if chosenType === 'apt-update'}
           <label
-            class="flex items-center justify-between gap-3 rounded-md border border-border-default p-3"
+            class="border-border-default flex items-center justify-between gap-3 rounded-md border p-3"
           >
             <div>
               <p class="text-sm font-medium">Reboot if needed</p>
-              <p class="text-xs text-muted">
+              <p class="text-muted text-xs">
                 After upgrade, schedule a reboot if any package requested it.
               </p>
             </div>
@@ -355,7 +355,7 @@
           </label>
         {:else if chosenType === 'exec-script'}
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Script name</span>
+            <span class="text-muted text-xs font-medium">Script name</span>
             <Input
               value={formState['exec-script'].script}
               oninput={(e) =>
@@ -365,7 +365,7 @@
             />
           </label>
           <label class="block space-y-1">
-            <span class="text-xs font-medium text-muted">Args (space-separated)</span>
+            <span class="text-muted text-xs font-medium">Args (space-separated)</span>
             <Input
               value={formState['exec-script'].args}
               oninput={(e) =>
@@ -377,8 +377,8 @@
         {/if}
 
         {#if previewPayload}
-          <details class="rounded-md border border-border-default bg-subtle">
-            <summary class="cursor-pointer px-3 py-2 text-xs text-muted">Payload preview</summary>
+          <details class="border-border-default bg-subtle rounded-md border">
+            <summary class="text-muted cursor-pointer px-3 py-2 text-xs">Payload preview</summary>
             <pre class="overflow-x-auto px-3 pb-3 font-mono text-xs">{previewPayload}</pre>
           </details>
         {/if}
@@ -389,7 +389,7 @@
     {#if step === 4}
       <div class="space-y-3">
         <label class="block space-y-1">
-          <span class="text-xs font-medium text-muted">Reason (optional)</span>
+          <span class="text-muted text-xs font-medium">Reason (optional)</span>
           <Textarea
             bind:value={reason}
             rows={3}
@@ -398,11 +398,11 @@
           />
         </label>
         <label
-          class="flex items-center justify-between gap-3 rounded-md border border-border-default p-3"
+          class="border-border-default flex items-center justify-between gap-3 rounded-md border p-3"
         >
           <div>
             <p class="text-sm font-medium">Require human approval</p>
-            <p class="text-xs text-muted">
+            <p class="text-muted text-xs">
               When on, the command waits in <span class="font-mono">pending-approval</span> until a second
               operator approves it.
             </p>
@@ -436,11 +436,11 @@
           <dt class="text-muted">Payload</dt>
           <dd class="col-span-2">
             <pre
-              class="overflow-x-auto rounded-md border border-border-default bg-subtle p-2 font-mono text-xs">{previewPayload}</pre>
+              class="border-border-default bg-subtle overflow-x-auto rounded-md border p-2 font-mono text-xs">{previewPayload}</pre>
           </dd>
         </dl>
         {#if inlineError}
-          <p class="rounded-md border border-danger bg-danger-bg p-2 text-xs text-danger-text">
+          <p class="border-danger bg-danger-bg text-danger-text rounded-md border p-2 text-xs">
             {inlineError}
           </p>
         {/if}

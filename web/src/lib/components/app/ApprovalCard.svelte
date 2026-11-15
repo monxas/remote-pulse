@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Check, Loader2, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import type { CommandRecord } from '$lib/api';
-  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Textarea } from '$lib/components/ui/textarea';
+  import type { CommandRecord } from '#lib/api.ts';
+  import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Textarea } from '#lib/components/ui/textarea/index.ts';
   import {
     Dialog,
     DialogContent,
@@ -13,8 +13,8 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '$lib/components/ui/dialog';
-  import { createApproveMutation, createRejectMutation } from '$lib/queries';
+  } from '#lib/components/ui/dialog/index.ts';
+  import { createApproveMutation, createRejectMutation } from '#lib/queries/index.ts';
   import RelativeTime from './RelativeTime.svelte';
 
   type Props = { command: CommandRecord };
@@ -60,9 +60,9 @@
     <div class="flex items-start justify-between gap-2">
       <div>
         <CardTitle class="font-mono text-base">{command.command_type}</CardTitle>
-        <p class="mt-1 text-xs text-muted">
+        <p class="text-muted mt-1 text-xs">
           on <a
-            class="font-mono text-accent-text hover:underline"
+            class="text-accent-text font-mono hover:underline"
             href={resolve('/hosts/[id]', { id: command.host_id })}>{command.host_hostname}</a
           >
           ·
@@ -74,7 +74,7 @@
   </CardHeader>
   <CardContent class="flex flex-1 flex-col gap-3">
     <pre
-      class="max-h-32 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-subtle p-2 font-mono text-xs">{summarisePayload(
+      class="border-border-default bg-subtle max-h-32 overflow-auto rounded-md border p-2 font-mono text-xs whitespace-pre-wrap">{summarisePayload(
         command.command_payload,
       )}</pre>
     <dl class="grid grid-cols-2 gap-2 text-xs">
@@ -131,7 +131,7 @@
       aria-label="Rejection reason"
     />
     {#if rejectError}
-      <p class="mt-2 text-xs text-danger-text">{rejectError}</p>
+      <p class="text-danger-text mt-2 text-xs">{rejectError}</p>
     {/if}
     <DialogFooter>
       <Button variant="outline" onclick={() => (rejectOpen = false)} disabled={$reject.isPending}>

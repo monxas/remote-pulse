@@ -6,7 +6,7 @@
  * a flash of the wrong theme. Mutating this store re-applies the class.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 export type ThemePref = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { LogOut } from '@lucide/svelte';
-  import { userStore } from '$lib/stores/user.svelte';
+  import { userStore } from '#lib/stores/user.svelte.ts';
 
   function initials(email: string | null | undefined): string {
     if (!email) return '?';
@@ -17,14 +17,14 @@
 {#if userStore.value}
   <div class="flex items-center gap-2">
     <span
-      class="inline-flex size-7 items-center justify-center rounded-full bg-accent-bg font-mono text-[10px] font-semibold text-accent-text"
+      class="bg-accent-bg text-accent-text inline-flex size-7 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
       aria-hidden="true"
       title={userStore.value.user_email ?? undefined}
     >
       {initials(userStore.value.user_email)}
     </span>
     <a
-      class="touch-target inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-subtle hover:text-default"
+      class="touch-target text-muted hover:bg-subtle hover:text-default inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs"
       href="/auth/logout"
       data-sveltekit-reload
       title="Sign out"

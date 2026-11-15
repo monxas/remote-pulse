@@ -4,8 +4,8 @@ const updateMock = vi.fn();
 const deleteMock = vi.fn();
 const grantMock = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('#lib/api.ts', async () => {
+  const actual = await vi.importActual<typeof import('#lib/api.ts')>('#lib/api.ts');
   return {
     ...actual,
     updateSettingsUser: (...args: unknown[]) => updateMock(...args),
@@ -14,7 +14,7 @@ vi.mock('$lib/api', async () => {
   };
 });
 
-import { ApiError, type SettingsUser } from '$lib/api';
+import { ApiError, type SettingsUser } from '#lib/api.ts';
 import {
   bulkChangeRole,
   bulkDeleteUsers,

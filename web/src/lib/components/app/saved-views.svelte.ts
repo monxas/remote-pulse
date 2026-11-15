@@ -297,8 +297,7 @@ export function persistUserViews(scope: string, views: SavedView[]): void {
 // ─── CRUD result types ────────────────────────────────────────────────────
 
 export type SaveResult =
-  | { ok: true; view: SavedView }
-  | { ok: false; error: 'name-required' | 'name-taken' };
+  { ok: true; view: SavedView } | { ok: false; error: 'name-required' | 'name-taken' };
 
 // ─── Store factory ────────────────────────────────────────────────────────
 
@@ -336,7 +335,7 @@ export function createSavedViewsStore(scope: string, pathname: string): SavedVie
   // Rune-backed state — Svelte 5 tracks mutations on plain arrays inside $state.
   let userViews = $state<SavedView[]>(loadUserViews(scope));
 
-  const currentParams = $derived(paramsFromUrl(page.url.searchParams));
+  const currentParams = $derived(paramsFromUrl(new SvelteURLSearchParams(page.url.search)));
 
   const combined = $derived<SavedView[]>([...factories, ...userViews]);
 
@@ -400,7 +399,7 @@ export function createSavedViewsStore(scope: string, pathname: string): SavedVie
     const qs = paramsToSearch(params);
     const target = `${pathname}${qs ? `?${qs}` : ''}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    void goto(target, { keepFocus: true, noScroll: true, replaceState: true });
+    void goto(target, { reset: false, replace: true });
   }
 
   function applyView(view: SavedView): void {

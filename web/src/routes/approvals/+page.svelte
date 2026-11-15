@@ -1,13 +1,13 @@
 <script lang="ts">
   import { CheckCircle2 } from '@lucide/svelte';
-  import { Badge } from '$lib/components/ui/badge';
-  import { Card, CardContent } from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
-  import ApprovalCard from '$lib/components/app/ApprovalCard.svelte';
-  import LiveBadge from '$lib/components/app/LiveBadge.svelte';
-  import PullToRefresh from '$lib/components/app/PullToRefresh.svelte';
-  import { createPendingApprovalsQuery } from '$lib/queries';
-  import { getLiveStream } from '$lib/queries/live-context';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Card, CardContent } from '#lib/components/ui/card/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import ApprovalCard from '#lib/components/app/ApprovalCard.svelte';
+  import LiveBadge from '#lib/components/app/LiveBadge.svelte';
+  import PullToRefresh from '#lib/components/app/PullToRefresh.svelte';
+  import { createPendingApprovalsQuery } from '#lib/queries/index.ts';
+  import { getLiveStream } from '#lib/queries/live-context.ts';
 
   const live = getLiveStream();
   const approvals = createPendingApprovalsQuery();
@@ -29,7 +29,7 @@
             <Badge variant="warn" class="ml-2 align-middle">{list.length} pending</Badge>
           {/if}
         </h1>
-        <p class="text-sm text-muted">Commands waiting on a second operator before they execute.</p>
+        <p class="text-muted text-sm">Commands waiting on a second operator before they execute.</p>
       </div>
       {#if live}
         <LiveBadge state={live.state} />
@@ -39,13 +39,13 @@
     {#if $approvals.isPending && !$approvals.data}
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
         {#each [0, 1, 2] as i (i)}
-          <div class="h-48 animate-pulse rounded-lg border border-border-subtle bg-subtle"></div>
+          <div class="border-border-subtle bg-subtle h-48 animate-pulse rounded-lg border"></div>
         {/each}
       </div>
     {:else if $approvals.isError}
       <Card>
         <CardContent class="space-y-3 py-6">
-          <p class="text-sm text-muted">
+          <p class="text-muted text-sm">
             Could not load approvals: {$approvals.error?.message ?? 'unknown error'}.
           </p>
           <Button size="sm" onclick={() => void $approvals.refetch()}>Reload</Button>
@@ -54,8 +54,8 @@
     {:else if list.length === 0}
       <Card>
         <CardContent class="flex flex-col items-center gap-3 py-12 text-center">
-          <CheckCircle2 class="size-8 text-success" aria-hidden="true" />
-          <p class="text-sm text-muted">Nothing to approve. You are caught up.</p>
+          <CheckCircle2 class="text-success size-8" aria-hidden="true" />
+          <p class="text-muted text-sm">Nothing to approve. You are caught up.</p>
         </CardContent>
       </Card>
     {:else}

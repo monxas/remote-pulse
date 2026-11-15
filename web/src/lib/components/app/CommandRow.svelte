@@ -1,13 +1,13 @@
 <script lang="ts">
   import { ChevronRight, ExternalLink, RotateCw } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { cn } from '$lib/utils';
-  import type { CommandRecord } from '$lib/api';
-  import { IN_FLIGHT_STATUSES } from '$lib/api';
-  import { Button } from '$lib/components/ui/button';
+  import { cn } from '#lib/utils.ts';
+  import type { CommandRecord } from '#lib/api.ts';
+  import { IN_FLIGHT_STATUSES } from '#lib/api.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
   import CommandStatusBadge from './CommandStatusBadge.svelte';
   import RelativeTime from './RelativeTime.svelte';
-  import { createRetryCommandMutation } from '$lib/queries';
+  import { createRetryCommandMutation } from '#lib/queries/index.ts';
 
   type Props = {
     command: CommandRecord;
@@ -44,35 +44,35 @@
 </script>
 
 <li
-  class="rounded-lg border border-border-default bg-elevated"
+  class="border-border-default bg-elevated rounded-lg border"
   data-testid="command-row"
   data-command-id={command.id}
 >
   <button
     type="button"
     data-testid="command-row-toggle"
-    class="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+    class="hover:bg-hover focus-visible:ring-ring flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
     onclick={() => (open = !open)}
     aria-expanded={open}
     aria-controls={`cmd-body-${command.id}`}
   >
     <ChevronRight
-      class={cn('size-4 shrink-0 text-muted transition-transform', open && 'rotate-90')}
+      class={cn('text-muted size-4 shrink-0 transition-transform', open && 'rotate-90')}
       aria-hidden="true"
     />
     <CommandStatusBadge status={command.status} />
-    <span class="font-mono text-xs text-muted shrink-0">{command.command_type}</span>
-    <span class="min-w-0 flex-1 truncate font-mono text-sm text-default" title={payloadSummary}>
+    <span class="text-muted shrink-0 font-mono text-xs">{command.command_type}</span>
+    <span class="text-default min-w-0 flex-1 truncate font-mono text-sm" title={payloadSummary}>
       {payloadSummary}
     </span>
-    <span class="hidden font-mono text-xs text-muted sm:inline">{command.host_hostname}</span>
-    <RelativeTime iso={command.issued_at} class="ml-auto shrink-0 font-mono text-xs text-muted" />
+    <span class="text-muted hidden font-mono text-xs sm:inline">{command.host_hostname}</span>
+    <RelativeTime iso={command.issued_at} class="text-muted ml-auto shrink-0 font-mono text-xs" />
   </button>
 
   {#if open}
     <div
       id={`cmd-body-${command.id}`}
-      class="space-y-3 border-t border-border-subtle px-3 py-3 text-sm"
+      class="border-border-subtle space-y-3 border-t px-3 py-3 text-sm"
     >
       <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
         <div>
@@ -106,7 +106,7 @@
       </dl>
 
       {#if command.rejected_reason}
-        <div class="rounded-md border border-danger bg-danger-bg p-2 text-xs text-danger-text">
+        <div class="border-danger bg-danger-bg text-danger-text rounded-md border p-2 text-xs">
           <span class="font-medium">Rejected:</span>
           {command.rejected_reason}
         </div>
@@ -115,21 +115,21 @@
       {#if command.stdout || command.stderr}
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {#if command.stdout}
-            <details open class="rounded-md border border-border-default bg-base">
-              <summary class="cursor-pointer px-2 py-1 text-xs font-medium text-muted">
+            <details open class="border-border-default bg-base rounded-md border">
+              <summary class="text-muted cursor-pointer px-2 py-1 text-xs font-medium">
                 stdout
               </summary>
               <pre
-                class="max-h-64 overflow-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-xs">{command.stdout}</pre>
+                class="max-h-64 overflow-auto px-2 pb-2 font-mono text-xs break-words whitespace-pre-wrap">{command.stdout}</pre>
             </details>
           {/if}
           {#if command.stderr}
-            <details open class="rounded-md border border-border-default bg-base">
-              <summary class="cursor-pointer px-2 py-1 text-xs font-medium text-danger-text">
+            <details open class="border-border-default bg-base rounded-md border">
+              <summary class="text-danger-text cursor-pointer px-2 py-1 text-xs font-medium">
                 stderr
               </summary>
               <pre
-                class="max-h-64 overflow-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-xs">{command.stderr}</pre>
+                class="max-h-64 overflow-auto px-2 pb-2 font-mono text-xs break-words whitespace-pre-wrap">{command.stderr}</pre>
             </details>
           {/if}
         </div>
@@ -155,7 +155,7 @@
           </Button>
         {/if}
         {#if isInFlight}
-          <span class="text-xs text-muted">In-flight commands cannot be cancelled yet.</span>
+          <span class="text-muted text-xs">In-flight commands cannot be cancelled yet.</span>
         {/if}
       </div>
     </div>

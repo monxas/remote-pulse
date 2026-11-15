@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { Input } from '$lib/components/ui/input';
-  import { cn } from '$lib/utils';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { cn } from '#lib/utils.ts';
   import WindowSelector from './WindowSelector.svelte';
-  import type { HostStatus } from '$lib/api';
+  import type { HostStatus } from '#lib/api.ts';
 
   type Props = {
     groups: ReadonlyArray<string>;
@@ -16,7 +16,7 @@
 
   // Read current state from URL search params (single source of truth so
   // refreshes don't clobber the operator's filter selection).
-  const params = $derived($page.url.searchParams);
+  const params = $derived(page.url.searchParams);
   const q = $derived(params.get('q') ?? '');
   const group = $derived(params.get('group') ?? '');
   const status = $derived((params.get('status') ?? '') as HostStatus | '');
@@ -35,7 +35,7 @@
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   function updateUrl(patch: Record<string, string | null>): void {
-    const next = new SvelteURLSearchParams($page.url.searchParams);
+    const next = new SvelteURLSearchParams(page.url.search);
     for (const [k, v] of Object.entries(patch)) {
       if (v === null || v === '') next.delete(k);
       else next.set(k, v);
@@ -46,9 +46,8 @@
     // see through the template concatenation we use to append `?qs`.
     // eslint-disable-next-line svelte/no-navigation-without-resolve
     void goto(target, {
-      keepFocus: true,
-      noScroll: true,
-      replaceState: true,
+      reset: false,
+      replace: true,
     });
   }
 
@@ -73,11 +72,11 @@
 </script>
 
 <div
-  class="flex flex-col gap-3 rounded-lg border border-border-default bg-elevated p-3 sm:flex-row sm:items-center"
+  class="border-border-default bg-elevated flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center"
 >
   <div class="relative flex-1">
     <Search
-      class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted"
+      class="text-muted pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
       aria-hidden="true"
     />
     <Input
@@ -90,14 +89,14 @@
   </div>
 
   <div class="flex items-center gap-2">
-    <label class="flex items-center gap-2 text-xs text-muted">
+    <label class="text-muted flex items-center gap-2 text-xs">
       <span class="sr-only sm:not-sr-only">Group</span>
       <select
         value={group}
         onchange={(e) => updateUrl({ group: (e.target as HTMLSelectElement).value || null })}
         class={cn(
-          'touch-target h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
-          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          'touch-target border-border-default bg-base text-default h-9 rounded-md border px-2 text-sm',
+          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
         )}
       >
         <option value="">All groups</option>
@@ -107,14 +106,14 @@
       </select>
     </label>
 
-    <label class="flex items-center gap-2 text-xs text-muted">
+    <label class="text-muted flex items-center gap-2 text-xs">
       <span class="sr-only sm:not-sr-only">Status</span>
       <select
         value={status}
         onchange={(e) => updateUrl({ status: (e.target as HTMLSelectElement).value || null })}
         class={cn(
-          'touch-target h-9 rounded-md border border-border-default bg-base px-2 text-sm text-default',
-          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          'touch-target border-border-default bg-base text-default h-9 rounded-md border px-2 text-sm',
+          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
         )}
       >
         {#each statuses as s (s.value)}
@@ -133,7 +132,7 @@
   {#if q || group || status || (window && window !== '5m')}
     <button
       type="button"
-      class="touch-target inline-flex items-center text-xs text-accent-text underline-offset-4 hover:underline"
+      class="touch-target text-accent-text inline-flex items-center text-xs underline-offset-4 hover:underline"
       onclick={clearAll}
     >
       Clear filters

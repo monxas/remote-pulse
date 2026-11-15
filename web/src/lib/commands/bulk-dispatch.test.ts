@@ -1,21 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoist the mock so importing `bulk-dispatch` (which transitively imports
-// `$lib/api`) resolves to our stub. We import the symbols we need by
+// `#lib/api.ts`) resolves to our stub. We import the symbols we need by
 // name to keep the mock object small + typed.
 const issueDashCommandMock = vi.fn();
 
-vi.mock('$lib/api', async () => {
+vi.mock('#lib/api.ts', async () => {
   // Keep the real `ApiError` class so the dispatcher's `instanceof` check
   // still works against mocked rejections.
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+  const actual = await vi.importActual<typeof import('#lib/api.ts')>('#lib/api.ts');
   return {
     ...actual,
     issueDashCommand: (...args: unknown[]) => issueDashCommandMock(...args),
   };
 });
 
-import { ApiError } from '$lib/api';
+import { ApiError } from '#lib/api.ts';
 import { dispatchBulk, seedItems, type BulkItem } from './bulk-dispatch';
 
 describe('seedItems', () => {

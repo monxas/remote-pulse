@@ -6,7 +6,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
-  import { cn } from '$lib/utils';
+  import { cn } from '#lib/utils.ts';
 
   // Props extend both anchor + button HTML attribute sets (minus the
   // ones we own / disambiguate) so the `<button>` branch can spread
